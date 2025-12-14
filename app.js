@@ -272,7 +272,7 @@ class BenefitPulse {
 
     incrementViewCount(benefitId) {
         const viewCounts = JSON.parse(localStorage.getItem(this.viewCountsKey));
-        if (viewCounts[benefitId]) {
+        if (viewCounts[benefitId] !== undefined) {
             viewCounts[benefitId]++;
             localStorage.setItem(this.viewCountsKey, JSON.stringify(viewCounts));
             
