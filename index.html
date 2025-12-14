@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BenefitPulse - Βρείτε τα Επιδόματα & Προγράμματα που σας Αφορούν</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🇬🇷 BenefitPulse</h1>
+            <p class="tagline">Ανακαλύψτε τα επιδόματα, vouchers και προγράμματα που σας αφορούν</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="profile-section" class="card">
+            <h2>Το Προφίλ Μου</h2>
+            <form id="profile-form">
+                <div class="form-group">
+                    <label for="age-range">Ηλικιακή Ομάδα:</label>
+                    <select id="age-range" required>
+                        <option value="">Επιλέξτε...</option>
+                        <option value="0-17">0-17 έτη</option>
+                        <option value="18-25">18-25 έτη</option>
+                        <option value="26-35">26-35 έτη</option>
+                        <option value="36-50">36-50 έτη</option>
+                        <option value="51-65">51-65 έτη</option>
+                        <option value="65+">65+ έτη</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="income-range">Εισόδημα (ετήσιο):</label>
+                    <select id="income-range" required>
+                        <option value="">Επιλέξτε...</option>
+                        <option value="0-6000">0€ - 6.000€</option>
+                        <option value="6001-12000">6.001€ - 12.000€</option>
+                        <option value="12001-20000">12.001€ - 20.000€</option>
+                        <option value="20001-30000">20.001€ - 30.000€</option>
+                        <option value="30001+">30.001€+</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="status">Κατάσταση:</label>
+                    <select id="status" required>
+                        <option value="">Επιλέξτε...</option>
+                        <option value="student">Φοιτητής/τρια</option>
+                        <option value="employed">Εργαζόμενος/η</option>
+                        <option value="unemployed">Άνεργος/η</option>
+                        <option value="self-employed">Ελεύθερος Επαγγελματίας</option>
+                        <option value="retired">Συνταξιούχος</option>
+                        <option value="parent">Γονέας</option>
+                        <option value="disabled">ΑΜΕΑ</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Αναζήτηση Επιδομάτων</button>
+            </form>
+        </section>
+
+        <div id="results-container" style="display: none;">
+            <section id="new-benefits" class="results-section">
+                <h2>🆕 Νέα από την Τελευταία Επίσκεψη</h2>
+                <div id="new-benefits-list" class="benefits-grid"></div>
+            </section>
+
+            <section id="expiring-benefits" class="results-section">
+                <h2>⏰ Λήγουν Σύντομα</h2>
+                <div id="expiring-benefits-list" class="benefits-grid"></div>
+            </section>
+
+            <section id="trending-benefits" class="results-section">
+                <h2>🔥 Δημοφιλή</h2>
+                <div id="trending-benefits-list" class="benefits-grid"></div>
+            </section>
+
+            <section id="all-benefits" class="results-section">
+                <h2>📋 Όλα τα Διαθέσιμα Προγράμματα</h2>
+                <div id="all-benefits-list" class="benefits-grid"></div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2025 BenefitPulse. Πληροφορίες από επίσημες πηγές.</p>
+        </div>
+    </footer>
+
+    <script src="benefits-data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
