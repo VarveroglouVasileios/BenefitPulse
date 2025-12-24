@@ -13,7 +13,14 @@ export class OpportunitiesService {
     status?: string;
     search?: string;
     showExpired?: boolean;
-    tab?: "active" | "results" | "news" | "archived" | "upcoming" | "current" | "all"; // Legacy tabs
+    tab?:
+      | "active"
+      | "results"
+      | "news"
+      | "archived"
+      | "upcoming"
+      | "current"
+      | "all"; // Legacy tabs
   }): Promise<{ opportunities: IOpportunity[]; total: number }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -49,20 +56,24 @@ export class OpportunitiesService {
           "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] },
         },
         {
-          "criteriaJson.applicationStatus": { $nin: ["expired", "closed", "news", "results", "unknown"] },
+          "criteriaJson.applicationStatus": {
+            $nin: ["expired", "closed", "news", "results", "unknown"],
+          },
         },
       ];
     }
 
     // For active tab: add date filters to exclude expired
-    if (!query.showExpired && query.tab !== "results" && query.tab !== "news" && query.tab !== "archived") {
+    if (
+      !query.showExpired &&
+      query.tab !== "results" &&
+      query.tab !== "news" &&
+      query.tab !== "archived"
+    ) {
       // Also filter by deadlineAt and applicationEndAt for backwards compatibility
       const dateFilter: any[] = [
         {
-          $or: [
-            { deadlineAt: null },
-            { deadlineAt: { $gte: now } },
-          ],
+          $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
         },
         {
           $or: [
@@ -71,12 +82,12 @@ export class OpportunitiesService {
           ],
         },
       ];
-      
+
       // Exclude Pass items with year in title that have expired deadlines
       dateFilter.push({
         $or: [
           { title: { $not: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } } }, // Not a Pass with year
-          { 
+          {
             $and: [
               { title: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } }, // Is a Pass with year
               { applicationEndAt: { $gte: now } }, // But has valid end date
@@ -84,7 +95,7 @@ export class OpportunitiesService {
           },
         ],
       });
-      
+
       if (!filter.$and) filter.$and = [];
       filter.$and.push(...dateFilter);
     }
@@ -120,68 +131,135 @@ export class OpportunitiesService {
     source?: string;
     status?: string;
     search?: string;
-  }): Promise<{ 
-    opportunities: Array<IOpportunity & { badge?: { sourceName: string; kind: string; applicationStatus?: string } }>; 
+    showRejected?: boolean; // Admin filter: show rejected items
+    showTendersNews?: boolean; // Admin filter: show tenders/news
+  }): Promise<{
+    opportunities: Array<
+      IOpportunity & {
+        badge?: {
+          sourceName: string;
+          kind: string;
+          applicationStatus?: string;
+        };
+      }
+    >;
     total: number;
     page: number;
     limit: number;
+    exclusionStats?: {
+      excludedItems: number;
+      exclusionReasons: Record<string, number>;
+    };
   }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
     const now = new Date();
     const tab = query.tab || "all";
+    const showRejected = query.showRejected === true;
+    const showTendersNews = query.showTendersNews === true;
 
+    // Base filter - include rejected if admin filter is enabled
     const filter: any = {
-      status: "published",
       deletedAt: null,
-      kind: { $ne: "service_info" },
     };
+
+    if (showRejected) {
+      // Admin: show all statuses including rejected
+      filter.status = { $in: ["published", "draft", "archived", "rejected"] };
+    } else {
+      // Normal: only published
+      filter.status = "published";
+    }
+
+    // Default: exclude service_info and tenders from Opportunities tabs (unless admin filter enabled)
+    if (!showTendersNews) {
+      filter.kind = { $nin: ["service_info", "tender"] };
+    } else {
+      // Admin: allow tenders/news but still exclude service_info
+      filter.kind = { $ne: "service_info" };
+    }
+
+    // Track exclusion reasons
+    const exclusionReasons: Record<string, number> = {};
 
     // Tab-based filtering (non-overlapping criteria)
     if (tab === "news") {
-      // Νέα: applicationStatus="news" (only in criteriaJson, not in applicationStatus field)
-      filter["criteriaJson.applicationStatus"] = "news";
+      // Νέα: applicationStatus="news" OR kind="tender" (tenders go to news tab)
+      filter.$or = [
+        { "criteriaJson.applicationStatus": "news" },
+        { kind: "tender" },
+      ];
+      // Remove tender from exclusion list for news tab (allow tenders in news)
+      filter.kind = { $nin: ["service_info"] };
     } else if (tab === "upcoming") {
       // Upcoming: kind="program" AND applicationStatus="upcoming"
-      // Require verificationResult="upcoming" OR (no verificationResult but applicationStatus="upcoming")
+      // FIXED: Don't require verificationResult - allow items with applicationStatus="upcoming" even if not verified yet
       filter.kind = "program";
       filter.$or = [
         { applicationStatus: "upcoming" },
         { "criteriaJson.applicationStatus": "upcoming" },
       ];
-      // Prefer verified items: verificationResult="upcoming" OR (no verificationResult but applicationStatus="upcoming")
+      // EXCLUDE broken links from Upcoming tab (only if verified as broken)
       filter.$and = filter.$and || [];
       filter.$and.push({
         $or: [
-          { verificationResult: "upcoming" }, // Verified as upcoming
-          { 
-            $and: [
-              { verificationResult: { $exists: false } }, // Not verified yet
-              { applicationStatus: "upcoming" }, // But marked as upcoming
-            ],
-          },
+          { brokenLink: { $exists: false } }, // Not verified yet - allow it
+          { brokenLink: false }, // Verified and not broken
         ],
       });
+      filter.$and.push({
+        $or: [
+          { verificationResult: { $exists: false } }, // Not verified yet - allow it
+          { verificationResult: { $ne: "dead_link" } }, // Not dead link
+        ],
+      });
+
+      // Calculate exclusion stats
+      const baseFilterForStats: any = {
+        status: showRejected
+          ? { $in: ["published", "draft", "archived", "rejected"] }
+          : "published",
+        deletedAt: null,
+        kind: "program",
+        $or: [
+          { applicationStatus: "upcoming" },
+          { "criteriaJson.applicationStatus": "upcoming" },
+        ],
+      };
+      const totalUpcoming = await Opportunity.countDocuments(
+        baseFilterForStats
+      );
+      const excludedBroken = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        brokenLink: true,
+      });
+      const excludedDeadLink = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        verificationResult: "dead_link",
+      });
+      exclusionReasons.brokenLink = excludedBroken;
+      exclusionReasons.deadLink = excludedDeadLink;
     } else if (tab === "current") {
       // Τρέχοντα: kind="program" AND applicationStatus="open"
-      // Also require verificationResult="open" OR (no verificationResult but applicationStatus="open")
+      // FIXED: Don't require verificationResult - allow items with applicationStatus="open" even if not verified yet
       filter.kind = "program";
       filter.$or = [
         { applicationStatus: "open" },
         { "criteriaJson.applicationStatus": "open" },
       ];
-      // Prefer verified items: verificationResult="open" OR (no verificationResult but applicationStatus="open")
+      // EXCLUDE broken links from Current tab (only if verified as broken)
       filter.$and = filter.$and || [];
       filter.$and.push({
         $or: [
-          { verificationResult: "open" }, // Verified as open
-          { 
-            $and: [
-              { verificationResult: { $exists: false } }, // Not verified yet
-              { applicationStatus: "open" }, // But marked as open
-            ],
-          },
+          { brokenLink: { $exists: false } }, // Not verified yet - allow it
+          { brokenLink: false }, // Verified and not broken
+        ],
+      });
+      filter.$and.push({
+        $or: [
+          { verificationResult: { $exists: false } }, // Not verified yet - allow it
+          { verificationResult: { $ne: "dead_link" } }, // Not dead link
         ],
       });
       // Also ensure dates are valid (not expired)
@@ -193,17 +271,97 @@ export class OpportunitiesService {
           ],
         },
         {
-          $or: [
-            { deadlineAt: null },
-            { deadlineAt: { $gte: now } },
-          ],
+          $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
         }
       );
+
+      // Calculate exclusion stats for Current tab
+      const baseFilterForStats: any = {
+        status: showRejected
+          ? { $in: ["published", "draft", "archived", "rejected"] }
+          : "published",
+        deletedAt: null,
+        kind: "program",
+        $or: [
+          { applicationStatus: "open" },
+          { "criteriaJson.applicationStatus": "open" },
+        ],
+      };
+      const totalOpen = await Opportunity.countDocuments(baseFilterForStats);
+      const excludedBroken = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        brokenLink: true,
+      });
+      const excludedDeadLink = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        verificationResult: "dead_link",
+      });
+      const excludedExpiredEndAt = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        applicationEndAt: { $exists: true, $lt: now },
+      });
+      const excludedExpiredDeadline = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        deadlineAt: { $exists: true, $lt: now },
+      });
+      exclusionReasons.brokenLink = excludedBroken;
+      exclusionReasons.deadLink = excludedDeadLink;
+      exclusionReasons.expiredEndAt = excludedExpiredEndAt;
+      exclusionReasons.expiredDeadline = excludedExpiredDeadline;
     } else {
       // Όλα: union of program + news + decisions (no specific filter)
-      // Just exclude service_info (already done above)
-      // Include: kind in ["program", "benefit", "voucher_pass", "decision"]
-      filter.kind = { $in: ["program", "benefit", "voucher_pass", "decision"] };
+      // Just exclude service_info and tender (already done above, unless admin filter enabled)
+      if (!showTendersNews) {
+        filter.kind = {
+          $in: ["program", "benefit", "voucher_pass", "decision", "news"],
+        };
+      } else {
+        // Admin: include tenders too
+        filter.kind = {
+          $in: [
+            "program",
+            "benefit",
+            "voucher_pass",
+            "decision",
+            "news",
+            "tender",
+          ],
+        };
+      }
+
+      // Calculate exclusion stats for All tab
+      const baseFilterForStats: any = {
+        status: showRejected
+          ? { $in: ["published", "draft", "archived", "rejected"] }
+          : "published",
+        deletedAt: null,
+      };
+      const totalAll = await Opportunity.countDocuments(baseFilterForStats);
+      const excludedServiceInfo = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        kind: "service_info",
+      });
+      const excludedTender = await Opportunity.countDocuments({
+        ...baseFilterForStats,
+        kind: "tender",
+      });
+      if (!showTendersNews) {
+        exclusionReasons.excludedFromOpportunities = excludedTender;
+        exclusionReasons.serviceInfo = excludedServiceInfo;
+      }
+    }
+
+    // Calculate exclusion stats for News tab
+    if (tab === "news") {
+      const baseFilterForStats: any = {
+        status: showRejected
+          ? { $in: ["published", "draft", "archived", "rejected"] }
+          : "published",
+        deletedAt: null,
+        kind: { $ne: "service_info" },
+      };
+      const totalNews = await Opportunity.countDocuments(baseFilterForStats);
+      // News tab includes tenders, so no exclusion for tenders here
     }
 
     // Additional filters
@@ -255,15 +413,28 @@ export class OpportunitiesService {
       badge: {
         sourceName: opp.source || "Unknown",
         kind: opp.kind || "benefit",
-        applicationStatus: opp.applicationStatus || opp.criteriaJson?.applicationStatus || "unknown",
+        applicationStatus:
+          opp.applicationStatus ||
+          opp.criteriaJson?.applicationStatus ||
+          "unknown",
       },
     }));
 
-    return { 
-      opportunities: opportunitiesWithBadges, 
+    // Calculate total excluded items
+    const excludedItems = Object.values(exclusionReasons).reduce(
+      (sum, count) => sum + count,
+      0
+    );
+
+    return {
+      opportunities: opportunitiesWithBadges,
       total,
       page,
       limit,
+      exclusionStats: {
+        excludedItems,
+        exclusionReasons,
+      },
     };
   }
 
@@ -318,20 +489,32 @@ export class OpportunitiesService {
                 $and: [
                   // ONLY allow open/upcoming status (NO unknown, NO legacy without dates)
                   {
-                    "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] },
+                    "criteriaJson.applicationStatus": {
+                      $in: ["open", "upcoming"],
+                    },
                   },
                   // Exclude expired/closed/news/results/unknown
                   {
-                    "criteriaJson.applicationStatus": { $nin: ["expired", "closed", "news", "results", "unknown"] },
+                    "criteriaJson.applicationStatus": {
+                      $nin: ["expired", "closed", "news", "results", "unknown"],
+                    },
                   },
                   // STRICT: Exclude Pass items with year in title that are expired
                   {
                     $or: [
-                      { title: { $not: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } } },
+                      {
+                        title: {
+                          $not: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i },
+                        },
+                      },
                       {
                         $and: [
                           { title: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } },
-                          { "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] } },
+                          {
+                            "criteriaJson.applicationStatus": {
+                              $in: ["open", "upcoming"],
+                            },
+                          },
                           // Exclude if year in title is before current year
                           {
                             $expr: {
@@ -359,10 +542,7 @@ export class OpportunitiesService {
                   },
                   // MANDATORY: deadlineAt must be null OR >= now
                   {
-                    $or: [
-                      { deadlineAt: null },
-                      { deadlineAt: { $gte: now } },
-                    ],
+                    $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
                   },
                   // MANDATORY: applicationEndAt must be null OR >= now
                   {
@@ -374,7 +554,11 @@ export class OpportunitiesService {
                   // Exclude Pass items with year in title that have expired deadlines
                   {
                     $or: [
-                      { title: { $not: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } } },
+                      {
+                        title: {
+                          $not: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i },
+                        },
+                      },
                       {
                         $and: [
                           { title: { $regex: /pass.*20\d{2}|20\d{2}.*pass/i } },
@@ -402,22 +586,30 @@ export class OpportunitiesService {
       .map((t: any) => t.opportunity as IOpportunity)
       .filter((opp) => {
         // Basic checks
-        if (opp.status !== "published" || opp.deletedAt || (opp as any).kind === "service_info") {
+        if (
+          opp.status !== "published" ||
+          opp.deletedAt ||
+          (opp as any).kind === "service_info"
+        ) {
           return false;
         }
-        
+
         const appStatus = (opp.criteriaJson as any)?.applicationStatus;
-        
+
         // STRICT: Only allow open/upcoming (NO unknown, NO legacy without status)
         if (!appStatus || !["open", "upcoming"].includes(appStatus)) {
           return false;
         }
-        
+
         // Exclude expired/closed/news/results/unknown
-        if (["expired", "closed", "news", "results", "unknown"].includes(appStatus)) {
+        if (
+          ["expired", "closed", "news", "results", "unknown"].includes(
+            appStatus
+          )
+        ) {
           return false;
         }
-        
+
         // MANDATORY: Exclude items with expired deadlines
         if (opp.deadlineAt && opp.deadlineAt < now) {
           return false;
@@ -425,7 +617,7 @@ export class OpportunitiesService {
         if (opp.applicationEndAt && opp.applicationEndAt < now) {
           return false;
         }
-        
+
         // STRICT: Exclude Pass items with year in title that are expired
         const title = (opp.title || "").toLowerCase();
         const isPassWithYear = /pass.*20\d{2}|20\d{2}.*pass/i.test(title);
@@ -440,9 +632,15 @@ export class OpportunitiesService {
               return false;
             }
             // Exclude if year is current year but no dates and we're past mid-year
-            if (titleYear === currentYear && !opp.deadlineAt && !opp.applicationEndAt && !opp.applicationStartAt) {
+            if (
+              titleYear === currentYear &&
+              !opp.deadlineAt &&
+              !opp.applicationEndAt &&
+              !opp.applicationStartAt
+            ) {
               const currentMonth = now.getMonth(); // 0-11
-              if (currentMonth >= 6) { // July onwards
+              if (currentMonth >= 6) {
+                // July onwards
                 return false;
               }
             }
@@ -459,7 +657,7 @@ export class OpportunitiesService {
             return false;
           }
         }
-        
+
         return true;
       });
 
@@ -480,14 +678,13 @@ export class OpportunitiesService {
         },
         // Exclude expired/closed/news/results/unknown
         {
-          "criteriaJson.applicationStatus": { $nin: ["expired", "closed", "news", "results", "unknown"] },
+          "criteriaJson.applicationStatus": {
+            $nin: ["expired", "closed", "news", "results", "unknown"],
+          },
         },
         // MANDATORY: deadlineAt must be null OR >= now
         {
-          $or: [
-            { deadlineAt: null },
-            { deadlineAt: { $gte: now } },
-          ],
+          $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
         },
         // MANDATORY: applicationEndAt must be null OR >= now
         {
@@ -537,14 +734,15 @@ export class OpportunitiesService {
       const appStatus = (opp.criteriaJson as any)?.applicationStatus;
       const title = (opp.title || "").toLowerCase();
       const isPassWithYear = /pass.*20\d{2}|20\d{2}.*pass/i.test(title);
-      
+
       const isActive =
         opp.status === "published" &&
         !opp.deletedAt &&
         (opp as any).kind !== "garbage" &&
         (!opp.deadlineAt || opp.deadlineAt >= now) &&
         (!opp.applicationEndAt || opp.applicationEndAt >= now) &&
-        (!appStatus || !["expired", "closed", "news", "results"].includes(appStatus)) &&
+        (!appStatus ||
+          !["expired", "closed", "news", "results"].includes(appStatus)) &&
         !(isPassWithYear && opp.applicationEndAt && opp.applicationEndAt < now);
 
       if (!isActive) continue;
@@ -594,7 +792,7 @@ export class OpportunitiesService {
         _id: { $in: matchedIds },
         status: "published",
         deletedAt: null,
-      kind: { $ne: "service_info" },
+        kind: { $ne: "service_info" },
         $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
       }).sort({ publishedAt: -1 }),
       Opportunity.find({
@@ -633,7 +831,11 @@ export class OpportunitiesService {
         {
           $or: [
             { "criteriaJson.applicationStatus": { $exists: false } },
-            { "criteriaJson.applicationStatus": { $nin: ["expired", "closed", "news", "results"] } },
+            {
+              "criteriaJson.applicationStatus": {
+                $nin: ["expired", "closed", "news", "results"],
+              },
+            },
           ],
         },
         {
@@ -739,7 +941,11 @@ export class OpportunitiesService {
         {
           $or: [
             { "criteriaJson.applicationStatus": { $exists: false } },
-            { "criteriaJson.applicationStatus": { $nin: ["expired", "closed", "news", "results"] } },
+            {
+              "criteriaJson.applicationStatus": {
+                $nin: ["expired", "closed", "news", "results"],
+              },
+            },
           ],
         },
       ],

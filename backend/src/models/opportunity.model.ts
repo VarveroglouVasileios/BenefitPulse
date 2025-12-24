@@ -28,6 +28,7 @@ export interface IOpportunity extends Document {
   verificationResult?: "open" | "upcoming" | "closed" | "unknown" | "dead_link";
   evidenceSnippet?: string; // Max 200 chars
   rejectionReason?: string; // Reason if rejected (e.g., "dead_link")
+  brokenLink?: boolean; // True if URL is 404/redirect to unrelated domain
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -56,6 +57,8 @@ const OpportunitySchema = new Schema<IOpportunity>(
         "voucher_pass",
         "service_info",
         "decision", // Διαύγεια decisions
+        "tender", // Tenders/procurements
+        "news", // News/announcements
         // legacy kinds
         "program",
         "voucher",
@@ -170,6 +173,11 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     rejectionReason: {
       type: String,
+    },
+    brokenLink: {
+      type: Boolean,
+      default: false,
+      index: true,
     },
     deletedAt: {
       type: Date,

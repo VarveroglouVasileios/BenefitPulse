@@ -62,6 +62,8 @@ export type OpportunityKind =
   | 'voucher_pass'
   | 'service_info'
   | 'decision' // Διαύγεια decisions
+  | 'tender' // Tenders/procurements (excluded from Opportunities tabs)
+  | 'news' // News/announcements (not active opportunities)
   // legacy kinds kept for backwards compatibility with existing data
   | 'program'
   | 'voucher'

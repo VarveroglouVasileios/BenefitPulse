@@ -115,17 +115,39 @@ export class AdminService {
     limit?: number;
     status?: string;
     type?: string;
+    showRejected?: boolean;
+    showTendersNews?: boolean;
   }): Promise<{ opportunities: IOpportunity[]; total: number }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
-    const filter: any = {};
+    const filter: any = {
+      deletedAt: null,
+    };
+    
+    // Status filter
     if (query.status) {
       filter.status = query.status;
+    } else if (query.showRejected) {
+      // Admin: show all including rejected
+      filter.status = { $in: ["published", "draft", "archived", "rejected"] };
+    } else {
+      // Default: exclude rejected
+      filter.status = { $in: ["published", "draft", "archived"] };
     }
+    
+    // Type filter
     if (query.type) {
       filter.type = query.type;
+    }
+    
+    // Kind filter: exclude tenders/news unless admin filter enabled
+    if (!query.showTendersNews) {
+      filter.kind = { $nin: ["service_info", "tender", "news"] };
+    } else {
+      // Admin: allow tenders/news but exclude service_info
+      filter.kind = { $ne: "service_info" };
     }
 
     const opportunities = await Opportunity.find(filter)

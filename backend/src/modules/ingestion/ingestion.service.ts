@@ -1113,6 +1113,7 @@ export class IngestionService {
           const segments = pathname.split("/").filter(Boolean);
           
           // Special handling for dypa.gov.gr: allow 1-segment slugs (valid articles)
+          // OVERRIDE: Disable "path too short" rule for dypa.gov.gr (WordPress slugs are 1 segment)
           if (hostname.includes("dypa.gov.gr")) {
             // Block root, language paths, search, node paths, hash-only, query-only
             if (
@@ -1139,21 +1140,10 @@ export class IngestionService {
               return { blocked: true, reason: `dypa.gov.gr: hub page "${segments[0]}"` };
             }
             
-            // Allow 1-segment paths that look like articles
+            // OVERRIDE: Allow ALL 1-segment paths for dypa.gov.gr (WordPress slugs are valid)
+            // Only block if it's in the denylist (already checked above)
             if (segments.length === 1) {
-              const slug = segments[0];
-              const slugLength = slug.length;
-              const hasDashes = slug.includes("-");
-              
-              // Allow if: slug length >= 15 AND contains dashes (looks like article)
-              if (slugLength >= 15 && hasDashes) {
-                return { blocked: false }; // Allow valid article slug
-              }
-              
-              // Also allow shorter slugs if they contain dashes and are not in denylist
-              if (hasDashes && slugLength >= 10 && !hubPagesDenylist.includes(slug.toLowerCase())) {
-                return { blocked: false }; // Allow shorter article-like slugs
-              }
+              return { blocked: false }; // Allow all 1-segment paths (WordPress slugs)
             }
             
             // Allow multi-segment paths for active employment policies and other valid paths
@@ -1164,11 +1154,6 @@ export class IngestionService {
             // Allow multi-segment paths by default (they're likely valid article/category paths)
             if (segments.length > 1) {
               return { blocked: false }; // Allow multi-segment paths
-            }
-            
-            // Block 1-segment paths that don't meet criteria (too short, no dashes, in denylist)
-            if (segments.length === 1) {
-              return { blocked: true, reason: `dypa.gov.gr: path too short (1 segment, length ${segments[0].length}, no dashes or too short)` };
             }
             
             // Default: allow (shouldn't reach here, but safety fallback)
@@ -1613,12 +1598,14 @@ export class IngestionService {
         await rawItem.save();
         processedCount++;
         
-        // Track published/updated
+        // Track published/updated with status
         if (reporter) {
           if (isDuplicate) {
             reporter.trackUpdated(sourceId);
+            // Also track status for updated items
+            reporter.trackPublished(sourceId, cleaned.status, cleaned.applicationStatus);
           } else {
-            reporter.trackPublished(sourceId);
+            reporter.trackPublished(sourceId, cleaned.status, cleaned.applicationStatus);
           }
         }
       } catch (error: any) {

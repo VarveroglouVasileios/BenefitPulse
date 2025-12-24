@@ -114,7 +114,7 @@ const CLOSED_KEYWORDS = [
   "finished",
 ];
 
-// Open/active indicators
+// Open/active indicators - ENHANCED with more patterns
 const OPEN_KEYWORDS = [
   "ανοικτή",
   "ανοιχτη",
@@ -134,6 +134,25 @@ const OPEN_KEYWORDS = [
   "platform is open",
   "submissions accepted",
   "accepting applications",
+  // Additional patterns
+  "είσοδος στην εφαρμογή",
+  "εισοδος στην εφαρμογη",
+  "είσοδος στην πλατφόρμα",
+  "εισοδος στην πλατφορμα",
+  "συμπλήρωση αιτήσεων",
+  "συμπληρωση αιτησεων",
+  "υποβολή αιτήσεων",
+  "υποβολη αιτησεων",
+  "διαθέσιμο",
+  "διαθεσιμο",
+  "ενεργό",
+  "ενεργο",
+  "τρέχον",
+  "τρέχον",
+  "τρέχον πρόγραμμα",
+  "τρέχον προγραμμα",
+  "ανοιχτό πρόγραμμα",
+  "ανοιχτο προγραμμα",
 ];
 
 // Upcoming indicators (enhanced for ΔΥΠΑ)
@@ -197,7 +216,7 @@ export interface CleanerOutput {
   summary: string;
   officialUrl: string;
   source: string;
-  kind: "benefit" | "voucher_pass" | "program" | "service_info" | "decision";
+  kind: "benefit" | "voucher_pass" | "program" | "service_info" | "decision" | "tender" | "news";
   type: "subsidy" | "voucher" | "program" | "public_call" | "asep_competition" | "manual" | "decision";
   applicationStatus: "open" | "closed" | "expired" | "upcoming" | "unknown" | "results" | "news";
   startAt: string | null;
@@ -262,12 +281,139 @@ function isOfficialDomain(url: string): boolean {
 }
 
 /**
+ * Check override rules (applied before service_info check)
+ * Returns override result if rule matches, null otherwise
+ */
+function checkOverrideRules(
+  title: string,
+  content: string,
+  url: string
+): {
+  kind: "benefit" | "tender" | "news";
+  type: "subsidy" | "manual";
+  status: "published" | "draft";
+  reason: string;
+  tags?: string[];
+} | null {
+  const lowerTitle = title.toLowerCase();
+  const lowerContent = content.toLowerCase();
+  const lowerUrl = url.toLowerCase();
+  
+  try {
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.toLowerCase().replace(/^www\./, "");
+    const pathname = urlObj.pathname.toLowerCase();
+    
+    // Override 1: AADE myΘέρμανση
+    if (
+      domain === "aade.gr" &&
+      pathname.includes("/mythermansi") &&
+      (lowerTitle.includes("επίδομα θέρμανσης") ||
+       lowerTitle.includes("επιδομα θερμανσης") ||
+       lowerTitle.includes("myθέρμανση") ||
+       lowerTitle.includes("mythermansi") ||
+       lowerContent.includes("επίδομα θέρμανσης") ||
+       lowerContent.includes("επιδομα θερμανσης") ||
+       lowerContent.includes("myθέρμανση") ||
+       lowerContent.includes("mythermansi"))
+    ) {
+        return {
+          kind: "benefit",
+          type: "subsidy",
+          status: "published",
+          reason: "AADE myΘέρμανση override",
+          tags: ["θέρμανση", "επίδομα", "aade"],
+        };
+    }
+    
+    // Override 2: Tenders/Procurements
+    const tenderKeywords = [
+      "προσφορ",
+      "ανάδειξη αναδόχου",
+      "αναδειξη αναδοχου",
+      "προμήθεια",
+      "προμηθεια",
+      "ν.4412/2016",
+      "διαπραγμάτευση",
+      "διαπραγματευση",
+      "σύμβαση",
+      "συμβαση",
+      "cpv",
+    ];
+    
+    const isTender = tenderKeywords.some(
+      (kw) =>
+        lowerTitle.includes(kw) ||
+        lowerContent.includes(kw) ||
+        pathname.includes(kw.replace(/\s+/g, "-"))
+    );
+    
+    if (isTender) {
+      return {
+        kind: "tender",
+        type: "manual",
+        status: "published",
+        reason: "Tender/procurement detected",
+        tags: ["προμήθεια", "διαγωνισμός"],
+      };
+    }
+    
+    // Override 3: Beneficiaries questionnaire (news, not opportunity)
+    const questionnaireKeywords = [
+      "ερωτηματολόγιο ωφελουμένων",
+      "ερωτηματολογιο ωφελουμενων",
+      "συμπλήρωση ερωτηματολογίου",
+      "συμπληρωση ερωτηματολογιου",
+    ];
+    
+    const isQuestionnaire = questionnaireKeywords.some(
+      (kw) => lowerTitle.includes(kw) || lowerContent.includes(kw)
+    );
+    
+    if (isQuestionnaire) {
+      return {
+        kind: "news",
+        type: "manual",
+        status: "published",
+        reason: "Beneficiaries questionnaire (news, not opportunity)",
+        tags: ["ερωτηματολόγιο", "ενημέρωση"],
+      };
+    }
+  } catch {
+    // URL parsing failed, skip override
+  }
+  
+  return null;
+}
+
+/**
  * Check if content is service info / menu / landing page
  */
 function isServiceInfo(title: string, content: string, url: string): boolean {
   const lowerTitle = title.toLowerCase();
   const lowerContent = content.toLowerCase();
   const lowerUrl = url.toLowerCase();
+
+  // EXCEPTION: AADE myΘέρμανση should NOT be rejected
+  try {
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.toLowerCase().replace(/^www\./, "");
+    const pathname = urlObj.pathname.toLowerCase();
+    
+    if (
+      domain === "aade.gr" &&
+      pathname.includes("/mythermansi") &&
+      (lowerTitle.includes("επίδομα θέρμανσης") ||
+       lowerTitle.includes("επιδομα θερμανσης") ||
+       lowerTitle.includes("myθέρμανση") ||
+       lowerContent.includes("επίδομα θέρμανσης") ||
+       lowerContent.includes("myθέρμανση"))
+    ) {
+      return false; // Don't reject myΘέρμανση
+    }
+  } catch {
+    // URL parsing failed, continue with normal check
+  }
 
   // Check for service info keywords
   for (const keyword of SERVICE_INFO_KEYWORDS) {
@@ -281,8 +427,13 @@ function isServiceInfo(title: string, content: string, url: string): boolean {
   }
 
   // Check if content is too short (likely boilerplate)
+  // BUT: Don't reject if we have valid title+url (will fetch details later)
   if (content.trim().length < 100) {
-    return true;
+    // Only reject if title is also too short or navigation-like
+    if (title.trim().length < 20 || lowerTitle === "περιεχόμενο" || lowerTitle === "content") {
+      return true;
+    }
+    // Otherwise, keep it but mark as needsFetchDetails (handled elsewhere)
   }
 
   // Check if title is navigation-like
@@ -392,6 +543,8 @@ function extractDates(
     /(?:η\s+δράση|η\s+δραση|οι\s+αιτήσεις|οι\s+αιτησεις)\s+(?:έληξε|εληξε|ολοκληρώθηκε|ολοκληρωθηκε)[\s:]+([^\.\n]{0,80})/gi,
     /(?:η\s+πλατφόρμα|πλατφόρμα)\s+(?:θα\s+παραμείνει|παραμένει)\s+(?:ανοικτή|κλειστή)\s+(?:έως|μέχρι)[\s:]+([^\.\n]{0,80})/gi,
     /(?:από|έναρξη)[\s:]+([^έως\n]{0,80})\s+έως[\s:]+([^\.\n]{0,80})/gi,
+    // Enhanced: "λήγει ... στις 23:59" or "προθεσμία ... στις 23:59"
+    /(?:λήγει|ληγει|λήξει|ληξει|έληξε|εληξε|προθεσμία|προθεσμια)[\s:]+([^\.\n]{0,100})(?:[\s:]+στις[\s:]+(\d{1,2}):(\d{2}))/gi,
     // ΔΥΠΑ specific: "ώρα 23:59" patterns
     /(?:έως|μέχρι)[\s:]+([^\.\n]{0,60})\s+(?:ώρα|ωρα)[\s:]+(\d{1,2}:\d{2})/gi,
   ];
@@ -399,23 +552,36 @@ function extractDates(
   for (const pattern of deadlinePatterns) {
     const matches = [...content.matchAll(pattern)];
     for (const match of matches) {
-      // Last capture group is usually the date
-      const dateStr = match[match.length - 1];
+      // Check if pattern has time component (23:59 format)
+      const hasTime = match[2] && match[3] && /^\d{1,2}:\d{2}$/.test(`${match[2]}:${match[3]}`);
+      
+      // Last capture group is usually the date (or second-to-last if time is present)
+      const dateStr = hasTime ? match[1] : (match[match.length - 1] || match[0]);
       const { date, matchedText } = parseDate(dateStr, now);
       
       if (date) {
+        // If time specified (23:59), set to that time
+        if (hasTime) {
+          const hours = parseInt(match[2], 10);
+          const minutes = parseInt(match[3], 10);
+          date.setHours(hours, minutes, 59, 999);
+        } else {
+          // Default to end of day if no time specified
+          date.setHours(23, 59, 59, 999);
+        }
+        
         if (pattern.source.includes("έναρξη") && match.length > 2 && !startAt) {
           // First group is start date
           const startStr = match[1];
           const { date: startDate } = parseDate(startStr, now);
           if (startDate) {
             startAt = startDate;
-            dateSignals.push(`"${match[0].substring(0, 120)}"`);
+            dateSignals.push(`Start: "${match[0].substring(0, 120)}"`);
           }
         }
-        if (!deadlineAt) {
+        if (!deadlineAt || date < deadlineAt) {
           deadlineAt = date;
-          dateSignals.push(`"${match[0].substring(0, 120)}"`);
+          dateSignals.push(`Deadline: "${match[0].substring(0, 120)}"`);
         }
       }
     }
@@ -450,7 +616,8 @@ function determineApplicationStatus(
   startAt: Date | null,
   deadlineAt: Date | null,
   now: Date,
-  title?: string
+  title?: string,
+  sourceUrl?: string
 ): {
   status: "open" | "closed" | "expired" | "upcoming" | "unknown" | "results" | "news";
   statusSignals: string[];
@@ -574,6 +741,41 @@ function determineApplicationStatus(
   }
 
   // Rule 5: Explicitly open and (if deadline exists) not expired
+  // ENHANCED: Check for ΔΥΠΑ labels "Ανοιχτό πρόγραμμα" / "Κλειστό πρόγραμμα"
+  const dypaOpenLabel = /(?:ανοιχτό\s+πρόγραμμα|ανοιχτο\s+προγραμμα|ανοιχτό\s+πρόγραμμα)/i;
+  const dypaClosedLabel = /(?:κλειστό\s+πρόγραμμα|κλειστο\s+προγραμμα|κλειστό\s+πρόγραμμα)/i;
+  
+  if (dypaOpenLabel.test(content)) {
+    statusSignals.push("ΔΥΠΑ label: Ανοιχτό πρόγραμμα");
+    if ((!startAt || startAt <= now) && (!deadlineAt || deadlineAt >= now)) {
+      return { status: "open", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
+    }
+  }
+  
+  if (dypaClosedLabel.test(content)) {
+    statusSignals.push("ΔΥΠΑ label: Κλειστό πρόγραμμα");
+    return { status: "closed", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
+  }
+  
+  // Enhanced deadline parsing: "λήγει ... στις 23:59" or "προθεσμία"
+  // Note: This is handled in extractDates() function, so we don't need to re-parse here
+  // But we can add signals if deadline was found
+  if (deadlineAt) {
+    const deadlinePatterns = [
+      /(?:λήγει|ληγει|λήξει|ληξει|έληξε|εληξε)[\s:]+([^\.\n]{0,100})(?:[\s:]+στις[\s:]+(\d{1,2}):(\d{2}))/i,
+      /(?:προθεσμία|προθεσμια)[\s:]+([^\.\n]{0,100})/i,
+      /(?:έως|εως|μέχρι|μεχρι)[\s:]+([^\.\n]{0,100})(?:[\s:]+στις[\s:]+(\d{1,2}):(\d{2}))/i,
+    ];
+    
+    for (const pattern of deadlinePatterns) {
+      const matches = [...content.matchAll(pattern)];
+      if (matches.length > 0) {
+        statusSignals.push(`Deadline pattern matched: "${matches[0][0].substring(0, 120)}"`);
+        break; // Found a match, no need to continue
+      }
+    }
+  }
+  
   for (const keyword of OPEN_KEYWORDS) {
     if (lowerContent.includes(keyword)) {
       const contextMatch = lowerContent.match(
@@ -648,16 +850,64 @@ function classifyKindAndType(
   content: string,
   url?: string
 ): {
-  kind: "benefit" | "voucher_pass" | "program" | "service_info" | "decision";
+  kind: "benefit" | "voucher_pass" | "program" | "service_info" | "decision" | "tender" | "news";
   type: "subsidy" | "voucher" | "program" | "public_call" | "asep_competition" | "manual" | "decision";
 } {
   const lowerTitle = title.toLowerCase();
   const lowerContent = content.toLowerCase();
   const lowerUrl = (url || "").toLowerCase();
   
-  // Διαύγεια: always classify as decision
+  // Διαύγεια: default to decision, but will be verified during live verification
+  // Live verification will check if it's relevant to benefits/programs
+  // If not relevant, it will be marked as kind="decision" and excluded from active tabs
   if (lowerUrl.includes("diavgeia.gov.gr") || lowerUrl.includes("opendata.diavgeia.gov.gr")) {
+    // Default to decision, but allow override during ingestion if keywords are present
+    const hasRelevantKeywords = [
+      "voucher", "pass", "επίδομα", "επιδομα", "επιδότηση", "επιχορηγηση",
+      "πρόγραμμα", "προγραμμα", "παροχή", "παροχη", "βοήθημα", "βοηθημα",
+      "κατάρτιση", "καταρτιση", "απασχόληση", "απασχοληση", "ανεργία", "ανεργια",
+    ].some(kw => lowerTitle.includes(kw) || lowerContent.includes(kw));
+    
+    // If has relevant keywords, allow it to be classified as program/benefit
+    // Live verification will do final check
+    if (hasRelevantKeywords && lowerContent.length > 200) {
+      // Check if it's a program or benefit
+      if (lowerContent.includes("πρόγραμμα") || lowerContent.includes("προγραμμα")) {
+        return { kind: "program", type: "program" };
+      }
+      if (lowerContent.includes("επίδομα") || lowerContent.includes("επιδομα")) {
+        return { kind: "benefit", type: "subsidy" };
+      }
+    }
+    
+    // Default: decision (will be verified during live verification)
     return { kind: "decision", type: "decision" };
+  }
+  
+  // Tender/Procurement detection (before other classifications)
+  const tenderKeywords = [
+    "προσφορ",
+    "ανάδειξη αναδόχου",
+    "αναδειξη αναδοχου",
+    "προμήθεια",
+    "προμηθεια",
+    "ν.4412/2016",
+    "διαπραγμάτευση",
+    "διαπραγματευση",
+    "σύμβαση",
+    "συμβαση",
+    "cpv",
+  ];
+  
+  const isTender = tenderKeywords.some(
+    (kw) =>
+      lowerTitle.includes(kw) ||
+      lowerContent.includes(kw) ||
+      lowerUrl.includes(kw.replace(/\s+/g, "-"))
+  );
+  
+  if (isTender) {
+    return { kind: "tender", type: "manual" };
   }
 
   // ASEP detection
@@ -760,6 +1010,12 @@ function classifyKindAndType(
     return { kind: "program", type: "program" };
   }
 
+  // Default: try to infer from content length and structure
+  // If content is substantial and has structure, it's likely a program/benefit
+  if (content.length > 300 && (lowerContent.includes("κριτήρια") || lowerContent.includes("προϋποθέσεις"))) {
+    return { kind: "program", type: "program" };
+  }
+  
   // Default
   return { kind: "service_info", type: "manual" };
 }
@@ -1419,6 +1675,60 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     evidence.notes.push("Domain not in official whitelist");
   }
 
+  // OVERRIDE RULES (apply before service_info check)
+  const overrideResult = checkOverrideRules(rawTitle, rawContent, itemUrl);
+  if (overrideResult) {
+    evidence.notes.push(`Override rule applied: ${overrideResult.reason}`);
+    // Extract dates first (needed for status)
+    const { startAt, deadlineAt, dateSignals } = extractDates(rawContent, now);
+    evidence.dateSignals = dateSignals;
+    
+    // Determine application status
+    const {
+      status: applicationStatus,
+      statusSignals,
+      applicationStartAt: computedApplicationStartAt,
+      applicationEndAt: computedApplicationEndAt,
+    } = determineApplicationStatus(
+      rawContent,
+      startAt,
+      deadlineAt,
+      now,
+      rawTitle,
+      sourceUrl // Pass sourceUrl for trusted domain check
+    );
+    
+    const applicationStartAt = computedApplicationStartAt || startAt;
+    const applicationEndAt = computedApplicationEndAt || deadlineAt;
+    evidence.statusSignals = statusSignals;
+    
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: overrideResult.kind,
+      type: overrideResult.type,
+      applicationStatus,
+      startAt: startAt ? startAt.toISOString() : null,
+      deadlineAt: deadlineAt ? deadlineAt.toISOString() : null,
+      announcedAt: now.toISOString(),
+      applicationStartAt: applicationStartAt ? applicationStartAt.toISOString() : null,
+      applicationEndAt: applicationEndAt ? applicationEndAt.toISOString() : null,
+      status: overrideResult.status,
+      tags: overrideResult.tags || [],
+      criteriaUnknown: true,
+      confidence: 0.8,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals,
+        dateSignals,
+        notes: [`Override: ${overrideResult.reason}`, ...evidence.notes],
+      },
+    };
+  }
+
   // Check if service info / menu / landing page
   if (isServiceInfo(rawTitle, rawContent, itemUrl)) {
     return {
@@ -1453,8 +1763,8 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
   evidence.dateSignals = dateSignals;
 
   // Determine application status
-  const { 
-    status: applicationStatus, 
+  const {
+    status: applicationStatus,
     statusSignals,
     applicationStartAt: computedApplicationStartAt,
     applicationEndAt: computedApplicationEndAt,
@@ -1463,7 +1773,8 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     startAt,
     deadlineAt,
     now,
-    rawTitle
+    rawTitle,
+    sourceUrl // Pass sourceUrl for trusted domain check
   );
   
   // Use computed dates or parsed dates
@@ -1483,6 +1794,14 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
   if (kind === "service_info") {
     status = "rejected";
     evidence.notes.push("Classified as service_info → rejected");
+  } else if (kind === "tender") {
+    // Tenders: published but excluded from Opportunities tabs (handled in getFeed)
+    status = "published";
+    evidence.notes.push("Tender/procurement → published (excluded from Opportunities tabs)");
+  } else if (kind === "news") {
+    // News: published but as news (not active application)
+    status = "published";
+    evidence.notes.push("News → published (as news, not active application)");
   } else if (applicationStatus === "expired" || applicationStatus === "closed") {
     // Closed/expired → archived (never published)
     status = "archived";

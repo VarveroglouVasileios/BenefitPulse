@@ -16,45 +16,39 @@ export class StatsService {
 
     // Count total published opportunities (all published, not just "open")
     // This should match what users see in "Όλα" tab
+    // Include all kinds EXCEPT service_info (which is not an opportunity)
     const opportunitiesFilter: any = {
       status: "published",
       deletedAt: null,
-      kind: { $in: ["program", "benefit", "voucher_pass", "decision"] }, // Include all relevant kinds
+      kind: { $nin: ["service_info"] }, // Exclude only service_info, include everything else
     };
     
     const opportunitiesCount = await Opportunity.countDocuments(opportunitiesFilter);
 
-    // Count open opportunities (applicationStatus=open OR verificationResult=open OR no deadline expired)
+    // Count open opportunities (applicationStatus=open/upcoming OR verificationResult=open/upcoming OR legacy items with valid dates)
+    // Exclude service_info, tender, news (these are not active opportunities)
+    // This should match what users see in "Τρέχοντα" tab
     const openFilter: any = {
       status: "published",
       deletedAt: null,
-      kind: { $in: ["program", "benefit", "voucher_pass", "decision"] },
-      $or: [
-        // Has applicationStatus=open
-        { applicationStatus: "open" },
-        // Has verificationResult=open
-        { verificationResult: "open" },
-        // Legacy: no applicationStatus but not expired by dates
+      kind: { $nin: ["service_info", "tender", "news"] }, // Exclude service_info, tender, news
+      // Exclude broken links (applies to all) - use $and to combine with other conditions
+      $and: [
+        // Exclude broken links
         {
-          $and: [
-            { applicationStatus: { $exists: false } },
-            {
-              $or: [
-                { deadlineAt: null },
-                { deadlineAt: { $gte: now } },
-              ],
-            },
-            {
-              $or: [
-                { applicationEndAt: null },
-                { applicationEndAt: { $gte: now } },
-              ],
-            },
+          $or: [
+            { brokenLink: { $exists: false } },
+            { brokenLink: false },
           ],
         },
-      ],
-      // Exclude expired by dates
-      $and: [
+        // Exclude dead links
+        {
+          $or: [
+            { verificationResult: { $exists: false } },
+            { verificationResult: { $ne: "dead_link" } },
+          ],
+        },
+        // Dates must be valid (not expired)
         {
           $or: [
             { deadlineAt: null },
@@ -65,6 +59,17 @@ export class StatsService {
           $or: [
             { applicationEndAt: null },
             { applicationEndAt: { $gte: now } },
+          ],
+        },
+        // Must have open/upcoming status OR be legacy item
+        {
+          $or: [
+            // Has applicationStatus=open or upcoming
+            { applicationStatus: { $in: ["open", "upcoming"] } },
+            // Has verificationResult=open or upcoming
+            { verificationResult: { $in: ["open", "upcoming"] } },
+            // Legacy: no applicationStatus (will be filtered by date checks above)
+            { applicationStatus: { $exists: false } },
           ],
         },
       ],
@@ -87,10 +92,9 @@ export class StatsService {
 
     return {
       sources: sourcesCount,
-      opportunities: opportunitiesCount, // This now matches the "Active" tab count
-      openCount: validatedOpenCount,
+      opportunities: opportunitiesCount, // Total published opportunities (matches "Όλα" tab)
+      openCount: validatedOpenCount, // Open/upcoming opportunities (matches "Τρέχοντα" tab)
       lastScanAt,
     };
   }
 }
-

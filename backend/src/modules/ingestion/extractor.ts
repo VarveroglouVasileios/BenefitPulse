@@ -64,32 +64,73 @@ export async function extractOpportunity(
     }
   }
 
-  // Fallback stub implementation
+  // Fallback stub implementation - ENHANCED with more keywords
   const lowerContent = content.toLowerCase();
+  
+  // Count how many benefit-related keywords we find (for confidence calculation)
+  let benefitKeywordCount = 0;
+  const benefitKeywords = [
+    "επίδομα", "επιδομα", "subsidy", "grant",
+    "ενίσχυση", "ενισχυση", "support", "financial support",
+    "καταβολή", "καταβολη", "payment", "benefit",
+    "δράση", "δραση", "action", "initiative",
+    "επιχορήγηση", "επιχορηγηση", "funding", "financial aid",
+    "βοήθημα", "βοηθημα", "aid", "assistance",
+    "παροχή", "παροχη", "provision", "allowance",
+    "οικονομική ενίσχυση", "οικονομικη ενισχυση", "economic support",
+    "οικονομική βοήθεια", "οικονομικη βοηθεια", "financial assistance",
+  ];
+  
+  for (const keyword of benefitKeywords) {
+    if (lowerContent.includes(keyword)) {
+      benefitKeywordCount++;
+    }
+  }
 
   let type: OpportunityType = "manual";
-  if (lowerContent.includes("επίδομα") || lowerContent.includes("subsidy")) {
+  let confidence = 0.5; // Base confidence
+  
+  // Enhanced type detection with synonyms
+  if (benefitKeywordCount > 0) {
     type = "subsidy";
+    confidence = Math.min(0.85, 0.5 + (benefitKeywordCount * 0.05)); // Increase confidence with more keywords
   } else if (
     lowerContent.includes("voucher") ||
-    lowerContent.includes("κουπόνι")
+    lowerContent.includes("κουπόνι") ||
+    lowerContent.includes("κουπονι") ||
+    lowerContent.includes("voucher κατάρτισης") ||
+    lowerContent.includes("voucher καταρτισης")
   ) {
     type = "voucher";
+    confidence = 0.75;
   } else if (
     lowerContent.includes("πρόγραμμα") ||
-    lowerContent.includes("program")
+    lowerContent.includes("προγραμμα") ||
+    lowerContent.includes("program") ||
+    lowerContent.includes("scheme") ||
+    lowerContent.includes("πρόγραμμα απασχόλησης") ||
+    lowerContent.includes("προγραμμα απασχολησης")
   ) {
     type = "program";
+    confidence = 0.75;
   } else if (
     lowerContent.includes("προκήρυξη") ||
-    lowerContent.includes("call")
+    lowerContent.includes("προκηρυξη") ||
+    lowerContent.includes("call") ||
+    lowerContent.includes("announcement") ||
+    lowerContent.includes("public call")
   ) {
     type = "public_call";
+    confidence = 0.75;
   } else if (
     lowerContent.includes("ασεπ") ||
-    lowerContent.includes("competition")
+    lowerContent.includes("asep") ||
+    lowerContent.includes("competition") ||
+    lowerContent.includes("διαγωνισμός") ||
+    lowerContent.includes("διαγωνισμος")
   ) {
     type = "asep_competition";
+    confidence = 0.8;
   }
 
   // Extract title (first line or first 100 chars)
@@ -155,6 +196,6 @@ export async function extractOpportunity(
     region,
     criteriaJson: {},
     criteriaRulesJson,
-    confidence: 0.5, // Low confidence for stub
+    confidence, // Use calculated confidence (higher if keywords found)
   };
 }

@@ -59,16 +59,28 @@ export async function verifyAllPublishedJob(job: Job): Promise<void> {
         verifiedAt: result.verifiedAt,
         verificationResult: result.verificationResult,
         evidenceSnippet: result.evidenceSnippet,
+        brokenLink: result.brokenLink || false,
       };
       
+      // Handle Diavgeia irrelevant decisions
+      if (result.isRelevantDecision === false) {
+        // Mark as decision (not opportunity) and exclude from active tabs
+        updates.kind = "decision";
+        updates.status = "published"; // Keep published but as decision
+        updates.applicationStatus = "closed"; // Not an active opportunity
+        shouldUpdate = true;
+        console.log(`   📋 Diavgeia irrelevant decision: ${opp.title.substring(0, 50)} → kind=decision`);
+      }
+      
       // Handle dead links
-      if (result.verificationResult === "dead_link") {
+      if (result.verificationResult === "dead_link" || result.brokenLink) {
         stats.deadLinks++;
         
         // Mark as rejected if recent, archived if old
         const isOld = opp.publishedAt && (now.getTime() - opp.publishedAt.getTime()) > 90 * 24 * 60 * 60 * 1000; // 90 days
         updates.status = isOld ? "archived" : "rejected";
         updates.rejectionReason = "dead_link";
+        updates.brokenLink = true;
         shouldUpdate = true;
         
         console.log(`   ❌ Dead link: ${opp.title.substring(0, 50)} → ${updates.status}`);
@@ -151,17 +163,26 @@ export async function verifyOpportunityJob(job: Job): Promise<void> {
   opportunity.verifiedAt = result.verifiedAt;
   opportunity.verificationResult = result.verificationResult;
   opportunity.evidenceSnippet = result.evidenceSnippet;
+  opportunity.brokenLink = result.brokenLink || false;
+  
+  // Handle Diavgeia irrelevant decisions
+  if (result.isRelevantDecision === false) {
+    opportunity.kind = "decision";
+    opportunity.status = "published"; // Keep published but as decision
+    opportunity.applicationStatus = "closed"; // Not an active opportunity
+  }
   
   if (result.shouldUpdateStatus && result.newApplicationStatus) {
     opportunity.applicationStatus = result.newApplicationStatus;
   }
   
-  if (result.verificationResult === "dead_link") {
+  if (result.verificationResult === "dead_link" || result.brokenLink) {
     const now = new Date();
     const isOld = opportunity.publishedAt && 
       (now.getTime() - opportunity.publishedAt.getTime()) > 90 * 24 * 60 * 60 * 1000;
     opportunity.status = isOld ? "archived" : "rejected";
-    (opportunity as any).rejectionReason = "dead_link";
+    opportunity.rejectionReason = "dead_link";
+    opportunity.brokenLink = true;
   }
   
   await opportunity.save();

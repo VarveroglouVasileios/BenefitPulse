@@ -27,8 +27,24 @@ export interface SourceMetrics {
   updated: number;
   skipped: Record<string, number>;
   skipSamples: Record<string, SkipSample[]>; // Samples per skip reason
+  statusCounts: {
+    open: number;
+    upcoming: number;
+    closed: number;
+    archived: number;
+    draft: number;
+    rejected: number;
+  };
+  topSkipReasons: Array<{ reason: string; count: number }>; // Top 10 skip reasons
   errors: Array<{ message: string; timestamp: string }>;
   durationMs: number;
+}
+
+export interface TabExclusionStats {
+  tab: string;
+  totalItems: number;
+  excludedItems: number;
+  exclusionReasons: Record<string, number>; // e.g., "brokenLink": 5, "tender": 2
 }
 
 export interface IngestionReport {
@@ -47,7 +63,16 @@ export interface IngestionReport {
     totalUpdated: number;
     totalSkipped: number;
     skipReasons: Record<string, number>;
+    statusCounts: {
+      open: number;
+      upcoming: number;
+      closed: number;
+      archived: number;
+      draft: number;
+      rejected: number;
+    };
   };
+  tabExclusions: TabExclusionStats[]; // Exclusion stats per tab
   metrics: {
     topBlockedDomains: Array<{ domain: string; count: number; samples: SkipSample[] }>;
     topRejectedTitles: Array<{ title: string; count: number; url: string }>;
@@ -68,6 +93,16 @@ export class IngestionReporter {
   private blockedDomains: Map<string, { count: number; samples: SkipSample[] }> = new Map();
   private rejectedTitles: Map<string, { title: string; count: number; url: string }> = new Map();
   private invalidDates: Map<string, { source: string; input: string; parser: string; count: number }> = new Map();
+  
+  // Status tracking per source
+  private sourceStatusCounts: Map<string, {
+    open: number;
+    upcoming: number;
+    closed: number;
+    archived: number;
+    draft: number;
+    rejected: number;
+  }> = new Map();
 
   constructor(debugMode: boolean = false) {
     this.runId = `ingestion-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}`;
@@ -99,8 +134,25 @@ export class IngestionReporter {
       updated: 0,
       skipped: {},
       skipSamples: {},
+      statusCounts: {
+        open: 0,
+        upcoming: 0,
+        closed: 0,
+        archived: 0,
+        draft: 0,
+        rejected: 0,
+      },
+      topSkipReasons: [],
       errors: [],
       durationMs: 0,
+    });
+    this.sourceStatusCounts.set(sourceId, {
+      open: 0,
+      upcoming: 0,
+      closed: 0,
+      archived: 0,
+      draft: 0,
+      rejected: 0,
     });
   }
 
@@ -125,12 +177,30 @@ export class IngestionReporter {
   }
 
   /**
-   * Track published opportunity
+   * Track published opportunity with status
    */
-  trackPublished(sourceId: string): void {
+  trackPublished(sourceId: string, status?: string, applicationStatus?: string): void {
     const source = this.sources.get(sourceId);
     if (source) {
       source.published++;
+      
+      // Track status counts
+      const statusCounts = this.sourceStatusCounts.get(sourceId);
+      if (statusCounts) {
+        if (status === "rejected") {
+          statusCounts.rejected++;
+        } else if (status === "archived") {
+          statusCounts.archived++;
+        } else if (status === "draft") {
+          statusCounts.draft++;
+        } else if (applicationStatus === "open") {
+          statusCounts.open++;
+        } else if (applicationStatus === "upcoming") {
+          statusCounts.upcoming++;
+        } else if (applicationStatus === "closed") {
+          statusCounts.closed++;
+        }
+      }
     }
   }
 
@@ -320,12 +390,46 @@ export class IngestionReporter {
       .sort((a, b) => b.count - a.count)
       .slice(0, 20);
 
+    // Calculate top skip reasons per source and aggregate status counts
+    const totalStatusCounts = {
+      open: 0,
+      upcoming: 0,
+      closed: 0,
+      archived: 0,
+      draft: 0,
+      rejected: 0,
+    };
+    
+    const sourcesArray = Array.from(this.sources.values());
+    for (const source of sourcesArray) {
+      // Update status counts from tracking
+      const statusCounts = this.sourceStatusCounts.get(source.sourceId);
+      if (statusCounts) {
+        source.statusCounts = { ...statusCounts };
+        totalStatusCounts.open += statusCounts.open;
+        totalStatusCounts.upcoming += statusCounts.upcoming;
+        totalStatusCounts.closed += statusCounts.closed;
+        totalStatusCounts.archived += statusCounts.archived;
+        totalStatusCounts.draft += statusCounts.draft;
+        totalStatusCounts.rejected += statusCounts.rejected;
+      }
+      
+      // Calculate top 10 skip reasons for this source
+      source.topSkipReasons = Object.entries(source.skipped)
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    }
+
+    // Calculate tab exclusion stats (this will be populated after ingestion completes)
+    const tabExclusions: TabExclusionStats[] = [];
+
     const report: IngestionReport = {
       runId: this.runId,
       startedAt: this.startedAt.toISOString(),
       completedAt: completedAt.toISOString(),
       durationMs,
-      sources: Array.from(this.sources.values()),
+      sources: sourcesArray,
       summary: {
         totalSources: this.sources.size,
         successfulSources,
@@ -336,7 +440,9 @@ export class IngestionReporter {
         totalUpdated,
         totalSkipped,
         skipReasons,
+        statusCounts: totalStatusCounts,
       },
+      tabExclusions,
       metrics: {
         topBlockedDomains,
         topRejectedTitles,

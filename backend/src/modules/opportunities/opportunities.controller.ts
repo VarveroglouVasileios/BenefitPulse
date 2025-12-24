@@ -23,7 +23,7 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
 
 export async function getFeed(req: Request, res: Response): Promise<void> {
   try {
-    const { tab, page, limit, type, kind, source, status, search } = req.query;
+    const { tab, page, limit, type, kind, source, status, search, showRejected, showTendersNews } = req.query;
     const result = await opportunitiesService.getFeed({
       tab: tab as "news" | "upcoming" | "current" | "all",
       page: page ? parseInt(page as string) : undefined,
@@ -33,6 +33,8 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
       source: source as string,
       status: status as string,
       search: search as string,
+      showRejected: showRejected === "true" || showRejected === true,
+      showTendersNews: showTendersNews === "true" || showTendersNews === true,
     });
     res.status(200).json(result);
   } catch (error: any) {

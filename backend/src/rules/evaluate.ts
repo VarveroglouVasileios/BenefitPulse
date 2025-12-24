@@ -4,11 +4,6 @@ import { IUserProfile } from "../models/profile.model";
 import { IOpportunity } from "../models/opportunity.model";
 
 export function evaluateMatch(
-  profile: UserProfile,
-  criteriaRules: CriteriaRules
-): MatchResult;
-
-export function evaluateMatch(
   profile: UserProfile | IUserProfile,
   criteriaRules: CriteriaRules,
   opportunity?: IOpportunity
