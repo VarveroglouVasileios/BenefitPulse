@@ -1669,6 +1669,142 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     notes: [] as string[],
   };
 
+  // BLACKLIST CHECK: Filter out procurement/tenders noise + administrative noise
+  // BUT: Allow "Προκήρυξη" if source is ASEP (ASEP uses it for jobs, not tenders)
+  const procurementKeywords = [
+    "προμήθεια",
+    "προμηθεια",
+    "διαγωνισμός",
+    "διαγωνισμος",
+    "διακήρυξη",
+    "διακηρυξη",
+    "ανάδειξη αναδόχου",
+    "αναδειξη αναδοχου",
+    "διαπραγμάτευση",
+    "διαπραγματευση",
+    "κατασκευή έργου",
+    "κατασκευη εργου",
+    "σίτισης",
+    "σιτισης",
+    "τροφίμων",
+    "τροφιμων",
+    "εσηδης",
+    "μίσθωση",
+    "μισθωση",
+    "καθαρισμός",
+    "καθαρισμος",
+    "φύλαξη",
+    "φυλαξη",
+  ];
+  
+  // Administrative noise keywords (questionnaires, evaluations, minutes)
+  const administrativeKeywords = [
+    "ερωτηματολόγιο",
+    "ερωτηματολογιο",
+    "ωφελουμένων", // Beneficiaries questionnaire context
+    "ωφελουμενων",
+    "αξιολόγηση",
+    "αξιολογηση",
+    "πρακτικό",
+    "πρακτικο",
+  ];
+  
+  const lowerTitle = rawTitle.toLowerCase();
+  const lowerSource = source.toLowerCase();
+  const isAsepSource = lowerSource.includes("asep") || lowerSource.includes("ασεπ");
+  
+  // Check for administrative noise keywords first
+  const matchedAdminKeyword = administrativeKeywords.find(keyword => lowerTitle.includes(keyword.toLowerCase()));
+  if (matchedAdminKeyword) {
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: "service_info",
+      type: "manual",
+      applicationStatus: "unknown",
+      startAt: null,
+      deadlineAt: null,
+      announcedAt: null,
+      applicationStartAt: null,
+      applicationEndAt: null,
+      status: "rejected",
+      tags: [],
+      criteriaUnknown: true,
+      confidence: 0.3,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals: [],
+        dateSignals: [],
+        notes: [`Rejected due to administrative noise keyword: "${matchedAdminKeyword}"`],
+      },
+    };
+  }
+  
+  // Check for "Προκήρυξη" separately - only reject if NOT from ASEP
+  const hasProkirixi = lowerTitle.includes("προκήρυξη") || lowerTitle.includes("προκηρυξη");
+  if (hasProkirixi && !isAsepSource) {
+    // "Προκήρυξη" from non-ASEP sources is likely a tender/procurement
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: "service_info",
+      type: "manual",
+      applicationStatus: "unknown",
+      startAt: null,
+      deadlineAt: null,
+      announcedAt: null,
+      applicationStartAt: null,
+      applicationEndAt: null,
+      status: "rejected",
+      tags: [],
+      criteriaUnknown: true,
+      confidence: 0.3,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals: [],
+        dateSignals: [],
+        notes: [`Rejected due to procurement keyword: "προκήρυξη" (non-ASEP source)`],
+      },
+    };
+  }
+  
+  // Check for other procurement keywords
+  const matchedKeyword = procurementKeywords.find(keyword => lowerTitle.includes(keyword.toLowerCase()));
+  
+  if (matchedKeyword) {
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: "service_info",
+      type: "manual",
+      applicationStatus: "unknown",
+      startAt: null,
+      deadlineAt: null,
+      announcedAt: null,
+      applicationStartAt: null,
+      applicationEndAt: null,
+      status: "rejected",
+      tags: [],
+      criteriaUnknown: true,
+      confidence: 0.3,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals: [],
+        dateSignals: [],
+        notes: [`Rejected due to procurement keyword: "${matchedKeyword}"`],
+      },
+    };
+  }
+
   // Check official domain
   const isOfficial = isOfficialDomain(itemUrl);
   if (!isOfficial) {

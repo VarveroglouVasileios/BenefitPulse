@@ -183,15 +183,67 @@ export class OpportunitiesService {
     // Track exclusion reasons
     const exclusionReasons: Record<string, number> = {};
 
+    // Sort based on tab (declare early)
+    let sort: any = {};
+
     // Tab-based filtering (non-overlapping criteria)
     if (tab === "news") {
-      // Νέα: applicationStatus="news" OR kind="tender" (tenders go to news tab)
-      filter.$or = [
-        { "criteriaJson.applicationStatus": "news" },
-        { kind: "tender" },
+      // Νέα: STRICT filter - must be kind='news' OR kind='program' AND title MUST contain announcement keywords
+      const announcementKeywords = [
+        "παράταση",
+        "παραταση",
+        "αποτελέσματα",
+        "αποτελεσματα",
+        "πίνακες",
+        "πινακες",
+        "έναρξη",
+        "εναρξη",
+        "αιτήσεις",
+        "αιτησεις",
+        "προκήρυξη",
+        "προκηρυξη",
       ];
-      // Remove tender from exclusion list for news tab (allow tenders in news)
-      filter.kind = { $nin: ["service_info"] };
+
+      // Must be kind='news' OR kind='program', AND title must contain announcement keywords, AND exclude service_info
+      // OR source is ASEP AND title contains news keywords
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          // Standard news/program with keywords
+          {
+            $and: [
+              { $or: [{ kind: "news" }, { kind: "program" }] },
+              {
+                title: {
+                  $regex: new RegExp(announcementKeywords.join("|"), "i"),
+                },
+              },
+            ],
+          },
+          // ASEP source with news-like title
+          {
+            $and: [
+              {
+                $or: [
+                  { source: { $regex: /asep/i } },
+                  { source: { $regex: /ασεπ/i } },
+                ],
+              },
+              {
+                title: {
+                  $regex: new RegExp(announcementKeywords.join("|"), "i"),
+                },
+              },
+            ],
+          },
+        ],
+      });
+      filter.$and.push({
+        kind: { $ne: "service_info" },
+      });
+
+      // Sort strictly by updatedAt desc (news is about recency)
+      sort = { updatedAt: -1 };
     } else if (tab === "upcoming") {
       // Upcoming: kind="program" AND applicationStatus="upcoming"
       // FIXED: Don't require verificationResult - allow items with applicationStatus="upcoming" even if not verified yet
@@ -385,19 +437,18 @@ export class OpportunitiesService {
       filter.$text = { $search: query.search };
     }
 
-    // Sort based on tab
-    let sort: any = {};
-    if (tab === "news") {
-      sort = { publishedAt: -1 }; // Desc: newest first
-    } else if (tab === "upcoming") {
-      // Asc by applicationStartAt, fallback to publishedAt desc
-      sort = { applicationStartAt: 1, publishedAt: -1 };
-    } else if (tab === "current") {
-      // Asc by applicationEndAt, fallback to publishedAt desc
-      sort = { applicationEndAt: 1, publishedAt: -1 };
-    } else {
-      // All: default sort
-      sort = { publishedAt: -1 };
+    // Sort based on tab (if not already set by news tab)
+    if (!sort || Object.keys(sort).length === 0) {
+      if (tab === "upcoming") {
+        // Asc by applicationStartAt, fallback to publishedAt desc
+        sort = { applicationStartAt: 1, publishedAt: -1 };
+      } else if (tab === "current") {
+        // Asc by applicationEndAt, fallback to publishedAt desc
+        sort = { applicationEndAt: 1, publishedAt: -1 };
+      } else {
+        // All: default sort
+        sort = { publishedAt: -1 };
+      }
     }
 
     const opportunities = await Opportunity.find(filter)
@@ -659,44 +710,53 @@ export class OpportunitiesService {
         }
 
         return true;
-      });
+      })
+      .slice(0, 10);
 
-    if (scored.length > 0) {
-      return scored;
+    // COLD START FIX: If top 10 items have 0 views, fallback to "Smart Featured" query
+    if (
+      scored.length === 0 ||
+      scored.every((opp: any) => {
+        const oppViews = top.find(
+          (t: any) => t.opportunity?._id?.toString() === opp._id?.toString()
+        );
+        return !oppViews || (oppViews.views === 0 && oppViews.clicks === 0);
+      })
+    ) {
+      // Smart Featured fallback: Sort by createdAt desc, filter for confidence > 0.8, exclude "Manual" source
+      const smartFeatured = await Opportunity.find({
+        status: "published",
+        deletedAt: null,
+        kind: { $ne: "service_info" },
+        confidence: { $gt: 0.8 },
+        source: { $ne: "Manual" }, // Prefer official sources
+        $or: [
+          { applicationStatus: { $in: ["open", "upcoming"] } },
+          { "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] } },
+        ],
+        "criteriaJson.applicationStatus": {
+          $nin: ["expired", "closed", "news", "results", "unknown"],
+        },
+        $and: [
+          {
+            $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+          },
+          {
+            $or: [
+              { applicationEndAt: null },
+              { applicationEndAt: { $gte: now } },
+            ],
+          },
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .lean();
+
+      return smartFeatured as unknown as IOpportunity[];
     }
 
-    // Fallback: newest published in last period (STRICT: only open/upcoming, no expired)
-    return Opportunity.find({
-      status: "published",
-      deletedAt: null,
-      kind: { $ne: "service_info" },
-      publishedAt: { $gte: since },
-      $and: [
-        // ONLY allow open/upcoming (NO unknown, NO legacy without status)
-        {
-          "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] },
-        },
-        // Exclude expired/closed/news/results/unknown
-        {
-          "criteriaJson.applicationStatus": {
-            $nin: ["expired", "closed", "news", "results", "unknown"],
-          },
-        },
-        // MANDATORY: deadlineAt must be null OR >= now
-        {
-          $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
-        },
-        // MANDATORY: applicationEndAt must be null OR >= now
-        {
-          $or: [
-            { applicationEndAt: null },
-            { applicationEndAt: { $gte: now } },
-          ],
-        },
-      ],
-    })
-      .sort({ publishedAt: -1 })
-      .limit(10);
+    return scored;
   }
 
   async getMatchedOpportunities(userId: string): Promise<

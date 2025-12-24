@@ -954,6 +954,7 @@ export class IngestionService {
     // Track skip reasons
     const skipReasons: Record<string, number> = {
       duplicate: 0,
+      duplicateTitle: 0, // New: duplicate title check
       contentTooShort: 0,
       genericTitle: 0,
       blockedByHeuristics: 0,
@@ -1399,6 +1400,17 @@ export class IngestionService {
         continue;
       }
 
+      // Prevent duplicates from RSS/Discovery: Check for duplicate title before creating RawItem
+      const existingByTitle = await RawItem.findOne({ title: item.title });
+      if (existingByTitle) {
+        skipReasons.duplicateTitle = (skipReasons.duplicateTitle || 0) + 1;
+        console.log(`   ⏭️  SKIP: Skipping duplicate title - "${item.title.substring(0, 50)}"`);
+        if (reporter) {
+          reporter.trackSkipped(sourceId, 'duplicateTitle', item.title, item.url, item.content?.length || 0, source.type);
+        }
+        continue;
+      }
+
       // Save raw item (upsert if exists)
       let rawItem = await RawItem.findOne({ hash });
       const isDuplicate = !!rawItem;
@@ -1449,6 +1461,39 @@ export class IngestionService {
 
         const cleaned = cleanAndValidate(cleanerInput);
 
+        // Extract eligibility rules using AI extractor (for criteria and confidence check)
+        const extracted = await extractOpportunity(
+          item.title + "\n\n" + item.content
+        );
+
+        // AUTO-PUBLISH TRUSTED SOURCES: Check if source is trusted and confidence is sufficient
+        const sourceName = source.name || "";
+        const isTrustedSource = 
+          sourceName.includes("ΔΥΠΑ") || 
+          sourceName.includes("DYPA") || 
+          sourceName.includes("ASEP") || 
+          sourceName.includes("ΑΣΕΠ") || 
+          sourceName.includes("Gov") || 
+          sourceName.includes("Vouchers") ||
+          sourceName.toLowerCase().includes("asep") ||
+          sourceName.toLowerCase().includes("dypa");
+        
+        // Auto-publish trusted sources with sufficient confidence
+        if (isTrustedSource && (extracted.confidence > 0.6 || cleaned.confidence > 0.6)) {
+          if (cleaned.status === "draft") {
+            console.log(`   🔓 AUTO-PUBLISH: Trusted source "${sourceName}" with confidence ${Math.max(extracted.confidence, cleaned.confidence)} - overriding draft status`);
+            cleaned.status = "published";
+            
+            // If dates are unknown, set default expiration to 2 months in the future
+            if (!cleaned.deadlineAt && !cleaned.applicationEndAt) {
+              const twoMonthsFromNow = new Date();
+              twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
+              cleaned.applicationEndAt = twoMonthsFromNow.toISOString();
+              console.log(`   📅 AUTO-DATE: Set default expiration to 2 months from now (${twoMonthsFromNow.toISOString().split('T')[0]})`);
+            }
+          }
+        }
+
         // Log cleaning result
         console.log(`   🧹 CLEANED: kind=${cleaned.kind}, type=${cleaned.type}, status=${cleaned.status}, applicationStatus=${cleaned.applicationStatus}`);
         if (cleaned.status === "rejected") {
@@ -1470,7 +1515,7 @@ export class IngestionService {
           continue;
         }
         
-        // Track draft/archived status
+        // Track draft/archived status (only if not auto-published)
         if (cleaned.status === "draft") {
           skipReasons.draft++;
           if (reporter) {
@@ -1484,9 +1529,7 @@ export class IngestionService {
         }
 
         // Extract eligibility rules using AI extractor (for criteria only)
-        const extracted = await extractOpportunity(
-          item.title + "\n\n" + item.content
-        );
+        // Note: extracted is already fetched above for auto-publish check, so we reuse it here
 
         // Merge eligibility rules from extractor and cleaner
         let criteriaRulesJson = extracted.criteriaRulesJson || {};
@@ -1546,11 +1589,41 @@ export class IngestionService {
           deletedAt: null,
         });
 
+        // ASEP-specific kind override: If ASEP source and title contains news keywords, set kind to 'news'
+        let finalKind = cleaned.kind;
+        let finalSummary = cleaned.summary;
+        
+        // Use summary from extractor if it's better (e.g., ASEP "no description" fix)
+        if (extracted.summary && extracted.summary.trim().length > 0 && 
+            (cleaned.summary.trim().length === 0 || cleaned.summary.toLowerCase().includes("no description"))) {
+          finalSummary = extracted.summary;
+        }
+        
+        // ASEP kind detection: If ASEP source and title contains news keywords, override kind
+        const lowerTitle = cleaned.title.toLowerCase();
+        const isAsepSource = sourceName.toLowerCase().includes("asep") || sourceName.toLowerCase().includes("ασεπ");
+        if (isAsepSource) {
+          // News-like keywords: results, tables, lottery, objections
+          if (
+            lowerTitle.includes("αποτελέσματα") ||
+            lowerTitle.includes("αποτελεσματα") ||
+            lowerTitle.includes("πίνακες") ||
+            lowerTitle.includes("πινακες") ||
+            lowerTitle.includes("κληρωτίδα") ||
+            lowerTitle.includes("κληρωτιδα") ||
+            lowerTitle.includes("ενστάσεις") ||
+            lowerTitle.includes("ενστασεις")
+          ) {
+            finalKind = "news";
+            console.log(`   📰 ASEP NEWS: Overriding kind to 'news' for ASEP results/announcements`);
+          }
+        }
+
         if (existingOpp) {
           // Update existing opportunity (don't create duplicate)
           existingOpp.title = cleaned.title;
-          existingOpp.summary = cleaned.summary;
-          existingOpp.kind = cleaned.kind;
+          existingOpp.summary = finalSummary;
+          existingOpp.kind = finalKind;
           existingOpp.type = cleaned.type;
           existingOpp.deadlineAt = deadlineAt;
           existingOpp.startAt = startAt;
@@ -1571,9 +1644,9 @@ export class IngestionService {
         // Store applicationStatus in model field
         await Opportunity.create({
           type: cleaned.type,
-          kind: cleaned.kind,
+          kind: finalKind,
           title: cleaned.title,
-          summary: cleaned.summary,
+          summary: finalSummary,
           officialUrl: cleaned.officialUrl,
           source: cleaned.source,
           publishedAt: item.publishedAt,

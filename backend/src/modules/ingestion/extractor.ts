@@ -132,26 +132,145 @@ export async function extractOpportunity(
     type = "asep_competition";
     confidence = 0.8;
   }
-
-  // Extract title (first line or first 100 chars)
+  
+  // Extract title (first line or first 100 chars) - extract early for use in ASEP detection
   const title = content.split("\n")[0].substring(0, 100) || "Untitled";
+  const lowerTitle = title.toLowerCase();
+  
+  // ASEP JOB DETECTION: Check for ASEP job announcements (ΠΡΟΚΗΡΥΞΗ, ΣΟΧ, ΣΜΕ)
+  const asepJobKeywords = [
+    "ασεπ",
+    "asep",
+    "προκήρυξη",
+    "προκηρυξη",
+    "σοχ",
+    "σμε",
+  ];
+  
+  const hasAsepJobKeyword = asepJobKeywords.some(keyword => 
+    lowerContent.includes(keyword) || lowerTitle.includes(keyword)
+  );
+  
+  if (hasAsepJobKeyword && (lowerContent.includes("προκήρυξη") || lowerContent.includes("προκηρυξη") || lowerTitle.includes("προκήρυξη") || lowerTitle.includes("προκηρυξη"))) {
+    type = "public_call" as OpportunityType; // Use public_call for ASEP job announcements (closest match)
+    confidence = 0.9; // ASEP is always high value
+  }
+  
+  // IMPROVED STUB LOGIC: Check for training keywords if confidence is low (default stub)
+  if (confidence <= 0.5) {
+    const trainingKeywords = [
+      "κατάρτιση",
+      "καταρτιση",
+      "επανακατάρτιση",
+      "επανακαταρτιση",
+      "δεξιότητες",
+      "δεξιοτητες",
+      "upskilling",
+      "reskilling",
+      "συμβουλευτική",
+      "συμβουλευτικη",
+    ];
+    
+    const hasTrainingKeyword = trainingKeywords.some(keyword => lowerContent.includes(keyword));
+    
+    if (hasTrainingKeyword) {
+      type = "program";
+      confidence = 0.8; // Boost confidence so it passes ingestion threshold
+    }
+  }
 
   // Extract summary (first 500 chars)
-  const summary = content.substring(0, 500);
-
-  // Simple tag extraction
+  let summary = content.substring(0, 500);
+  
+  // FIX ASEP "No Description": If summary is empty or "no description", use title
+  if (!summary || summary.trim().length === 0 || summary.toLowerCase().includes("no description") || summary.toLowerCase().includes("χωρίς περιγραφή")) {
+    summary = title; // Use title as summary for ASEP and other sources with missing descriptions
+  }
+  
+  // Simple tag extraction (declare tags array first)
   const tags: string[] = [];
+  
+  // ASEP-specific kind detection based on title keywords (lowerTitle already declared above)
+  const isAsepContent = lowerContent.includes("asep") || lowerContent.includes("ασεπ") || lowerTitle.includes("asep") || lowerTitle.includes("ασεπ");
+  
+  if (isAsepContent) {
+    // News-like keywords: results, tables, lottery, objections
+    if (
+      lowerTitle.includes("αποτελέσματα") ||
+      lowerTitle.includes("αποτελεσματα") ||
+      lowerTitle.includes("πίνακες") ||
+      lowerTitle.includes("πινακες") ||
+      lowerTitle.includes("κληρωτίδα") ||
+      lowerTitle.includes("κληρωτιδα") ||
+      lowerTitle.includes("ενστάσεις") ||
+      lowerTitle.includes("ενστασεις")
+    ) {
+      // Force kind to 'news' for ASEP results/announcements
+      // Note: We can't change 'kind' here as it's not in ExtractedOpportunity interface
+      // This will be handled in cleaner.ts or ingestion.service.ts
+      // But we can add a tag to help identify it
+      if (!tags.includes("public-sector")) {
+        tags.push("public-sector");
+      }
+    }
+    
+    // Job/application keywords: submission, applications, proclamation
+    if (
+      lowerTitle.includes("υποβολή") ||
+      lowerTitle.includes("υποβολη") ||
+      lowerTitle.includes("αιτήσεις") ||
+      lowerTitle.includes("αιτησεις") ||
+      lowerTitle.includes("πρόσκληση") ||
+      lowerTitle.includes("προσκληση") ||
+      lowerTitle.includes("προκήρυξη") ||
+      lowerTitle.includes("προκηρυξη")
+    ) {
+      // This is a job/program announcement
+      if (type === "manual" || type === "public_call") {
+        type = "public_call"; // Ensure it's treated as a call/announcement
+      }
+      if (!tags.includes("public-sector")) {
+        tags.push("public-sector");
+      }
+    }
+  }
   const tagKeywords: Record<string, string[]> = {
     student: ["φοιτητής", "φοιτητή", "student"],
     unemployed: ["άνεργος", "unemployed"],
     parent: ["γονέας", "parent"],
     energy: ["ενέργεια", "energy"],
     housing: ["κατοικία", "housing"],
+    katartisi: ["κατάρτιση", "καταρτιση", "επανακατάρτιση", "επανακαταρτιση", "upskilling", "reskilling"], // Training tag
+    "public-sector": ["ασεπ", "asep", "προκήρυξη", "προκηρυξη", "σοχ", "σμε"], // ASEP/public sector tag
   };
 
   for (const [tag, keywords] of Object.entries(tagKeywords)) {
-    if (keywords.some((kw) => lowerContent.includes(kw))) {
+    if (keywords.some((kw) => lowerContent.includes(kw) || lowerTitle.includes(kw))) {
       tags.push(tag);
+    }
+  }
+  
+  // If we detected ASEP job keywords, ensure "public-sector" tag is present
+  if (hasAsepJobKeyword && !tags.includes("public-sector")) {
+    tags.push("public-sector");
+  }
+  
+  // If we detected training keywords and set type to "program", ensure "katartisi" tag is present
+  if (type === "program" && confidence >= 0.8 && !tags.includes("katartisi")) {
+    const trainingKeywords = [
+      "κατάρτιση",
+      "καταρτιση",
+      "επανακατάρτιση",
+      "επανακαταρτιση",
+      "δεξιότητες",
+      "δεξιοτητες",
+      "upskilling",
+      "reskilling",
+      "συμβουλευτική",
+      "συμβουλευτικη",
+    ];
+    if (trainingKeywords.some(keyword => lowerContent.includes(keyword))) {
+      tags.push("katartisi");
     }
   }
 
@@ -180,13 +299,80 @@ export async function extractOpportunity(
     }
   }
 
-  // Mock criteria rules (should be extracted by AI)
+  // Regex-based criteria extraction (since we don't have LLM)
   const criteriaRulesJson: CriteriaRules = {
     statusFlags: tags.includes("student")
       ? { required: ["student"] }
       : undefined,
     region: region ? { includes: [region] } : undefined,
   };
+
+  // Regex helpers for criteria extraction
+  const ageRegex = /(\d{2})\s*[-–]\s*(\d{2})\s*(?:ετών|χρονών)/i;
+  const unemploymentRegex = /(?:κάρτα|δελτίο)\s*ανεργίας|εγγεγραμμένοι\s*άνεργοι|ανέρων/i;
+  const regionRegex = /(?:περιφέρεια|δήμος)\s*([Α-Ωα-ωά-ώ\s]+)/i;
+
+  // 1. Extract Age Range
+  const ageMatch = lowerContent.match(ageRegex);
+  if (ageMatch) {
+    const ageMin = parseInt(ageMatch[1], 10);
+    const ageMax = parseInt(ageMatch[2], 10);
+    if (!isNaN(ageMin) && !isNaN(ageMax)) {
+      criteriaRulesJson.ageRange = {
+        min: ageMin,
+        max: ageMax,
+      };
+      if (!tags.includes("age-criteria")) {
+        tags.push("age-criteria");
+      }
+    }
+  }
+
+  // 2. Extract Unemployment Status
+  if (unemploymentRegex.test(lowerContent)) {
+    criteriaRulesJson.statusFlags = criteriaRulesJson.statusFlags || {};
+    criteriaRulesJson.statusFlags.required = [
+      ...(criteriaRulesJson.statusFlags.required || []),
+      "unemployed",
+    ];
+    if (!tags.includes("unemployed")) {
+      tags.push("unemployed");
+    }
+  }
+
+  // 3. Simple Region Detection (enhance existing region extraction)
+  if (!region) {
+    if (lowerContent.includes("αττική") || lowerContent.includes("αττικής") || lowerContent.includes("αθήνα") || lowerContent.includes("αθηνα")) {
+      region = "attiki";
+    } else if (lowerContent.includes("θεσσαλονίκ") || lowerContent.includes("θεσσαλονικη") || lowerContent.includes("κεντρικής μακεδονίας") || lowerContent.includes("κεντρικης μακεδονιας")) {
+      region = "thessaloniki";
+    } else if (lowerContent.includes("κρήτη") || lowerContent.includes("κρητη") || lowerContent.includes("crete")) {
+      region = "crete";
+    } else if (lowerContent.includes("πελοπόννησος") || lowerContent.includes("πελοποννησος") || lowerContent.includes("peloponnese")) {
+      region = "peloponnese";
+    } else if (lowerContent.includes("μακεδονία") || lowerContent.includes("μακεδονια") || lowerContent.includes("macedonia")) {
+      region = "macedonia";
+    } else if (lowerContent.includes("θράκη") || lowerContent.includes("θρακη") || lowerContent.includes("thrace")) {
+      region = "thrace";
+    } else if (lowerContent.includes("ήπειρος") || lowerContent.includes("ηπειρος") || lowerContent.includes("epirus")) {
+      region = "epirus";
+    } else if (lowerContent.includes("θεσσαλία") || lowerContent.includes("θεσσαλια") || lowerContent.includes("thessaly")) {
+      region = "thessaly";
+    } else if (lowerContent.includes("στερεά ελλάδα") || lowerContent.includes("στερεα ελλαδα") || lowerContent.includes("central greece")) {
+      region = "central_greece";
+    } else if (lowerContent.includes("δυτική ελλάδα") || lowerContent.includes("δυτικη ελλαδα") || lowerContent.includes("western greece")) {
+      region = "western_greece";
+    } else if (lowerContent.includes("αιγαίο") || lowerContent.includes("αιγαιο") || lowerContent.includes("aegean")) {
+      region = "aegean_islands";
+    } else if (lowerContent.includes("ιόνιο") || lowerContent.includes("ιονιο") || lowerContent.includes("ionian")) {
+      region = "ionian_islands";
+    }
+    
+    // Update region in criteriaRulesJson if found
+    if (region) {
+      criteriaRulesJson.region = { includes: [region] };
+    }
+  }
 
   return {
     type,

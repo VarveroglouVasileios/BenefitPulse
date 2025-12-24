@@ -241,6 +241,37 @@ export async function seed() {
       type: "html_catalog" as const,
       enabled: false, // Disabled: 403 Forbidden (blocked)
     },
+    // NEW SOURCES - Expanded data sources
+    {
+      name: "Vouchers Gov",
+      url: "https://vouchers.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true, // Target generic listing cards
+    },
+    {
+      name: "ESPA Antagonistikotita",
+      url: "http://epan2.antagonistikotita.gr/uploads/rss.xml",
+      type: "rss" as const,
+      enabled: true, // RSS feed for competitiveness programs
+    },
+    {
+      name: "TaxHeaven News",
+      url: "https://www.taxheaven.gr/rss",
+      type: "rss" as const,
+      enabled: true, // RSS feed for tax-related announcements (catches "Spiti Mou" etc.)
+    },
+    {
+      name: "ASEP Announcements",
+      url: "https://www.asep.gr/rss/news",
+      type: "rss" as const,
+      enabled: true, // RSS feed for ASEP job announcements (more reliable than HTML)
+    },
+    {
+      name: "Dentist Pass",
+      url: "https://vouchers.gov.gr/dentistpass",
+      type: "single_page" as const,
+      enabled: true, // Dentist Pass specific page
+    },
   ];
 
   // Check for duplicates and deduplicate, update broken URLs
