@@ -91,17 +91,21 @@
             v-model="form.acceptTerms"
             type="checkbox"
             :class="{ error: errors.acceptTerms }"
+            required
           />
           <span>
-            Αποδέχομαι τους
-            <router-link to="/terms">όρους χρήσης</router-link> και την
-            <router-link to="/privacy">πολιτική απορρήτου</router-link>
+            Έχω διαβάσει και αποδέχομαι τους
+            <router-link to="/terms" target="_blank">Όρους Χρήσης</router-link> και την
+            <router-link to="/privacy" target="_blank">Πολιτική Απορρήτου</router-link>
             <span class="required">*</span>
           </span>
         </label>
         <span v-if="errors.acceptTerms" class="error-message">{{
           errors.acceptTerms
         }}</span>
+        <small class="checkbox-hint">
+          Η αποδοχή είναι υποχρεωτική για τη χρήση της πλατφόρμας.
+        </small>
       </div>
 
       <button
@@ -372,6 +376,13 @@ h1 {
 
 .checkbox-group span {
   color: var(--text-primary);
+}
+
+.checkbox-hint {
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
 }
 
 .btn {

@@ -73,6 +73,11 @@ const router = createRouter({
       component: () => import("../views/public/Disclaimer.vue"),
     },
     {
+      path: "/cookies",
+      name: "Cookies",
+      component: () => import("../views/public/Cookies.vue"),
+    },
+    {
       path: "/profile/wizard",
       name: "ProfileWizard",
       component: () => import("../views/user/ProfileWizard.vue"),

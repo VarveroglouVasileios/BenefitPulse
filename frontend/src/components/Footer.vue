@@ -26,8 +26,10 @@
           <li><a href="#" @click.prevent="openContactModal('error')" class="footer-link-prominent">⚠️ Αναφορά λάθους</a></li>
           <li><a href="#" @click.prevent="openContactModal('source')" class="footer-link-prominent">💡 Πρότεινε πηγή</a></li>
           <li><a href="#" @click.prevent="openContactModal('general')">Επικοινωνία</a></li>
-          <li><router-link to="/terms">Όροι</router-link></li>
-          <li><router-link to="/privacy">Απόρρητο</router-link></li>
+          <li><router-link to="/terms">Όροι Χρήσης</router-link></li>
+          <li><router-link to="/privacy">Πολιτική Απορρήτου</router-link></li>
+          <li><router-link to="/cookies">Πολιτική Cookies</router-link></li>
+          <li><router-link to="/disclaimer">Αποποίηση Ευθύνης</router-link></li>
         </ul>
       </div>
     </div>

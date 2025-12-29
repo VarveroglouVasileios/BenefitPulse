@@ -1,205 +1,82 @@
 <template>
   <div class="disclaimer">
     <div class="container">
-      <h1>Δήλωση Αποποίησης Ευθύνης</h1>
-      <p class="last-updated">Τελευταία ενημέρωση: {{ lastUpdated }}</p>
+      <div class="disclaimer-banner">
+        <h1>⚠️ Σημαντική Προειδοποίηση</h1>
+      </div>
 
-      <section>
-        <h2>1. Γενική Αποποίηση</h2>
-        <p>
-          Το BenefitPulse <strong>δεν είναι επίσημος φορέας</strong> και δεν
-          συσχετίζεται με κανέναν επίσημο οργανισμό της ελληνικής κυβέρνησης ή
-          δημόσιας διοίκησης.
+      <section class="main-disclaimer">
+        <p class="bold-statement">
+          Το BenefitPulse είναι <strong>αυτοματοποιημένο εργαλείο πληροφόρησης</strong>.
+          <strong>Δεν είμαστε επίσημος φορέας</strong> και <strong>δεν παράγουμε</strong>
+          το περιεχόμενο που παρουσιάζουμε.
         </p>
-        <p>
-          Η πλατφόρμα λειτουργεί ως <strong>aggregator</strong> που συλλέγει και
-          παρουσιάζει πληροφορίες από επίσημες πηγές (gov.gr, vouchers.gov.gr,
-          ΔΥΠΑ, ΟΠΕΚΑ, κ.λπ.) για τη διευκόλυνση των χρηστών.
+        <p class="bold-statement">
+          <strong>ΠΑΝΤΑ</strong> επαληθεύστε τις πληροφορίες στην <strong>επίσημη
+          πηγή</strong> (σύνδεσμοι παρέχονται) πριν από οποιαδήποτε ενέργεια ή απόφαση.
+        </p>
+        <p class="bold-statement">
+          Χρησιμοποιείτε την πλατφόρμα <strong>με δική σας ευθύνη</strong>.
         </p>
       </section>
 
       <section>
-        <h2>2. Χωρίς Εγγύηση Επιλεξιμότητας</h2>
-        <p>
-          <strong>Δεν εγγυόμαστε</strong> ότι:
-        </p>
+        <h2>Τι Είμαστε</h2>
         <ul>
-          <li>
-            Οι ευκαιρίες που σας προτείνουμε είναι κατάλληλες για εσάς
-          </li>
-          <li>
-            Έχετε τα απαραίτητα κριτήρια για να επιλέξετε σε οποιοδήποτε
-            πρόγραμμα
-          </li>
-          <li>
-            Οι προτάσεις μας είναι πλήρεις, ακριβείς ή ενημερωμένες
-          </li>
-        </ul>
-        <p>
-          <strong>Εσείς είστε υπεύθυνοι</strong> να:
-        </p>
-        <ul>
-          <li>
-            Ελέγξετε τα επίσημα κριτήρια και όρους κάθε προγράμματος στην
-            επίσημη ιστοσελίδα
-          </li>
-          <li>
-            Επικοινωνήσετε απευθείας με τους επίσημους φορείς για απορίες
-          </li>
-          <li>
-            Επιβεβαιώσετε την ενημέρωση των πληροφοριών πριν την υποβολή
-            αιτήσεων
-          </li>
+          <li>✅ <strong>Aggregator:</strong> Συλλέγουμε πληροφορίες από επίσημες πηγές</li>
+          <li>✅ <strong>Indexer:</strong> Οργανώνουμε και παρουσιάζουμε πληροφορίες</li>
+          <li>❌ <strong>ΔΕΝ</strong> είμαστε επίσημος φορέας</li>
+          <li>❌ <strong>ΔΕΝ</strong> παράγουμε περιεχόμενο</li>
+          <li>❌ <strong>ΔΕΝ</strong> εγγυόμαστε ακρίβεια ή πληρότητα</li>
+          <li>❌ <strong>ΔΕΝ</strong> φέρουμε ευθύνη για αποτυχίες ή απώλειες</li>
         </ul>
       </section>
 
       <section>
-        <h2>3. Πηγές και Ακρίβεια Πληροφοριών</h2>
-        <p>
-          Παρόλο που συλλέγουμε πληροφορίες από επίσημες πηγές, δεν
-          εγγυόμαστε:
-        </p>
-        <ul>
+        <h2>Τι Πρέπει να Κάνετε</h2>
+        <ol>
           <li>
-            Την πληρότητα, ακρίβεια ή ενημερωμένη κατάσταση των
-            πληροφοριών
+            <strong>Ελέγξτε</strong> πάντα την επίσημη ιστοσελίδα κάθε προγράμματος
+            (σύνδεσμοι παρέχονται)
           </li>
           <li>
-            Ότι οι πληροφορίες είναι ταυτόχρονα ενημερωμένες με τις
-            επίσημες σελίδες
+            <strong>Επικοινωνήστε</strong> απευθείας με τους επίσημους φορείς για
+            απορίες
           </li>
           <li>
-            Ότι δεν υπάρχουν σφάλματα, παραλείψεις ή καθυστερήσεις στην
-            παρουσίαση
+            <strong>Επιβεβαιώστε</strong> τα κριτήρια, τις προθεσμίες και τους όρους
+            πριν την υποβολή αιτήσεων
           </li>
-        </ul>
-        <p>
-          <strong>Σας συνιστούμε</strong> να επισκέπτεστε πάντα τις επίσημες
-          σελίδες για τις πιο πρόσφατες πληροφορίες και να επικοινωνείτε με τους
-          επίσημους φορείς πριν από οποιαδήποτε ενέργεια.
-        </p>
+          <li>
+            <strong>Μην</strong> στηριχτείτε αποκλειστικά στις πληροφορίες μας για
+            σημαντικές αποφάσεις
+          </li>
+        </ol>
       </section>
 
-      <section>
-        <h2>4. Περιορισμός Ευθύνης</h2>
+      <section class="warning-box">
+        <h2>🚨 Προειδοποίηση</h2>
         <p>
           Το BenefitPulse <strong>δεν φέρει ευθύνη</strong> για:
         </p>
         <ul>
-          <li>
-            Απώλεια ευκαιριών, χρημάτων ή άλλων οφελών λόγω χρήσης της
-            πλατφόρμας
-          </li>
-          <li>
-            Αποτυχίες στην υποβολή αιτήσεων ή καθυστερήσεις λόγω
-            ανακριβών/παρωχημένων πληροφοριών
-          </li>
-          <li>
-            Αλλαγές σε κριτήρια, προθεσμίες ή όρους από τους επίσημους
-            φορείς
-          </li>
-          <li>
-            Τεχνικά προβλήματα, διακοπές λειτουργίας ή απώλεια δεδομένων
-          </li>
-          <li>
-            Οποιεσδήποτε αποφάσεις που λάβετε βάσει των πληροφοριών που
-            παρέχονται
-          </li>
+          <li>Απώλεια ευκαιριών λόγω καθυστερημένων ή ανακριβών πληροφοριών</li>
+          <li>Αποτυχίες στην υποβολή αιτήσεων</li>
+          <li>Αλλαγές σε κριτήρια ή προθεσμίες από επίσημους φορείς</li>
+          <li>Οικονομικές ζημίες ή άλλες συνέπειες</li>
         </ul>
-      </section>
-
-      <section>
-        <h2>5. Προσωποποιημένες Προτάσεις</h2>
-        <p>
-          Οι προτάσεις που σας παρουσιάζουμε ("Για σένα") βασίζονται σε
-          αλγόριθμους matching και <strong>δεν αποτελούν:</strong>
-        </p>
-        <ul>
-          <li>Επίσημη γνώμη ή σύσταση</li>
-          <li>Εγγύηση επιλεξιμότητας</li>
-          <li>Επαγγελματική συμβουλή</li>
-        </ul>
-        <p>
-          Είναι μόνο <strong>ενδεικτικές προτάσεις</strong> που βασίζονται στα
-          στοιχεία προφίλ που μας έχετε δώσει. Η τελική επιλογή και
-          επιβεβαίωση είναι αποκλειστικά δική σας ευθύνη.
-        </p>
-      </section>
-
-      <section>
-        <h2>6. Χρήση της Πλατφόρμας</h2>
-        <p>
-          Με την πρόσβαση και χρήση της πλατφόρμας, <strong>αποδέχεστε</strong>
-          ότι:
-        </p>
-        <ul>
-          <li>
-            Χρησιμοποιείτε τις πληροφορίες με δική σας ευθύνη
-          </li>
-          <li>
-            Θα ελέγξετε πάντα τις επίσημες πηγές πριν από οποιαδήποτε
-            ενέργεια
-          </li>
-          <li>
-            Δεν θα στηριχτείτε αποκλειστικά στις πληροφορίες της πλατφόρμας
-            για σημαντικές αποφάσεις
-          </li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>7. Επικοινωνία με Επίσημους Φορείς</h2>
-        <p>
-          Για οποιαδήποτε ερώτηση, αίτηση ή διευκρίνιση, <strong>πρέπει</strong>
-          να επικοινωνήσετε απευθείας με τους επίσημους φορείς:
-        </p>
-        <ul>
-          <li>
-            <strong>gov.gr:</strong> Γενικές πληροφορίες και ηλεκτρονικές
-            υπηρεσίες
-          </li>
-          <li>
-            <strong>vouchers.gov.gr:</strong> Προγράμματα vouchers
-          </li>
-          <li>
-            <strong>ΔΥΠΑ:</strong> Επιδόματα και προγράμματα
-          </li>
-          <li>
-            <strong>ΟΠΕΚΑ:</strong> Κοινωνικά επιδόματα
-          </li>
-        </ul>
-        <p>
-          Το BenefitPulse δεν μπορεί να απαντήσει σε ερωτήσεις σχετικά με την
-          επιλεξιμότητα, τα κριτήρια ή την κατάσταση αιτήσεων.
-        </p>
-      </section>
-
-      <section>
-        <h2>8. Αλλαγές και Ενημερώσεις</h2>
-        <p>
-          Διατηρούμε το δικαίωμα να αλλάζουμε, τροποποιούμε ή διακόπτουμε οποιοδήποτε
-          μέρος της πλατφόρμας οποιαδήποτε στιγμή χωρίς προειδοποίηση.
-        </p>
-        <p>
-          Οι προκηρύξεις, τα κριτήρια και οι όροι των προγραμμάτων μπορεί να αλλάζουν
-          από τους επίσημους φορείς. Προτείνουμε να ελέγχετε τακτικά τις επίσημες
-          πηγές.
-        </p>
       </section>
 
       <div class="actions">
-        <router-link to="/" class="btn btn-primary">Επιστροφή στην Αρχική</router-link>
+        <router-link to="/" class="btn btn-primary">Κατανοώ - Επιστροφή στην Αρχική</router-link>
+        <router-link to="/terms" class="btn btn-secondary">Διαβάστε τους Όρους Χρήσης</router-link>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const lastUpdated = new Date().toLocaleDateString("el-GR", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
+// No script needed for static disclaimer
 </script>
 
 <style scoped>
@@ -219,17 +96,40 @@ const lastUpdated = new Date().toLocaleDateString("el-GR", {
   border: 1px solid var(--border-color);
 }
 
-h1 {
-  color: var(--text-primary);
-  margin-bottom: 0.5rem;
+.disclaimer-banner {
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+  color: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
 }
 
-.last-updated {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
+.disclaimer-banner h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.main-disclaimer {
   margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 1.5rem;
+  background: var(--bg-primary);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: 0.25rem;
+}
+
+.bold-statement {
+  font-size: 1.1rem;
+  line-height: 1.8;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.bold-statement strong {
+  color: var(--accent-primary);
+  font-weight: 700;
 }
 
 section {
@@ -242,19 +142,13 @@ h2 {
   font-size: 1.25rem;
 }
 
-p {
-  line-height: 1.8;
-  margin-bottom: 1rem;
-  color: var(--text-secondary);
-}
-
-ul {
+ul, ol {
   margin: 1rem 0;
   padding-left: 2rem;
 }
 
 li {
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -264,11 +158,32 @@ strong {
   font-weight: 600;
 }
 
+.warning-box {
+  padding: 1.5rem;
+  background: #fef2f2;
+  border: 2px solid #ef4444;
+  border-radius: 0.5rem;
+  margin-top: 2rem;
+}
+
+.warning-box h2 {
+  color: #ef4444;
+  margin-top: 0;
+}
+
+.warning-box p,
+.warning-box li {
+  color: #991b1b;
+}
+
 .actions {
   margin-top: 3rem;
   padding-top: 2rem;
   border-top: 1px solid var(--border-color);
-  text-align: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .btn {
@@ -278,6 +193,7 @@ strong {
   text-decoration: none;
   font-weight: 600;
   transition: all 0.2s;
+  text-align: center;
 }
 
 .btn-primary {
@@ -289,12 +205,36 @@ strong {
   background: var(--accent-hover);
 }
 
+.btn-secondary {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1rem;
   }
+
+  .disclaimer-banner h1 {
+    font-size: 1.5rem;
+  }
+
+  .bold-statement {
+    font-size: 1rem;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
 }
 </style>
-
-
-

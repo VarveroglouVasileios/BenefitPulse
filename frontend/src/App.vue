@@ -6,6 +6,7 @@
     </main>
     <Footer v-if="authStore.hydrated" />
     <Chatbot v-if="authStore.hydrated" />
+    <CookieBanner />
   </div>
 </template>
 
@@ -18,6 +19,7 @@ import { useThemeStore } from "./stores/theme.store";
 import NavBar from "./components/NavBar.vue";
 import Footer from "./components/Footer.vue";
 import Chatbot from "./components/Chatbot.vue";
+import CookieBanner from "./components/CookieBanner.vue";
 
 const { trackPageview } = useTracking();
 const authStore = useAuthStore();
