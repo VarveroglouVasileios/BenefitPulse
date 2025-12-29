@@ -40,6 +40,7 @@ import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
 import { securityMiddleware, rateLimiter } from "./config/security";
 import { authMiddleware, adminMiddleware } from "./middleware/auth.middleware";
+import { validateObjectId } from "./middleware/validation.middleware";
 
 import { Opportunity } from "./models/opportunity.model";
 import { UserProfile } from "./models/profile.model";
@@ -187,7 +188,7 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
 app.get("/api/feed", opportunitiesController.getFeed); // New feed endpoint with tabs
 app.get("/api/opportunities/trending", opportunitiesController.getTrending);
-app.get("/api/opportunities/:id", opportunitiesController.getOpportunityById);
+app.get("/api/opportunities/:id", validateObjectId, opportunitiesController.getOpportunityById);
 app.get("/api/stats", statsController.getStats);
 
 // User opportunities routes
@@ -219,6 +220,7 @@ app.get(
 app.get(
   "/api/opportunities/:id/match-reasons",
   authMiddleware,
+  validateObjectId,
   opportunitiesController.getMatchReasons
 );
 
@@ -257,6 +259,7 @@ app.get(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.getAdminOpportunityById
 );
 app.post(
@@ -269,36 +272,42 @@ app.put(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.updateOpportunity
 );
 app.post(
   "/api/admin/opportunities/:id/publish",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.publishOpportunity
 );
 app.post(
   "/api/admin/opportunities/:id/unpublish",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.unpublishOpportunity
 );
 app.post(
   "/api/admin/opportunities/:id/archive",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.archiveOpportunity
 );
 app.delete(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.deleteOpportunity
 );
 app.post(
   "/api/admin/opportunities/:id/restore",
   authMiddleware,
   adminMiddleware,
+  validateObjectId,
   adminController.restoreOpportunity
 );
 

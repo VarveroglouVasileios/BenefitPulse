@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { EventsService } from "./events.service";
 import { eventDataSchema } from "../../../../shared/src/zodSchemas";
+import { config } from "../../config/env";
 
 const eventsService = new EventsService();
 
@@ -18,6 +19,9 @@ export async function trackEvent(
     await eventsService.trackEvent(data, sessionId, userId);
     res.status(201).json({ message: "Event tracked" });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to track event' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }

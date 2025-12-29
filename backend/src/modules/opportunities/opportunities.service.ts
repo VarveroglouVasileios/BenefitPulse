@@ -4,6 +4,7 @@ import { UserProfile } from "../../models/profile.model";
 import { Event } from "../../models/event.model";
 import { evaluateMatch } from "../../rules/evaluate";
 import { CriteriaRules } from "../../../../shared/src/rulesTypes";
+import { sanitizeSearchQuery } from "../../utils/validation";
 
 export class OpportunitiesService {
   async getPublicOpportunities(query: {
@@ -105,7 +106,11 @@ export class OpportunitiesService {
     }
 
     if (query.search) {
-      filter.$text = { $search: query.search };
+      // Sanitize search query to prevent injection and errors
+      const sanitized = sanitizeSearchQuery(query.search);
+      if (sanitized) {
+        filter.$text = { $search: sanitized };
+      }
     }
 
     const opportunities = await Opportunity.find(filter)

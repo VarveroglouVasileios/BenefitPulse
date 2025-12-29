@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { OpportunitiesService } from './opportunities.service';
+import { config } from '../../config/env';
 
 const opportunitiesService = new OpportunitiesService();
 
@@ -17,7 +18,11 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
     });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -38,7 +43,11 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
     });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -52,7 +61,11 @@ export async function getOpportunityById(req: Request, res: Response): Promise<v
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -62,7 +75,11 @@ export async function getTrending(req: Request, res: Response): Promise<void> {
     const opportunities = await opportunitiesService.getTrending(hours);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -72,7 +89,11 @@ export async function getMatchedOpportunities(req: AuthRequest, res: Response): 
     const opportunities = await opportunitiesService.getMatchedOpportunities(userId);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -82,7 +103,11 @@ export async function getForYouOpportunities(req: AuthRequest, res: Response): P
     const result = await opportunitiesService.getForYouOpportunities(userId);
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -92,7 +117,11 @@ export async function getTodayOpportunities(req: AuthRequest, res: Response): Pr
     const opportunities = await opportunitiesService.getTodayOpportunities(userId);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -102,7 +131,11 @@ export async function getNewSinceLastVisit(req: AuthRequest, res: Response): Pro
     const opportunities = await opportunitiesService.getNewSinceLastVisit(userId);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -113,7 +146,11 @@ export async function getExpiringSoon(req: AuthRequest, res: Response): Promise<
     const opportunities = await opportunitiesService.getExpiringSoon(userId, days);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -124,6 +161,10 @@ export async function getMatchReasons(req: AuthRequest, res: Response): Promise<
     const result = await opportunitiesService.getMatchReasons(userId, id);
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }

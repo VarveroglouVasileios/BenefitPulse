@@ -3,6 +3,7 @@ import { AuthRequest } from '../../middleware/auth.middleware';
 import { ProfileService } from './profile.service';
 import { matchingQueue } from '../../jobs/queues';
 import { userProfileSchema } from '../../../../shared/src/zodSchemas';
+import { config } from '../../config/env';
 
 const profileService = new ProfileService();
 
@@ -36,7 +37,10 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
     };
     res.status(200).json(response);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -69,6 +73,9 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
 
     res.status(200).json(profile);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }

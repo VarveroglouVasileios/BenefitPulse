@@ -2,6 +2,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { AdminService } from './admin.service';
 import { matchingQueue } from '../../jobs/queues';
+import { isValidObjectId } from '../../utils/validation';
+import { config } from '../../config/env';
 
 const adminService = new AdminService();
 
@@ -12,7 +14,10 @@ export async function createOpportunity(req: AuthRequest, res: Response): Promis
     const opportunity = await adminService.createOpportunity(req.body, adminId);
     res.status(201).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to create opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -20,6 +25,13 @@ export async function updateOpportunity(req: AuthRequest, res: Response): Promis
   try {
     const adminId = req.userId!;
     const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(id)) {
+      res.status(400).json({ error: 'Invalid ID format' });
+      return;
+    }
+    
     const opportunity = await adminService.updateOpportunity(id, req.body, adminId);
     if (!opportunity) {
       res.status(404).json({ error: 'Opportunity not found' });
@@ -27,7 +39,11 @@ export async function updateOpportunity(req: AuthRequest, res: Response): Promis
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    // Don't expose internal error details in production
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to update opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -35,6 +51,13 @@ export async function publishOpportunity(req: AuthRequest, res: Response): Promi
   try {
     const adminId = req.userId!;
     const { id } = req.params;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(id)) {
+      res.status(400).json({ error: 'Invalid ID format' });
+      return;
+    }
+    
     const opportunity = await adminService.publishOpportunity(id, adminId);
     if (!opportunity) {
       res.status(404).json({ error: 'Opportunity not found' });
@@ -50,7 +73,10 @@ export async function publishOpportunity(req: AuthRequest, res: Response): Promi
 
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to publish opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -65,7 +91,10 @@ export async function unpublishOpportunity(req: AuthRequest, res: Response): Pro
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to unpublish opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -80,7 +109,10 @@ export async function archiveOpportunity(req: AuthRequest, res: Response): Promi
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to archive opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -91,7 +123,10 @@ export async function deleteOpportunity(req: AuthRequest, res: Response): Promis
     await adminService.deleteOpportunity(id, adminId);
     res.status(200).json({ message: 'Opportunity deleted' });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to delete opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -106,7 +141,10 @@ export async function restoreOpportunity(req: AuthRequest, res: Response): Promi
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Failed to restore opportunity' 
+      : error.message;
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -123,7 +161,10 @@ export async function getAdminOpportunities(req: AuthRequest, res: Response): Pr
     });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -137,7 +178,10 @@ export async function getAdminOpportunityById(req: AuthRequest, res: Response): 
     }
     res.status(200).json(opportunity);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -147,7 +191,10 @@ export async function getDraftQueue(req: AuthRequest, res: Response): Promise<vo
     const drafts = await adminService.getDraftQueue();
     res.status(200).json(drafts);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -159,7 +206,10 @@ export async function getRawItems(req: AuthRequest, res: Response): Promise<void
     });
     res.status(200).json(items);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -169,7 +219,10 @@ export async function getOverviewMetrics(req: AuthRequest, res: Response): Promi
     const metrics = await adminService.getOverviewMetrics();
     res.status(200).json(metrics);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -179,7 +232,10 @@ export async function getTimeseriesMetrics(req: AuthRequest, res: Response): Pro
     const metrics = await adminService.getTimeseriesMetrics(days);
     res.status(200).json(metrics);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -189,7 +245,10 @@ export async function getTopRoutes(req: AuthRequest, res: Response): Promise<voi
     const routes = await adminService.getTopRoutes(limit);
     res.status(200).json(routes);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -199,7 +258,10 @@ export async function getTopOpportunities(req: AuthRequest, res: Response): Prom
     const opportunities = await adminService.getTopOpportunities(limit);
     res.status(200).json(opportunities);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -215,7 +277,10 @@ export async function getAuditLog(req: AuthRequest, res: Response): Promise<void
     });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -226,7 +291,10 @@ export async function triggerIngestion(req: AuthRequest, res: Response): Promise
     const result = await adminService.triggerIngestion(adminId);
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -236,7 +304,10 @@ export async function archiveExpired(req: AuthRequest, res: Response): Promise<v
     const result = await adminService.archiveExpiredOpportunities(adminId);
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -246,7 +317,10 @@ export async function resetBadData(req: AuthRequest, res: Response): Promise<voi
     const result = await adminService.resetBadData(adminId);
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -261,7 +335,10 @@ export async function getContactSubmissions(req: AuthRequest, res: Response): Pr
     });
     res.status(200).json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }
 
@@ -279,6 +356,9 @@ export async function replyToContact(req: AuthRequest, res: Response): Promise<v
     await adminService.replyToContact(id, message, adminId);
     res.status(200).json({ message: "Η απάντηση στάλθηκε επιτυχώς" });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    const errorMessage = config.nodeEnv === 'production' 
+      ? 'Internal server error' 
+      : error.message;
+    res.status(500).json({ error: errorMessage });
   }
 }

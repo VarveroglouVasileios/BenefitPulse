@@ -115,6 +115,7 @@
 import { ref, onMounted, nextTick, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api/endpoints';
+import DOMPurify from 'dompurify';
 
 const router = useRouter();
 
@@ -149,9 +150,13 @@ function formatMessage(content: string): string {
   // Convert newlines to <br>
   let formatted = content.replace(/\n/g, '<br>');
   
-  // Links are already in HTML format from backend
-  // We'll handle clicks via event delegation in the template
-  return formatted;
+  // Sanitize HTML to prevent XSS attacks
+  // Allow only safe tags: br, a, strong, em, and their attributes
+  return DOMPurify.sanitize(formatted, {
+    ALLOWED_TAGS: ['br', 'a', 'strong', 'em', 'b', 'i', 'p'],
+    ALLOWED_ATTR: ['href', 'style'],
+    ALLOW_DATA_ATTR: false,
+  });
 }
 
 function handleLinkClick(event: Event) {
