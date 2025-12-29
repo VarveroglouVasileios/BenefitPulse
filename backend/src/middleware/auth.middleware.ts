@@ -9,13 +9,22 @@ export interface AuthRequest extends Request {
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Try to get token from cookie first (preferred method)
+    let token = req.cookies?.auth_token;
+    
+    // Fallback to Authorization header for backward compatibility
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
+    
+    if (!token) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
 
-    const token = authHeader.substring(7);
     const decoded = jwt.verify(token, config.jwt.secret) as any;
     req.userId = decoded.userId;
     req.userRole = decoded.role;

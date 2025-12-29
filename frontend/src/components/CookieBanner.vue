@@ -3,51 +3,46 @@
     <div class="cookie-content">
       <div class="cookie-text">
         <p>
-          <strong>Χρήση Cookies:</strong> Χρησιμοποιούμε cookies για την καλύτερη
-          εμπειρία σας στην πλατφόρμα. Συνεχίζοντας, αποδέχεστε τη χρήση cookies
-          σύμφωνα με την <router-link to="/privacy">Πολιτική Απορρήτου</router-link>.
+          <strong>Χρήση Cookies:</strong> Χρησιμοποιούμε cookies για την
+          καλύτερη εμπειρία σας στην πλατφόρμα. Συνεχίζοντας, αποδέχεστε τη
+          χρήση cookies σύμφωνα με την
+          <router-link to="/privacy">Πολιτική Απορρήτου</router-link>.
         </p>
       </div>
       <div class="cookie-actions">
-        <button @click="acceptCookies" class="btn btn-accept">
-          Αποδοχή
-        </button>
-        <button @click="rejectCookies" class="btn btn-reject">
-          Απόρριψη
-        </button>
+        <button @click="acceptCookies" class="btn btn-accept">Αποδοχή</button>
+        <button @click="rejectCookies" class="btn btn-reject">Απόρριψη</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted } from "vue";
+import { useCookieConsentStore } from "../stores/cookieConsent.store";
 
-const COOKIE_CONSENT_KEY = 'benefitpulse_cookie_consent';
-
+const cookieConsentStore = useCookieConsentStore();
 const showBanner = ref(false);
 
 onMounted(() => {
-  // Check if consent has been given
-  const consent = localStorage.getItem(COOKIE_CONSENT_KEY);
+  // Check if consent has been given (stored in memory via Pinia)
+  const consent = cookieConsentStore.getConsent();
   if (!consent) {
     showBanner.value = true;
   }
 });
 
 function acceptCookies() {
-  localStorage.setItem(COOKIE_CONSENT_KEY, 'accepted');
-  localStorage.setItem(`${COOKIE_CONSENT_KEY}_timestamp`, new Date().toISOString());
+  cookieConsentStore.setConsent("accepted");
   showBanner.value = false;
   // Initialize tracking if consent is given
   // This will be handled by useTracking composable checking consent
 }
 
 function rejectCookies() {
-  localStorage.setItem(COOKIE_CONSENT_KEY, 'rejected');
-  localStorage.setItem(`${COOKIE_CONSENT_KEY}_timestamp`, new Date().toISOString());
+  cookieConsentStore.setConsent("rejected");
   showBanner.value = false;
-  // Do not initialize tracking
+  // Do not initialize tracking - useTracking will check consent before sending any data
 }
 </script>
 
@@ -147,4 +142,3 @@ function rejectCookies() {
   }
 }
 </style>
-

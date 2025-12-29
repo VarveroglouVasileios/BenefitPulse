@@ -1,26 +1,35 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "../stores/auth.store";
+
+// Session ID stored in memory (not localStorage)
+// Generated once per page load, reused for all requests
+let sessionId: string | null = null;
+
+function getOrCreateSessionId(): string {
+  if (!sessionId) {
+    sessionId = generateSessionId();
+  }
+  return sessionId;
+}
+
+function generateSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
 
 const http: AxiosInstance = axios.create({
   baseURL: "/api",
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // Send cookies with requests (required for HTTP-only cookies)
 });
 
-// Request interceptor - add auth token
+// Request interceptor - add session ID
+// Token is sent automatically via HTTP-only cookie, no need to add Authorization header
 http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const token = localStorage.getItem("token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  // Add session ID
-  let sessionId = localStorage.getItem("sessionId");
-  if (!sessionId) {
-    sessionId = generateSessionId();
-    localStorage.setItem("sessionId", sessionId);
-  }
-  config.headers["X-Session-Id"] = sessionId;
+  // Session ID for tracking
+  const currentSessionId = getOrCreateSessionId();
+  config.headers["X-Session-Id"] = currentSessionId;
 
   return config;
 });
@@ -37,8 +46,9 @@ http.interceptors.response.use(
     const isAuthMe = url.includes("/auth/me");
 
     if (status === 401) {
-      // Πάντα καθάρισε το token όταν πάρουμε 401
-      localStorage.removeItem("token");
+      // Clear user state when we get 401 (cookie expired or invalid)
+      const authStore = useAuthStore();
+      authStore.user = null;
 
       // Μην κάνεις redirect για /auth/me – αυτό χρησιμοποιείται για hydrate
       if (!isAuthLoginOrRegister && !isAuthMe) {
@@ -49,9 +59,5 @@ http.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
 
 export default http;

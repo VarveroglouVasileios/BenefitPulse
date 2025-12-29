@@ -35,6 +35,7 @@ require("web-streams-polyfill/polyfill");
 
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
 import { securityMiddleware, rateLimiter } from "./config/security";
@@ -74,7 +75,11 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors({ origin: config.frontendUrl }));
+app.use(cookieParser()); // Parse cookies
+app.use(cors({ 
+  origin: config.frontendUrl,
+  credentials: true, // Allow cookies to be sent
+}));
 app.use(securityMiddleware);
 
 // Rate limiting - μόνο σε production για να μην ενοχλεί development flows

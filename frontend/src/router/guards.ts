@@ -8,12 +8,13 @@ export async function authGuard(
 ): Promise<void> {
   const authStore = useAuthStore();
 
-  // Αν υπάρχει token αλλά δεν έχουμε φορτώσει ακόμη user, κάνε hydrate από /auth/me
-  if (authStore.token && !authStore.user) {
+  // Αν δεν έχουμε φορτώσει ακόμη user, κάνε hydrate από /auth/me
+  // Το cookie θα σταλεί αυτόματα με το request
+  if (!authStore.hydrated) {
     try {
       await authStore.fetchMe();
     } catch {
-      // αν αποτύχει, θα καθαριστεί το token από το store/http interceptor
+      // αν αποτύχει, το user θα είναι null
     }
   }
 
@@ -31,7 +32,8 @@ export async function adminGuard(
 ): Promise<void> {
   const authStore = useAuthStore();
 
-  if (authStore.token && !authStore.user) {
+  // Αν δεν έχουμε φορτώσει ακόμη user, κάνε hydrate από /auth/me
+  if (!authStore.hydrated) {
     try {
       await authStore.fetchMe();
     } catch {
