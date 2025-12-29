@@ -52,6 +52,51 @@ const FAQS: FAQ[] = [
     answer: 'Το BenefitPulse είναι μια πλατφόρμα aggregator που συγκεντρώνει και παρουσιάζει επίσημες ανακοινώσεις για επιδόματα, vouchers, προγράμματα και προκηρύξεις στην Ελλάδα. Δεν είμαστε επίσημος φορέας, αλλά συλλέγουμε πληροφορίες από επίσημες πηγές όπως το gov.gr, vouchers.gov.gr, ΔΥΠΑ και ΟΠΕΚΑ.',
   },
   {
+    question: 'Πες μου για τα επιδόματα',
+    patterns: [
+      /(πες|πεις|tell).*(μου|με).*(για|about).*(επιδόματα|επιδοματα|benefits)/i,
+      /(επιδόματα|επιδοματα|benefits)/i,
+      /(τι.*επιδόματα|τι.*επιδοματα|what.*benefits)/i,
+      /(υπάρχουν|υπαρχουν|are there).*(επιδόματα|επιδοματα|benefits)/i,
+      /(δείξε|δειξε|show).*(μου|με).*(επιδόματα|επιδοματα|benefits)/i,
+      /(πες.*για.*επιδόματα|πες.*για.*επιδοματα)/i,
+      /(μπορείς.*πεις.*για.*επιδόματα|μπορεις.*πεις.*για.*επιδοματα)/i,
+      /(θέλω.*γνωρίζω.*επιδόματα|θελω.*γνωριζω.*επιδοματα)/i,
+    ],
+    answer: 'Στο BenefitPulse μπορείτε να βρείτε πληροφορίες για διάφορα επιδόματα και προγράμματα:\n\n• **Επιδόματα στέγασης** - Επίδομα ενοικίου, στεγαστικά δάνεια\n• **Κοινωνικά επιδόματα** - ΟΠΕΚΑ, επιδόματα ανεργίας\n• **Vouchers** - Youth Pass, Dentist Pass, και άλλα\n• **Προγράμματα κατάρτισης** - Επαγγελματική κατάρτιση, upskilling\n\nΓια να δείτε τα ανοιχτά προγράμματα, επισκεφτείτε τη σελίδα <a href="/opportunities?status=open" style="color: #3b82f6; text-decoration: underline;">"Όλες"</a> ή <a href="/trending" style="color: #3b82f6; text-decoration: underline;">"Δημοφιλή"</a>.\n\n**Σημαντικό:** Πάντα ελέγχετε τα επίσημα κριτήρια στην επίσημη σελίδα κάθε προγράμματος.',
+  },
+  {
+    question: 'Ανοιχτά προγράμματα',
+    patterns: [
+      /(πες|πεις|tell).*(μου|με).*(για|about).*(ανοιχτά|ανοιχτα|open).*(προγράμματα|προγραμματα|programs)/i,
+      /(ανοιχτά|ανοιχτα|open).*(προγράμματα|προγραμματα|programs)/i,
+      /(τι.*ανοιχτό|τι.*ανοιχτο|what.*open)/i,
+      /(υπάρχουν|υπαρχουν|are there).*(ανοιχτά|ανοιχτα|open)/i,
+      /(δείξε|δειξε|show).*(μου|με).*(ανοιχτά|ανοιχτα|open)/i,
+      /(προγράμματα|προγραμματα|programs).*(ανοιχτά|ανοιχτα|open)/i,
+      /(πες.*για.*ανοιχτά|πες.*για.*ανοιχτα)/i,
+      /(μπορείς.*πεις.*για.*ανοιχτά|μπορεις.*πεις.*για.*ανοιχτα)/i,
+      /(θέλω.*δω.*ανοιχτά|θελω.*δω.*ανοιχτα)/i,
+      /(δείξε.*ανοιχτά|δειξε.*ανοιχτα)/i,
+    ],
+    answer: 'Μπορείτε να δείτε τα ανοιχτά προγράμματα και επιδόματα από διάφορες σελίδες:\n\n• <a href="/opportunities?status=open" style="color: #3b82f6; text-decoration: underline;">"Όλες" - Ανοιχτά τώρα</a> - Όλα τα προγράμματα που είναι αυτή τη στιγμή ανοιχτά\n• <a href="/trending" style="color: #3b82f6; text-decoration: underline;">"Δημοφιλή"</a> - Τα πιο δημοφιλή προγράμματα\n• <a href="/" style="color: #3b82f6; text-decoration: underline;">Αρχική σελίδα</a> - Νέα & ανοιχτά προγράμματα\n\nΑν έχετε δημιουργήσει προφίλ, μπορείτε να δείτε προσωποποιημένες προτάσεις στην ενότητα <a href="/for-you" style="color: #3b82f6; text-decoration: underline;">"Για σένα"</a>.\n\n**Υπενθύμιση:** Πάντα ελέγχετε τα επίσημα κριτήρια και προθεσμίες στην επίσημη σελίδα κάθε προγράμματος.',
+  },
+  {
+    question: 'Τι μπορείς να μου πεις',
+    patterns: [
+      /(τι.*μπορείς|τι.*μπορεις|what.*can).*(μου|με).*(πεις|πεις|tell)/i,
+      /(τι.*ξέρεις|τι.*ξερεις|what.*know)/i,
+      /(τι.*μπορώ|τι.*μπορω|what.*can).*(ρωτήσω|ρωτησω|ask)/i,
+      /(βοήθεια|βοηθεια|help).*(τι|what)/i,
+      /(δυνατότητες|δυνατοτητες|capabilities)/i,
+      /(τι.*μπορείς.*πεις|τι.*μπορεις.*πεις)/i,
+      /(τι.*μπορείς.*μου.*πεις|τι.*μπορεις.*μου.*πεις)/i,
+      /(μπορείς.*πεις.*τι|μπορεις.*πεις.*τι)/i,
+      /(τι.*ξέρεις.*για|τι.*ξερεις.*για)/i,
+    ],
+    answer: 'Μπορώ να σας βοηθήσω με:\n\n**📋 Γενικές πληροφορίες:**\n• Τι είναι το BenefitPulse και πώς λειτουργεί\n• Πληροφορίες για επιδόματα και προγράμματα\n• Πώς να δημιουργήσετε προφίλ\n\n**🔍 Εύρεση προγραμμάτων:**\n• Ανοιχτά προγράμματα και επιδόματα\n• Δημοφιλή προγράμματα\n• Προγράμματα κατά κατηγορία (στέγαση, ανεργία, νέοι, κ.λπ.)\n\n**❓ Συχνές ερωτήσεις:**\n• Είναι επίσημη υπηρεσία;\n• Πώς υπολογίζεται το "Για σένα";\n• Τι δεδομένα κρατάτε;\n• Privacy και ασφάλεια\n\n**💡 Οδηγίες:**\n• Πώς να χρησιμοποιήσετε την πλατφόρμα\n• Πώς να ελέγξετε την επιλεξιμότητά σας\n\nΡωτήστε με οτιδήποτε θέλετε!',
+  },
+  {
     question: 'Πώς λειτουργεί;',
     patterns: [
       /(πώς|πως|how).*λειτουργεί|λειτουργει/i,
@@ -137,7 +182,7 @@ const HELP_INTENT: Intent = {
   patterns: [
     /(βοήθεια|βοηθεια|help)/i,
     /(οδηγίες|οδηγιες|instructions)/i,
-    /(τι.*μπορώ|τι.*μπορω|what.*can)/i,
+    /(τι.*μπορώ.*ρωτήσω|τι.*μπορω.*ρωτησω|what.*can.*ask)/i,
   ],
   response: `Μπορώ να σας βοηθήσω με:
 
@@ -149,6 +194,18 @@ const HELP_INTENT: Intent = {
 
 Ρωτήστε με οτιδήποτε θέλετε να μάθετε!`,
   category: 'help',
+};
+
+// Opportunities/Programs intent
+const OPPORTUNITIES_INTENT: Intent = {
+  keywords: ['ευκαιρίες', 'ευκαιριες', 'opportunities', 'προγράμματα', 'προγραμματα'],
+  patterns: [
+    /(ευκαιρίες|ευκαιριες|opportunities)/i,
+    /(προγράμματα|προγραμματα|programs)/i,
+    /(δείξε|δειξε|show).*(ευκαιρίες|ευκαιριες|opportunities)/i,
+  ],
+  response: 'Μπορείτε να δείτε όλες τις ευκαιρίες από τη σελίδα <a href="/opportunities" style="color: #3b82f6; text-decoration: underline;">"Όλες"</a>. Για ανοιχτά προγράμματα, δείτε <a href="/opportunities?status=open" style="color: #3b82f6; text-decoration: underline;">εδώ</a>.',
+  category: 'opportunities',
 };
 
 // Unknown/fallback intent
@@ -167,7 +224,7 @@ export function findIntent(message: string): Intent | null {
   // Check greetings first
   for (const greeting of GREETINGS) {
     for (const pattern of greeting.patterns) {
-      if (pattern.test(message)) {
+      if (pattern.test(lowerMessage)) {
         return greeting;
       }
     }
@@ -175,19 +232,86 @@ export function findIntent(message: string): Intent | null {
 
   // Check help
   for (const pattern of HELP_INTENT.patterns) {
-    if (pattern.test(message)) {
+    if (pattern.test(lowerMessage)) {
       return HELP_INTENT;
     }
   }
 
-  // Check FAQs
+  // Check opportunities intent
+  for (const pattern of OPPORTUNITIES_INTENT.patterns) {
+    if (pattern.test(lowerMessage)) {
+      return OPPORTUNITIES_INTENT;
+    }
+  }
+
+  // Check FAQs - use lowerMessage for case-insensitive matching
   for (const faq of FAQS) {
     for (const pattern of faq.patterns) {
-      if (pattern.test(message)) {
+      if (pattern.test(lowerMessage)) {
         return {
           keywords: [],
           patterns: [],
           response: faq.answer,
+          category: 'faq',
+        };
+      }
+    }
+  }
+
+  // Fallback: Check for common keywords even if patterns don't match exactly
+  // This helps with variations in Greek language
+  const benefitsKeywords = ['επιδόματα', 'επιδοματα', 'benefits', 'επίδομα', 'επιδομα'];
+  const openKeywords = ['ανοιχτά', 'ανοιχτα', 'open', 'ανοιχτό', 'ανοιχτο', 'διαθέσιμα', 'διαθεσιμα'];
+  const programsKeywords = ['προγράμματα', 'προγραμματα', 'programs', 'πρόγραμμα', 'προγραμμα'];
+  const tellKeywords = ['πες', 'πεις', 'tell', 'δείξε', 'δειξε', 'show', 'δω', 'θέλω', 'θελω'];
+  const whatKeywords = ['τι', 'what', 'μπορείς', 'μπορεις', 'can', 'ξέρεις', 'ξερεις', 'know'];
+
+  // Check for benefits/questions about benefits
+  if (benefitsKeywords.some(kw => lowerMessage.includes(kw))) {
+    if (tellKeywords.some(kw => lowerMessage.includes(kw)) || 
+        whatKeywords.some(kw => lowerMessage.includes(kw)) ||
+        lowerMessage.includes('υπάρχουν') || lowerMessage.includes('υπαρχουν')) {
+      const benefitsFaq = FAQS.find(f => f.question.includes('επιδόματα'));
+      if (benefitsFaq) {
+        return {
+          keywords: [],
+          patterns: [],
+          response: benefitsFaq.answer,
+          category: 'faq',
+        };
+      }
+    }
+  }
+
+  // Check for open programs/questions about open programs
+  if (openKeywords.some(kw => lowerMessage.includes(kw))) {
+    if (programsKeywords.some(kw => lowerMessage.includes(kw)) ||
+        tellKeywords.some(kw => lowerMessage.includes(kw)) ||
+        lowerMessage.includes('υπάρχουν') || lowerMessage.includes('υπαρχουν')) {
+      const openFaq = FAQS.find(f => f.question.includes('Ανοιχτά'));
+      if (openFaq) {
+        return {
+          keywords: [],
+          patterns: [],
+          response: openFaq.answer,
+          category: 'faq',
+        };
+      }
+    }
+  }
+
+  // Check for "what can you tell me" type questions
+  if (whatKeywords.some(kw => lowerMessage.includes(kw)) && 
+      (lowerMessage.includes('μπορείς') || lowerMessage.includes('μπορεις') || lowerMessage.includes('can'))) {
+    if (lowerMessage.includes('πεις') || lowerMessage.includes('tell') || 
+        lowerMessage.includes('ξέρεις') || lowerMessage.includes('ξερεις') ||
+        lowerMessage.includes('know')) {
+      const whatFaq = FAQS.find(f => f.question.includes('Τι μπορείς'));
+      if (whatFaq) {
+        return {
+          keywords: [],
+          patterns: [],
+          response: whatFaq.answer,
           category: 'faq',
         };
       }

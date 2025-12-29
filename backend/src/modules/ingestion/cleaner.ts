@@ -1697,7 +1697,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     "φυλαξη",
   ];
   
-  // Administrative noise keywords (questionnaires, evaluations, minutes)
+  // Administrative noise keywords (questionnaires, evaluations, minutes, high-level jobs)
   const administrativeKeywords = [
     "ερωτηματολόγιο",
     "ερωτηματολογιο",
@@ -1707,6 +1707,17 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     "αξιολογηση",
     "πρακτικό",
     "πρακτικο",
+    // High-level public sector jobs (not relevant for our users)
+    "γενικής διεύθυνσης",
+    "γενικης διευθυνσης",
+    "θέσης ευθύνης",
+    "θεσης ευθυνης",
+    "προέδρου",
+    "προεδρου",
+    "διευθύνοντος συμβούλου",
+    "διευθυνοντος συμβουλου",
+    "οριζόντιων θέσεων",
+    "οριζοντιων θεσεων",
   ];
   
   const lowerTitle = rawTitle.toLowerCase();

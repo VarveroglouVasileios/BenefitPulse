@@ -35,7 +35,7 @@
         </button>
       </div>
 
-      <div class="chat-messages" ref="messagesContainer">
+      <div class="chat-messages" ref="messagesContainer" @click="handleLinkClick">
         <div v-if="messages.length === 0" class="welcome-message">
           <div class="welcome-content">
             <div class="welcome-icon">🤖</div>
@@ -113,7 +113,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { api } from '../api/endpoints';
+
+const router = useRouter();
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -143,8 +146,28 @@ function closeChat() {
 }
 
 function formatMessage(content: string): string {
-  // Simple formatting: convert newlines to <br>
-  return content.replace(/\n/g, '<br>');
+  // Convert newlines to <br>
+  let formatted = content.replace(/\n/g, '<br>');
+  
+  // Links are already in HTML format from backend
+  // We'll handle clicks via event delegation in the template
+  return formatted;
+}
+
+function handleLinkClick(event: Event) {
+  const target = event.target as HTMLElement;
+  if (target.tagName === 'A') {
+    const href = (target as HTMLAnchorElement).href;
+    if (href && href.startsWith(window.location.origin)) {
+      // Internal link - use router
+      event.preventDefault();
+      const path = (target as HTMLAnchorElement).pathname + (target as HTMLAnchorElement).search;
+      router.push(path);
+      // Optionally close chat after navigation
+      // closeChat();
+    }
+    // External links will open normally
+  }
 }
 
 function formatTime(date: Date): string {
@@ -429,6 +452,21 @@ onMounted(() => {
 .message-text {
   line-height: 1.5;
   margin-bottom: 0.25rem;
+}
+
+.message-text a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.message-text a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.message.assistant .message-text a {
+  color: var(--accent-primary);
 }
 
 .message-time {

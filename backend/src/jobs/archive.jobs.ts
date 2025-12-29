@@ -63,13 +63,18 @@ async function fetchFullPageContent(url: string): Promise<string | null> {
     const content = $("main, article, .content, body").text().trim();
     return content || null;
   } catch (error) {
-    console.error(`Failed to fetch ${url}:`, error instanceof Error ? error.message : error);
+    console.error(
+      `Failed to fetch ${url}:`,
+      error instanceof Error ? error.message : error
+    );
     return null;
   }
 }
 
 export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
-  console.log(`🔍 [Archive] Starting archive expired opportunities check (job ${job.id})...`);
+  console.log(
+    `🔍 [Archive] Starting archive expired opportunities check (job ${job.id})...`
+  );
 
   const today = new Date().toISOString();
   const now = new Date();
@@ -153,15 +158,15 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
             shouldArchive = true;
             summaryExpiredCount++;
           } else {
-            const now = new Date().toISOString();
+            const nowIso = new Date().toISOString();
             const cleanerInput: CleanerInput = {
-              nowIso: now,
+              nowIso: nowIso,
               source: opp.source,
               sourceUrl: opp.officialUrl,
               itemUrl: opp.officialUrl,
               rawTitle: opp.title,
               rawContent: contentToCheck,
-              rawFetchedAtIso: now,
+              rawFetchedAtIso: nowIso,
             };
 
             const cleaned = cleanAndValidate(cleanerInput);
@@ -198,7 +203,10 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     }
   }
 
-  console.log(`✅ [Archive] Completed: archived ${archivedCount}/${checkedCount} opportunities`);
-  console.log(`   Breakdown: deadline=${deadlineExpiredCount}, summary=${summaryExpiredCount}, cleaner=${cleanerExpiredCount}, noRawItem=${noRawItemCount}`);
+  console.log(
+    `✅ [Archive] Completed: archived ${archivedCount}/${checkedCount} opportunities`
+  );
+  console.log(
+    `   Breakdown: deadline=${deadlineExpiredCount}, summary=${summaryExpiredCount}, cleaner=${cleanerExpiredCount}, noRawItem=${noRawItemCount}`
+  );
 }
-

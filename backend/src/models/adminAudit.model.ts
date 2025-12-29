@@ -29,7 +29,7 @@ const AdminAuditSchema = new Schema<IAdminAudit>(
     },
     resourceId: {
       type: Schema.Types.ObjectId,
-      required: true,
+      required: false, // Optional for system-level actions (trigger_ingestion, archive_expired, reset_bad_data)
     },
     before: {
       type: Schema.Types.Mixed,

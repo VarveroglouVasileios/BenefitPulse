@@ -22,7 +22,14 @@ export class ChatbotService {
       };
     }
 
-    const lastMessage = userMessages[userMessages.length - 1].content;
+    const lastMessage = userMessages[userMessages.length - 1].content.trim();
+
+    // Handle empty messages
+    if (!lastMessage || lastMessage.length === 0) {
+      return {
+        message: 'Παρακαλώ γράψτε κάτι για να σας βοηθήσω.',
+      };
+    }
 
     // Get response from rule-based system
     const response = getResponse(lastMessage);

@@ -2,7 +2,10 @@
   <header class="navbar">
     <div class="container">
       <div class="brand">
-        <router-link to="/">BenefitPulse</router-link>
+        <router-link to="/" class="brand-link">
+          <img src="/logo.svg" alt="BenefitPulse Logo" class="logo" />
+          <span class="brand-text">BenefitPulse</span>
+        </router-link>
       </div>
       <nav>
         <router-link to="/">Αρχική</router-link>
@@ -15,9 +18,19 @@
         <router-link v-if="isAdmin" to="/admin">Admin</router-link>
       </nav>
       <div class="actions">
-        <button class="theme-toggle" @click="toggleTheme" :aria-label="theme === 'light' ? 'Ενεργοποίηση dark mode' : 'Ενεργοποίηση light mode'">
-          <span v-if="theme === 'light'">🌙</span>
-          <span v-else>☀️</span>
+        <button
+          class="theme-toggle"
+          @click="toggleTheme"
+          :aria-label="
+            theme === 'light'
+              ? 'Ενεργοποίηση dark mode'
+              : 'Ενεργοποίηση light mode'
+          "
+          :aria-pressed="theme === 'dark'"
+          type="button"
+        >
+          <span v-if="theme === 'light'" aria-hidden="true">🌙</span>
+          <span v-else aria-hidden="true">☀️</span>
         </button>
         <template v-if="isAuthenticated">
           <span class="user">{{ user?.firstName || user?.email }}</span>
@@ -78,11 +91,40 @@ async function handleLogout() {
   gap: 1rem;
 }
 
-.brand a {
+.brand-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--text-primary);
   font-weight: 700;
   font-size: 1.2rem;
   text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.brand-link:hover {
+  opacity: 0.8;
+}
+
+.logo {
+  width: 32px;
+  height: 32px;
+  display: block;
+  flex-shrink: 0;
+}
+
+.brand-text {
+  display: inline-block;
+}
+
+@media (max-width: 480px) {
+  .brand-text {
+    display: none;
+  }
+  .logo {
+    width: 28px;
+    height: 28px;
+  }
 }
 
 nav {

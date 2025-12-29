@@ -8,7 +8,11 @@
       <span v-if="isExpiringSoon" class="badge expiring">EXPIRING</span>
       <span v-if="isExpired" class="badge expired">EXPIRED</span>
     </div>
-    <p class="summary">{{ opportunity.summary.substring(0, 150) }}...</p>
+    <p class="summary">
+      {{ opportunity.summary && opportunity.summary.length > 150
+        ? opportunity.summary.substring(0, 150) + '...'
+        : (opportunity.summary || 'Δεν υπάρχει περιγραφή') }}
+    </p>
     
     <!-- Meta fields -->
     <div class="card-meta">
@@ -34,7 +38,11 @@
       </span>
       <span v-else class="unknown-deadline">Κατάσταση: άγνωστη — έλεγξε στο επίσημο link</span>
     </div>
-    <router-link :to="`/opportunities/${opportunity._id}`" class="link">
+    <router-link 
+      :to="`/opportunities/${opportunity._id}`" 
+      class="link"
+      :aria-label="`Δείτε περισσότερα για ${opportunity.title}`"
+    >
       Δείτε περισσότερα →
     </router-link>
   </div>
@@ -94,7 +102,28 @@ function getSourceLabel(source: string): string {
 }
 
 function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString("el-GR");
+  if (!date) return "Άγνωστη ημερομηνία";
+  
+  const d = new Date(date);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  // Relative dates for recent items
+  if (diffDays === 0) return "Σήμερα";
+  if (diffDays === 1) return "Χθες";
+  if (diffDays > 1 && diffDays < 7) return `πριν ${diffDays} ημέρες`;
+  if (diffDays >= 7 && diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `πριν ${weeks} ${weeks === 1 ? 'εβδομάδα' : 'εβδομάδες'}`;
+  }
+  
+  // Absolute date for older items
+  return d.toLocaleDateString("el-GR", {
+    day: "numeric",
+    month: "short",
+    year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+  });
 }
 </script>
 

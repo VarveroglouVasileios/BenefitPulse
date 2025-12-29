@@ -107,7 +107,7 @@ export class AdminService {
     id: string,
     adminId: string
   ): Promise<IOpportunity | null> {
-    return this.updateOpportunity(id, { deletedAt: null }, adminId);
+    return this.updateOpportunity(id, { deletedAt: undefined }, adminId);
   }
 
   async getOpportunities(query: {
@@ -125,7 +125,7 @@ export class AdminService {
     const filter: any = {
       deletedAt: null,
     };
-    
+
     // Status filter
     if (query.status) {
       filter.status = query.status;
@@ -136,12 +136,12 @@ export class AdminService {
       // Default: exclude rejected
       filter.status = { $in: ["published", "draft", "archived"] };
     }
-    
+
     // Type filter
     if (query.type) {
       filter.type = query.type;
     }
-    
+
     // Kind filter: exclude tenders/news unless admin filter enabled
     if (!query.showTendersNews) {
       filter.kind = { $nin: ["service_info", "tender", "news"] };
@@ -182,7 +182,8 @@ export class AdminService {
   // Metrics
   async getOverviewMetrics(): Promise<any> {
     const now = new Date();
-    const today = new Date(now.setHours(0, 0, 0, 0));
+    // Create today at midnight without mutating 'now'
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -357,6 +358,7 @@ export class AdminService {
       adminId,
       action: "trigger_ingestion",
       resourceType: "system",
+      // resourceId omitted for system-level actions
       after: { count },
     });
 
@@ -479,7 +481,9 @@ export class AdminService {
               const urlObj = new URL(opp.officialUrl);
               const pathname = urlObj.pathname;
               rawItem = await RawItem.findOne({
-                url: { $regex: pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") },
+                url: {
+                  $regex: pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                },
               }).sort({ createdAt: -1 });
             } catch {
               // URL parsing failed
@@ -500,15 +504,15 @@ export class AdminService {
               shouldArchive = true;
               summaryExpiredCount++;
             } else {
-              const now = new Date().toISOString();
+              const nowIso = new Date().toISOString();
               const cleanerInput: CleanerInput = {
-                nowIso: now,
+                nowIso: nowIso,
                 source: opp.source,
                 sourceUrl: opp.officialUrl,
                 itemUrl: opp.officialUrl,
                 rawTitle: opp.title,
                 rawContent: contentToCheck,
-                rawFetchedAtIso: now,
+                rawFetchedAtIso: nowIso,
               };
 
               const cleaned = cleanAndValidate(cleanerInput);
@@ -544,6 +548,7 @@ export class AdminService {
       adminId,
       action: "archive_expired",
       resourceType: "system",
+      // resourceId omitted for system-level actions
       after: { archived: archivedCount, checked: checkedCount },
     });
 
@@ -636,6 +641,7 @@ export class AdminService {
       adminId,
       action: "reset_bad_data",
       resourceType: "system",
+      // resourceId omitted for system-level actions
       after: { modified: result.modifiedCount ?? 0 },
     });
 
