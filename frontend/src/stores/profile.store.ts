@@ -19,8 +19,16 @@ export const useProfileStore = defineStore("profile", {
       try {
         const response = await api.profile.get();
         this.profile = response.data;
-      } catch (error) {
-        console.error("Failed to fetch profile:", error);
+      } catch (error: any) {
+        // Silently handle 404 (user might not have profile yet)
+        const status = error.response?.status;
+        if (status !== 404) {
+          console.error("Failed to fetch profile:", error);
+        }
+        // Set profile to null if not found
+        if (status === 404) {
+          this.profile = null;
+        }
       } finally {
         this.loading = false;
       }

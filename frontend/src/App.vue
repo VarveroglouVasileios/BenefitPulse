@@ -48,8 +48,11 @@ onMounted(async () => {
   }, 50);
   
   await authStore.fetchMe();
-  // Load theme from user profile if authenticated (only after fetchMe completes)
-  if (authStore.isAuthenticated) {
+  // Load theme from user profile if authenticated (only after fetchMe completes and hydrated is true)
+  // Double-check user exists to prevent race conditions
+  if (authStore.isAuthenticated && authStore.hydrated && authStore.user) {
+    // Small delay to ensure all state is settled
+    await nextTick();
     themeStore.loadTheme();
   }
   trackPageview(window.location.pathname);
@@ -70,8 +73,8 @@ watch(() => router.currentRoute.value.path, () => {
 
 // Watch for auth changes (e.g., after login/logout)
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
-  if (isAuthenticated && authStore.hydrated) {
-    // Only load theme if already hydrated (after initial fetchMe)
+  if (isAuthenticated && authStore.hydrated && authStore.user) {
+    // Only load theme if already hydrated and user exists (after initial fetchMe)
     themeStore.loadTheme();
   } else if (!isAuthenticated) {
     // Reset to system theme when logged out

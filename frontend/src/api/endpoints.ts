@@ -11,7 +11,19 @@ export const api = {
 
   // Profile
   profile: {
-    get: () => http.get('/profile'),
+    get: () => {
+      // Wrap in try-catch to silently handle 404 (user might not have profile yet)
+      return http.get('/profile').catch((error: any) => {
+        // Silently handle 404 - user might not have profile yet
+        if (error.response?.status === 404) {
+          // Return a rejected promise with the error, but don't log to console
+          // The calling code will handle it gracefully
+          return Promise.reject(error);
+        }
+        // Re-throw other errors
+        throw error;
+      });
+    },
     update: (data: any) => http.put('/profile', data),
     updateTheme: (theme: 'light' | 'dark') => http.put('/profile/theme', { theme }),
   },

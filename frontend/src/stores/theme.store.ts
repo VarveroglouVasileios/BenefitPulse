@@ -40,7 +40,9 @@ export const useThemeStore = defineStore("theme", () => {
   async function loadTheme() {
     if (isLoadingTheme.value) return; // Prevent concurrent loads
     
-    if (!authStore.isAuthenticated) {
+    // Don't try to load theme if user is not authenticated or not hydrated yet
+    // Double-check to prevent any race conditions
+    if (!authStore.isAuthenticated || !authStore.hydrated || !authStore.user) {
       userTheme.value = null;
       applyTheme(systemTheme.value);
       return;
@@ -49,7 +51,7 @@ export const useThemeStore = defineStore("theme", () => {
     isLoadingTheme.value = true;
     try {
       const response = await api.profile.get();
-      const profileTheme = response.data.theme;
+      const profileTheme = response.data?.theme;
       if (profileTheme === "light" || profileTheme === "dark") {
         userTheme.value = profileTheme;
         applyTheme(profileTheme);
@@ -58,9 +60,16 @@ export const useThemeStore = defineStore("theme", () => {
         userTheme.value = null;
         applyTheme(systemTheme.value);
       }
-    } catch (error) {
-      console.error("Failed to load theme from profile:", error);
+    } catch (error: any) {
+      // Silently handle 404 (user might not have profile yet) or 401 (not authenticated)
+      // These are expected errors and don't need to be logged
+      const status = error.response?.status;
+      if (status !== 404 && status !== 401) {
+        console.error("Failed to load theme from profile:", error);
+      }
       // On error, keep current theme (don't reset)
+      userTheme.value = null;
+      applyTheme(systemTheme.value);
     } finally {
       isLoadingTheme.value = false;
     }

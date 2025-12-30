@@ -510,9 +510,13 @@ async function fetchForYou() {
   }
   try {
     const response = await api.opportunities.forYou();
-    forYou.value = (response.data || []).slice(0, 6);
+    // The forYou endpoint returns { hasProfile: boolean, matched: [], unknown: [] }
+    const data = response.data || {};
+    const opportunities = [...(data.matched || []), ...(data.unknown || [])];
+    forYou.value = opportunities.slice(0, 6);
   } catch (error) {
     console.error("Failed to fetch for you:", error);
+    forYou.value = [];
   } finally {
     loadingForYou.value = false;
   }
