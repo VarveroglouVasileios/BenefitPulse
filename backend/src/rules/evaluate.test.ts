@@ -17,7 +17,7 @@ describe("Rules Engine", () => {
       ageRange: { includes: ["18-24", "25-34"] },
       incomeRange: { max: "10-20k" },
       statusFlags: { required: ["student"] },
-      region: { includes: ["attiki", "thessaloniki"] },
+      region: { includes: ["attiki", "central_macedonia"] },
     };
 
     const result = evaluateMatch(studentProfile, rules);

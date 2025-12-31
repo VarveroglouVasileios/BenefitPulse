@@ -57,6 +57,13 @@ export interface CriteriaRules {
     languagesRequired?: Array<{ language: string; levelMin?: string }>;
     itSkillsRequired?: boolean;
     licensingRequiredKeywords?: string[];
+    // Hard Skills requirements
+    hardSkillsRequired?: Array<{
+      name?: string; // Exact skill name or keyword
+      category?: "technical" | "software" | "language" | "certification" | "professional" | "other";
+      levelMin?: "beginner" | "intermediate" | "advanced" | "expert";
+      yearsMin?: number;
+    }>;
   };
   requirementsSummaryBullets?: string[];
 }

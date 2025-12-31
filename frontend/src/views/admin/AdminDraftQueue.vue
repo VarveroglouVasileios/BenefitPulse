@@ -1,14 +1,46 @@
 <template>
   <div class="admin-drafts">
+    <AdminBreadcrumbs />
     <h1>Draft Queue</h1>
     <div v-if="loading" class="loading">Φόρτωση...</div>
+    <div v-else-if="error" class="error-message">
+      <p>⚠️ Σφάλμα κατά τη φόρτωση: {{ error }}</p>
+      <button @click="fetchDrafts" class="btn btn-primary">Δοκιμή ξανά</button>
+    </div>
+    <div v-else-if="drafts.length === 0" class="empty-state">
+      <p>✅ Δεν υπάρχουν items που χρειάζονται review.</p>
+      <p class="empty-note">
+        Το Draft Queue εμφανίζει items με:
+        <ul>
+          <li>Status "draft"</li>
+          <li>Low confidence (&lt; 60%)</li>
+          <li>Missing deadlines</li>
+          <li>Unknown criteria</li>
+        </ul>
+      </p>
+    </div>
     <div v-else class="drafts-list">
+      <div class="drafts-header">
+        <p class="drafts-count">Βρέθηκαν {{ drafts.length }} items που χρειάζονται review</p>
+      </div>
       <div v-for="draft in drafts" :key="draft._id" class="draft-card">
-        <h3>{{ draft.title }}</h3>
-        <p>{{ draft.summary }}</p>
+        <div class="draft-header">
+          <h3>{{ draft.title }}</h3>
+          <div class="status-badges">
+            <span v-if="draft.status === 'draft'" class="badge badge-draft">Draft</span>
+            <span v-else-if="draft.status === 'published'" class="badge badge-published">Published</span>
+            <span v-if="draft.confidence < 0.6" class="badge badge-low-confidence">Low Confidence</span>
+            <span v-if="!draft.deadlineAt && !draft.applicationEndAt" class="badge badge-missing-dates">Missing Dates</span>
+            <span v-if="draft.criteriaUnknown" class="badge badge-unknown-criteria">Unknown Criteria</span>
+          </div>
+        </div>
+        <p>{{ draft.summary || 'Δεν υπάρχει περίληψη' }}</p>
         <div class="meta">
-          <span>Confidence: {{ (draft.confidence * 100).toFixed(0) }}%</span>
+          <span>Confidence: {{ ((draft.confidence || 0) * 100).toFixed(0) }}%</span>
           <span>Source: {{ draft.source }}</span>
+          <span v-if="draft.deadlineAt">Deadline: {{ formatDate(draft.deadlineAt) }}</span>
+          <span v-else-if="draft.applicationEndAt">Application End: {{ formatDate(draft.applicationEndAt) }}</span>
+          <span v-else>No deadline</span>
         </div>
         <div class="actions">
           <router-link
@@ -16,13 +48,100 @@
             class="btn btn-primary"
             >Επεξεργασία</router-link
           >
-          <button @click="publish(draft._id)" class="btn btn-primary">Publish</button>
+          <button 
+            v-if="draft.status !== 'published'" 
+            @click="openPublishModal(draft._id, draft.title)" 
+            class="btn btn-success"
+            :disabled="publishingId === draft._id"
+          >
+            {{ publishingId === draft._id ? 'Δημοσίευση...' : 'Δημοσίευση' }}
+          </button>
+          <button 
+            v-if="draft.status === 'published'"
+            @click="openUnpublishModal(draft._id, draft.title)"
+            class="btn btn-warning"
+            :disabled="unpublishingId === draft._id"
+          >
+            {{ unpublishingId === draft._id ? 'Αποδημοσίευση...' : 'Αποδημοσίευση' }}
+          </button>
           <button 
             @click="openDeleteModal(draft._id, draft.title)" 
             class="btn btn-danger"
             :disabled="deletingId === draft._id"
           >
             {{ deletingId === draft._id ? 'Διαγραφή...' : 'Διαγραφή' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Publish Confirmation Modal -->
+    <div v-if="showPublishModal" class="modal-overlay" @click="closePublishModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>✅ Επιβεβαίωση Δημοσίευσης</h2>
+          <button class="close-btn" @click="closePublishModal" aria-label="Κλείσιμο">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <p class="warning-text">
+            Είστε σίγουροι ότι θέλετε να δημοσιεύσετε αυτό το item;
+          </p>
+          <div class="draft-preview">
+            <strong>{{ draftToPublish?.title }}</strong>
+          </div>
+          <p class="warning-note publish-note">
+            ⚠️ <strong>Προσοχή:</strong> Μετά τη δημοσίευση, το item θα είναι <strong>ορατό στους χρήστες</strong> 
+            στην πλατφόρμα. Βεβαιωθείτε ότι όλα τα δεδομένα είναι σωστά και πλήρη.
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="closePublishModal" class="btn btn-cancel">
+            Ακύρωση
+          </button>
+          <button 
+            @click="confirmPublish" 
+            class="btn btn-confirm-publish"
+            :disabled="publishingId !== null"
+          >
+            {{ publishingId ? 'Δημοσίευση...' : 'Ναι, Δημοσίευση' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unpublish Confirmation Modal -->
+    <div v-if="showUnpublishModal" class="modal-overlay" @click="closeUnpublishModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>⚠️ Επιβεβαίωση Αποδημοσίευσης</h2>
+          <button class="close-btn" @click="closeUnpublishModal" aria-label="Κλείσιμο">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <p class="warning-text">
+            Είστε σίγουροι ότι θέλετε να αποδημοσιεύσετε αυτό το item;
+          </p>
+          <div class="draft-preview">
+            <strong>{{ draftToUnpublish?.title }}</strong>
+          </div>
+          <p class="warning-note unpublish-note">
+            ⚠️ <strong>Προσοχή:</strong> Μετά την αποδημοσίευση, το item <strong>δεν θα είναι ορατό</strong> 
+            στους χρήστες. Θα μεταφερθεί σε status "draft" και θα χρειάζεται εκ νέου δημοσίευση για να εμφανιστεί.
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button @click="closeUnpublishModal" class="btn btn-cancel">
+            Ακύρωση
+          </button>
+          <button 
+            @click="confirmUnpublish" 
+            class="btn btn-confirm-unpublish"
+            :disabled="unpublishingId !== null"
+          >
+            {{ unpublishingId ? 'Αποδημοσίευση...' : 'Ναι, Αποδημοσίευση' }}
           </button>
         </div>
       </div>
@@ -69,30 +188,105 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { api } from "../../api/endpoints";
+import AdminBreadcrumbs from "../../components/AdminBreadcrumbs.vue";
 
 const drafts = ref([]);
 const loading = ref(true);
+const error = ref<string | null>(null);
 const deletingId = ref<string | null>(null);
+const publishingId = ref<string | null>(null);
+const unpublishingId = ref<string | null>(null);
 const showDeleteModal = ref(false);
+const showPublishModal = ref(false);
+const showUnpublishModal = ref(false);
 const draftToDelete = ref<{ id: string; title: string } | null>(null);
+const draftToPublish = ref<{ id: string; title: string } | null>(null);
+const draftToUnpublish = ref<{ id: string; title: string } | null>(null);
+
+function formatDate(date: string | Date): string {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  return d.toLocaleDateString('el-GR', { 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit' 
+  });
+}
 
 async function fetchDrafts() {
+  loading.value = true;
+  error.value = null;
   try {
     const response = await api.admin.draftQueue();
-    drafts.value = response.data;
-  } catch (error) {
-    console.error("Failed to fetch drafts:", error);
+    drafts.value = response.data || [];
+    console.log(`✅ Loaded ${drafts.value.length} draft items`);
+  } catch (err: any) {
+    console.error("Failed to fetch drafts:", err);
+    error.value = err.response?.data?.error || err.message || 'Άγνωστο σφάλμα';
   } finally {
     loading.value = false;
   }
 }
 
-async function publish(id: string) {
+function openPublishModal(id: string, title: string) {
+  draftToPublish.value = { id, title };
+  showPublishModal.value = true;
+}
+
+function closePublishModal() {
+  if (publishingId.value === null) {
+    showPublishModal.value = false;
+    draftToPublish.value = null;
+  }
+}
+
+async function confirmPublish() {
+  if (!draftToPublish.value) return;
+  
+  const id = draftToPublish.value.id;
+  publishingId.value = id;
+  
   try {
     await api.admin.opportunities.publish(id);
     await fetchDrafts();
-  } catch (error) {
-    alert("Σφάλμα κατά τη δημοσίευση");
+    showPublishModal.value = false;
+    draftToPublish.value = null;
+  } catch (error: any) {
+    alert(`Σφάλμα κατά τη δημοσίευση: ${error.response?.data?.error || error.message}`);
+    await fetchDrafts();
+  } finally {
+    publishingId.value = null;
+  }
+}
+
+function openUnpublishModal(id: string, title: string) {
+  draftToUnpublish.value = { id, title };
+  showUnpublishModal.value = true;
+}
+
+function closeUnpublishModal() {
+  if (unpublishingId.value === null) {
+    showUnpublishModal.value = false;
+    draftToUnpublish.value = null;
+  }
+}
+
+async function confirmUnpublish() {
+  if (!draftToUnpublish.value) return;
+  
+  const id = draftToUnpublish.value.id;
+  unpublishingId.value = id;
+  
+  try {
+    await api.admin.opportunities.unpublish(id);
+    await fetchDrafts();
+    showUnpublishModal.value = false;
+    draftToUnpublish.value = null;
+  } catch (error: any) {
+    alert(`Σφάλμα κατά την αποδημοσίευση: ${error.response?.data?.error || error.message}`);
+    await fetchDrafts();
+  } finally {
+    unpublishingId.value = null;
   }
 }
 
@@ -152,6 +346,53 @@ onMounted(fetchDrafts);
   color: var(--text-secondary);
 }
 
+.drafts-header {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.drafts-count {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: var(--text-secondary);
+}
+
+.empty-state p {
+  margin-bottom: 1rem;
+}
+
+.empty-note {
+  margin-top: 2rem;
+  text-align: left;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.empty-note ul {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.error-message {
+  text-align: center;
+  padding: 2rem;
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.5rem;
+  margin: 2rem 0;
+}
+
 .drafts-list {
   display: flex;
   flex-direction: column;
@@ -166,9 +407,64 @@ onMounted(fetchDrafts);
   border: 1px solid var(--border-color);
 }
 
-.draft-card h3 {
-  color: var(--text-primary);
+.draft-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
   margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.draft-header h3 {
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.status-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-draft {
+  background: rgba(251, 191, 36, 0.2);
+  color: #d97706;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.badge-low-confidence {
+  background: rgba(239, 68, 68, 0.2);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.badge-missing-dates {
+  background: rgba(59, 130, 246, 0.2);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.badge-unknown-criteria {
+  background: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+  border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+.badge-published {
+  background: rgba(16, 185, 129, 0.2);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.4);
 }
 
 .draft-card p {
@@ -206,6 +502,24 @@ onMounted(fetchDrafts);
 
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+.btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #059669;
+}
+
+.btn-warning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #d97706;
 }
 
 .btn-danger {
@@ -344,6 +658,34 @@ onMounted(fetchDrafts);
   color: var(--error);
 }
 
+.publish-note {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.dark .publish-note {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.publish-note strong {
+  color: #059669;
+}
+
+.unpublish-note {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.dark .unpublish-note {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.unpublish-note strong {
+  color: #d97706;
+}
+
 .modal-footer {
   display: flex;
   gap: 1rem;
@@ -372,6 +714,28 @@ onMounted(fetchDrafts);
 
 .btn-confirm-delete:hover:not(:disabled) {
   background: #dc2626;
+  opacity: 0.9;
+}
+
+.btn-confirm-publish {
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+}
+
+.btn-confirm-publish:hover:not(:disabled) {
+  background: #059669;
+  opacity: 0.9;
+}
+
+.btn-confirm-unpublish {
+  background: #f59e0b;
+  color: white;
+  font-weight: 600;
+}
+
+.btn-confirm-unpublish:hover:not(:disabled) {
+  background: #d97706;
   opacity: 0.9;
 }
 

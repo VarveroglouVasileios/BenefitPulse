@@ -1010,6 +1010,34 @@ function classifyKindAndType(
     return { kind: "program", type: "program" };
   }
 
+  // News detection: Results, tables, announcements without application window
+  const newsIndicators = [
+    "αποτελέσματα", "αποτελεσματα",
+    "πίνακες", "πινakes", "πίνακας", "πινakas",
+    "προσωρινά αποτελέσματα", "προσωρινα αποτελεσματα",
+    "οριστικά αποτελέσματα", "οριστικα αποτελεσματα",
+    "πίνακας τοποθετήσεων", "πινakas τοποθετησεων",
+    "επιλαχόντων", "επιλαχοντων",
+    "ενστάσεις", "ενστασεις",
+    "ανακοίνωση αποτελεσμάτων", "ανακοινωση αποτελεσματων",
+    "έκδοση αποτελεσμάτων", "εκδοση αποτελεσματων",
+  ];
+  
+  // Check if it's news (results/tables) without application window
+  const hasNewsIndicators = newsIndicators.some(indicator => 
+    lowerTitle.includes(indicator) || lowerContent.includes(indicator)
+  );
+  const hasNoApplicationWindow = !lowerContent.includes("αίτηση") && 
+                                 !lowerContent.includes("αιτηση") &&
+                                 !lowerContent.includes("υποβολή") &&
+                                 !lowerContent.includes("υποβολη") &&
+                                 !lowerContent.includes("πρόσκληση") &&
+                                 !lowerContent.includes("προσκληση");
+  
+  if (hasNewsIndicators && hasNoApplicationWindow) {
+    return { kind: "news", type: "manual" };
+  }
+
   // Default: try to infer from content length and structure
   // If content is substantial and has structure, it's likely a program/benefit
   if (content.length > 300 && (lowerContent.includes("κριτήρια") || lowerContent.includes("προϋποθέσεις"))) {
@@ -1057,6 +1085,26 @@ function cleanSummary(title: string, content: string): string {
     .replace(/site map[^.]*/gi, "")
     .replace(/μετάβαση[^.]*/gi, "")
     .trim();
+
+  // Remove Greek accessibility/navigation phrases at the start
+  const navigationPhrases = [
+    /^παράκαμψη\s+προς\s+το\s+κυρίως\s+περιεχόμενο[\.\s]*/i,
+    /^skip\s+to\s+content[\.\s]*/i,
+    /^skip\s+to\s+main[\.\s]*/i,
+    /^επικοινωνία[\.\s]*/i,
+    /^αναζήτηση[\.\s]*/i,
+    /^αναζητηση[\.\s]*/i,
+    /^search[\.\s]*/i,
+    /^contact[\.\s]*/i,
+    /^περιεχόμενο[\.\s]*/i,
+    /^content[\.\s]*/i,
+    /^μενού[\.\s]*/i,
+    /^menu[\.\s]*/i,
+  ];
+
+  for (const phrase of navigationPhrases) {
+    cleaned = cleaned.replace(phrase, "").trim();
+  }
 
   // Remove title if it appears at start
   const titleWords = title.toLowerCase().split(/\s+/).slice(0, 3);

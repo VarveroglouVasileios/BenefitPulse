@@ -7,8 +7,9 @@ export type StatusFlag =
   | 'retired'
   | 'self_employed'
   | 'parent';
-export type Region = 'attiki' | 'thessaloniki' | 'crete' | 'peloponnese' | 'macedonia' | 'thrace' | 'epirus' | 'thessaly' | 'central_greece' | 'western_greece' | 'aegean_islands' | 'ionian_islands' | 'other';
+export type Region = 'eastern_macedonia_thrace' | 'central_macedonia' | 'western_macedonia' | 'epirus' | 'thessaly' | 'central_greece' | 'ionian_islands' | 'western_greece' | 'peloponnese' | 'attiki' | 'north_aegean' | 'south_aegean' | 'crete';
 export type EducationLevel = 'primary' | 'secondary' | 'tertiary' | 'postgraduate' | 'none';
+export type GeneralEducationLevel = 'None' | 'YE' | 'DE' | 'TE' | 'PE' | 'Master' | 'PhD';
 
 // ASEP Qualifications types
 export interface UserDegree {
@@ -31,6 +32,20 @@ export interface UserITSkills {
   certs?: string[]; // e.g., ["ECDL", "ACTA"]
 }
 
+// Hard Skills for Job Matching
+export interface HardSkill {
+  name: string; // e.g., "JavaScript", "Microsoft Office", "Project Management"
+  category: 
+    | "technical"      // Programming, IT tools
+    | "software"       // MS Office, Adobe, etc.
+    | "language"       // Foreign languages (separate from UserLanguage)
+    | "certification"  // Professional certifications
+    | "professional"   // Project management, accounting, etc.
+    | "other";
+  level?: "beginner" | "intermediate" | "advanced" | "expert";
+  yearsOfExperience?: number; // Optional: years of experience with this skill
+}
+
 export interface UserProfile {
   userId: string;
   ageRange?: AgeRange;
@@ -39,7 +54,14 @@ export interface UserProfile {
   isStudent?: boolean;
   region?: Region;
   lastVisitAt?: Date;
-  // ASEP Qualifications (NEW)
+  // Education & Work Experience (for Job Matching)
+  educationLevel?: GeneralEducationLevel;
+  degreeCategories?: string[]; // e.g., ["Computer Science", "Economics"]
+  workExperienceYears?: number; // Years of work experience
+  driverLicense?: boolean;
+  // Hard Skills (for Job Matching)
+  hardSkills?: HardSkill[];
+  // ASEP Qualifications (for ASEP-specific matching)
   highestEducationLevel?: "ΠΕ" | "ΤΕ" | "ΔΕ" | "ΥΕ";
   degrees?: UserDegree[];
   languages?: UserLanguage[];

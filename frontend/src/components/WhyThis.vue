@@ -65,21 +65,55 @@ onMounted(async () => {
 
 <style scoped>
 .why-this {
-  background: #e7f3ff;
-  border: 1px solid #b3d9ff;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   padding: 1.5rem;
   border-radius: 0.5rem;
   margin-top: 2rem;
+  color: var(--text-primary);
+}
+
+.why-this h3 {
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.why-this p {
+  color: var(--text-primary);
+  margin: 0.5rem 0;
+}
+
+.why-this strong {
+  color: var(--text-primary);
 }
 
 .why-this ul {
   margin: 0.5rem 0;
   padding-left: 1.5rem;
+  color: var(--text-secondary);
+}
+
+.why-this li {
+  color: var(--text-secondary);
+  margin: 0.25rem 0;
 }
 
 .missing {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #b3d9ff;
+  border-top: 1px solid var(--border-color);
+}
+
+.missing p {
+  color: var(--text-primary);
+}
+
+.missing ul {
+  color: var(--text-secondary);
+}
+
+.loading {
+  color: var(--text-secondary);
 }
 </style>

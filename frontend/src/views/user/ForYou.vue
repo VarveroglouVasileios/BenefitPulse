@@ -1,7 +1,21 @@
 <template>
   <div class="for-you">
-    <h1>Για Εσάς</h1>
-    <p>Ευκαιρίες που πιθανόν σας αφορούν</p>
+    <div class="header">
+      <div>
+        <h1>Για Εσάς</h1>
+        <p>Ευκαιρίες που πιθανόν σας αφορούν</p>
+      </div>
+      <div class="header-actions">
+        <router-link to="/profile/wizard" class="btn-update-profile">
+          <span>✏️</span>
+          <span>Ενημέρωση Προφίλ</span>
+        </router-link>
+        <div v-if="!loading && (matched.length > 0 || unknown.length > 0)" class="total-badge">
+          <span class="total-number">{{ totalCount }}</span>
+          <span class="total-label">{{ totalCount === 1 ? 'ευκαιρία' : 'ευκαιρίες' }}</span>
+        </div>
+      </div>
+    </div>
 
     <div v-if="loading" class="loading">Φόρτωση...</div>
 
@@ -49,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { api } from "../../api/endpoints";
 import OpportunityCard from "../../components/OpportunityCard.vue";
 
@@ -57,6 +71,9 @@ const matched = ref<any[]>([]);
 const unknown = ref<any[]>([]);
 const hasProfile = ref<boolean | null>(null);
 const loading = ref(true);
+
+// Computed total count
+const totalCount = computed(() => matched.value.length + unknown.value.length);
 
 onMounted(async () => {
   loading.value = true;
@@ -92,6 +109,98 @@ onMounted(async () => {
 
 .section.secondary {
   margin-top: 3rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.btn-update-profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--primary-color, #4F46E5);
+  color: white;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  white-space: nowrap;
+}
+
+.btn-update-profile:hover {
+  background: var(--primary-color-dark, #4338CA);
+}
+
+.btn-update-profile span:first-child {
+  font-size: 1.1rem;
+}
+
+.total-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary, #f3f4f6);
+  border: 2px solid var(--border-color, #e5e7eb);
+  border-radius: 0.75rem;
+  padding: 1rem 1.5rem;
+  min-width: 120px;
+}
+
+.total-number {
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--primary-color, #4F46E5);
+  line-height: 1;
+}
+
+.total-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #6b7280);
+  margin-top: 0.25rem;
+  text-transform: lowercase;
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+  }
+  
+  .header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .btn-update-profile {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .total-badge {
+    width: 100%;
+    flex-direction: row;
+    gap: 0.5rem;
+    justify-content: center;
+  }
+  
+  .total-number {
+    font-size: 1.5rem;
+  }
 }
 
 .opportunities-grid {

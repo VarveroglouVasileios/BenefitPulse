@@ -1,5 +1,6 @@
 <template>
   <div class="admin-editor">
+    <AdminBreadcrumbs />
     <h1>{{ isNew ? "Νέα Ευκαιρία" : "Επεξεργασία Ευκαιρίας" }}</h1>
     <form @submit.prevent="handleSubmit">
       <div class="form-group">
@@ -44,6 +45,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
+import AdminBreadcrumbs from "../../components/AdminBreadcrumbs.vue";
 
 const route = useRoute();
 const router = useRouter();

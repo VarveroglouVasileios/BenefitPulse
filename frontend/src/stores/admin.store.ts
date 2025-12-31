@@ -3,6 +3,7 @@ import { api } from '../api/endpoints';
 
 interface AdminState {
   opportunities: any[];
+  opportunitiesTotal: number;
   metrics: any;
   loading: boolean;
   metricsLoading: boolean;
@@ -11,6 +12,7 @@ interface AdminState {
 export const useAdminStore = defineStore('admin', {
   state: (): AdminState => ({
     opportunities: [],
+    opportunitiesTotal: 0,
     metrics: null,
     loading: false,
     metricsLoading: false,
@@ -21,9 +23,18 @@ export const useAdminStore = defineStore('admin', {
       this.loading = true;
       try {
         const response = await api.admin.opportunities.list(params);
-        this.opportunities = response.data.opportunities;
+        // Ensure we always set an array, even if response.data is undefined
+        this.opportunities = Array.isArray(response.data?.opportunities) 
+          ? response.data.opportunities 
+          : [];
+        // Store total count
+        this.opportunitiesTotal = response.data?.total || 0;
       } catch (error) {
         console.error('Failed to fetch admin opportunities:', error);
+        // Reset to empty array on error to prevent stale data
+        this.opportunities = [];
+        this.opportunitiesTotal = 0;
+        throw error; // Re-throw so component can handle it
       } finally {
         this.loading = false;
       }

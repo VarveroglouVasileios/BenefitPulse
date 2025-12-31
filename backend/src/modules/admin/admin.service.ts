@@ -165,10 +165,40 @@ export class AdminService {
   }
 
   // Moderation - Draft Queue
+  // Returns items that need review:
+  // 1. Items with status "draft"
+  // 2. Items with low confidence (< 0.6) even if published
+  // 3. Items without deadlines (missing critical dates)
+  // 4. Items with unknown criteria
   async getDraftQueue(): Promise<IOpportunity[]> {
-    return Opportunity.find({ status: "draft", deletedAt: null }).sort({
-      createdAt: -1,
-    });
+    const now = new Date();
+    
+    // Find items that need review
+    // Exclude service_info, tender, news (same filter as getOpportunities for consistency)
+    const drafts = await Opportunity.find({
+      deletedAt: null,
+      kind: { $nin: ["service_info", "tender", "news"] }, // Match getOpportunities filter
+      $or: [
+        // Status is draft
+        { status: "draft" },
+        // Low confidence items (even if published)
+        { confidence: { $lt: 0.6 } },
+        // Missing critical dates
+        {
+          $and: [
+            { deadlineAt: null },
+            { applicationEndAt: null },
+            { status: { $ne: "archived" } }, // Don't include archived items
+          ],
+        },
+        // Unknown criteria
+        { criteriaUnknown: true },
+      ],
+    })
+      .sort({ createdAt: -1 })
+      .limit(100); // Limit to most recent 100 items
+    
+    return drafts;
   }
 
   async getRawItems(query: { processed?: boolean }): Promise<any[]> {

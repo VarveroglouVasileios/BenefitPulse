@@ -310,9 +310,9 @@ const animatedStats = ref({
   opportunities: 0,
 });
 
-const lastScanAt = ref<Date | null>(new Date());
+const lastScanAt = ref<Date | null>(null);
 const lastScanLabel = computed(() => {
-  if (!lastScanAt.value) return "";
+  if (!lastScanAt.value) return null; // Return null if no scan data available
   const diffMinutes = Math.max(
     0,
     Math.round((Date.now() - lastScanAt.value.getTime()) / 60000)

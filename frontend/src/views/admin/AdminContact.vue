@@ -1,5 +1,6 @@
 <template>
   <div class="admin-contact">
+    <AdminBreadcrumbs />
     <div class="header">
       <h1>Διαχείριση Επικοινωνίας</h1>
       <div class="filters">
@@ -119,6 +120,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
 import { api } from "../../api/endpoints";
+import AdminBreadcrumbs from "../../components/AdminBreadcrumbs.vue";
 
 interface ContactSubmission {
   _id: string;

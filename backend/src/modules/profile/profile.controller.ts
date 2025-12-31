@@ -16,7 +16,7 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
       return;
     }
     const obj = profile.toObject();
-    // Return all fields including ASEP qualifications
+    // Return all fields including Education & Work and ASEP qualifications
     const response = {
       userId: obj.userId,
       ageRange: obj.ageRange,
@@ -26,7 +26,14 @@ export async function getProfile(req: AuthRequest, res: Response): Promise<void>
       region: obj.region,
       theme: obj.theme,
       lastVisitAt: obj.lastVisitAt,
-      // ASEP Qualifications
+      // Education & Work Experience (for Job Matching)
+      educationLevel: obj.educationLevel,
+      degreeCategories: obj.degreeCategories,
+      workExperienceYears: obj.workExperienceYears,
+      driverLicense: obj.driverLicense,
+      // Hard Skills (for Job Matching)
+      hardSkills: obj.hardSkills,
+      // ASEP Qualifications (for ASEP-specific matching)
       highestEducationLevel: obj.highestEducationLevel,
       degrees: obj.degrees,
       languages: obj.languages,
@@ -50,10 +57,33 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
     const parseResult = userProfileSchema.safeParse(req.body);
 
     if (!parseResult.success) {
-      const errors = parseResult.error.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      }));
+      // Sanitize error messages to prevent information disclosure
+      const errors = parseResult.error.errors.map((e) => {
+        let message = e.message;
+        
+        // Remove enum values from error messages (security: don't expose schema structure)
+        // Replace Zod's default enum error message with generic one
+        if (message.includes("Expected") && message.includes("received")) {
+          const fieldName = e.path.join(".");
+          const fieldLabels: Record<string, string> = {
+            ageRange: "Ηλικιακή ομάδα",
+            incomeRange: "Εισοδηματική κατηγορία",
+            employmentStatus: "Επαγγελματική κατάσταση",
+            region: "Περιοχή",
+            isStudent: "Κατάσταση φοιτητή",
+          };
+          const label = fieldLabels[fieldName] || fieldName;
+          message = `Μη έγκυρη τιμή για το πεδίο "${label}"`;
+        } else {
+          // Generic sanitization: remove technical details
+          message = message.replace(/Expected .* received .*/g, "Μη έγκυρη τιμή");
+        }
+        
+        return {
+          field: e.path.join("."),
+          message,
+        };
+      });
       res.status(400).json({
         error: "Validation failed",
         errors,

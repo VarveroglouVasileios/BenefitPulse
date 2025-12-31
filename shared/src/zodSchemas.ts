@@ -17,19 +17,19 @@ export const incomeRangeSchema = z.enum([
   "50k+",
 ]);
 export const regionSchema = z.enum([
-  "attiki",
-  "thessaloniki",
-  "crete",
-  "peloponnese",
-  "macedonia",
-  "thrace",
-  "epirus",
-  "thessaly",
-  "central_greece",
-  "western_greece",
-  "aegean_islands",
-  "ionian_islands",
-  "other",
+  "eastern_macedonia_thrace", // Ανατολική Μακεδονία και Θράκη
+  "central_macedonia", // Κεντρική Μακεδονία
+  "western_macedonia", // Δυτική Μακεδονία
+  "epirus", // Ήπειρος
+  "thessaly", // Θεσσαλία
+  "central_greece", // Στερεά Ελλάδα
+  "ionian_islands", // Ιόνια Νησιά
+  "western_greece", // Δυτική Ελλάδα
+  "peloponnese", // Πελοπόννησος
+  "attiki", // Αττική
+  "north_aegean", // Βόρειο Αιγαίο
+  "south_aegean", // Νότιο Αιγαίο
+  "crete", // Κρήτη
 ]);
 
 export const employmentStatusSchema = z.enum([
@@ -40,7 +40,18 @@ export const employmentStatusSchema = z.enum([
   "other",
 ]);
 
-// ASEP Qualifications schemas
+// Education & Work Experience schemas
+export const generalEducationLevelSchema = z.enum([
+  "None",      // Καμία
+  "YE",        // Υποχρεωτική Εκπαίδευση
+  "DE",        // Δευτεροβάθμια Εκπαίδευση
+  "TE",        // Τεχνολογική Εκπαίδευση
+  "PE",        // Πανεπιστημιακή Εκπαίδευση
+  "Master",    // Μεταπτυχιακό
+  "PhD",       // Διδακτορικό
+]);
+
+// ASEP Qualifications schemas (for ASEP-specific matching)
 export const educationLevelSchema = z.enum(["ΠΕ", "ΤΕ", "ΔΕ", "ΥΕ"]);
 export const cefrLevelSchema = z.enum(["A1", "A2", "B1", "B2", "C1", "C2"]);
 
@@ -64,13 +75,28 @@ export const userITSkillsSchema = z.object({
   certs: z.array(z.string()).optional(),
 });
 
+// Hard Skills schema
+export const hardSkillSchema = z.object({
+  name: z.string().min(1, "Το όνομα της δεξιότητας είναι υποχρεωτικό"),
+  category: z.enum(["technical", "software", "language", "certification", "professional", "other"]),
+  level: z.enum(["beginner", "intermediate", "advanced", "expert"]).optional(),
+  yearsOfExperience: z.number().int().min(0).max(50).optional(),
+});
+
 export const userProfileSchema = z.object({
   ageRange: ageRangeSchema.optional(),
   incomeRange: incomeRangeSchema.optional(),
   employmentStatus: employmentStatusSchema.optional(),
   isStudent: z.boolean().optional(),
   region: regionSchema.optional(),
-  // ASEP Qualifications (NEW)
+  // Education & Work Experience (for Job Matching)
+  educationLevel: generalEducationLevelSchema.optional(),
+  degreeCategories: z.array(z.string()).optional(), // e.g., ["Computer Science", "Economics"]
+  workExperienceYears: z.number().int().min(0).max(50).optional(),
+  driverLicense: z.boolean().optional(),
+  // Hard Skills (for Job Matching)
+  hardSkills: z.array(hardSkillSchema).optional(),
+  // ASEP Qualifications (for ASEP-specific matching)
   highestEducationLevel: educationLevelSchema.optional(),
   degrees: z.array(userDegreeSchema).optional(),
   languages: z.array(userLanguageSchema).optional(),

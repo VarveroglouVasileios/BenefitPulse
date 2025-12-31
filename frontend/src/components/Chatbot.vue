@@ -107,6 +107,12 @@
           </svg>
         </button>
       </form>
+      <div class="chat-disclaimer">
+        <p class="disclaimer-text">
+          Ο βοηθός χρησιμοποιεί Τεχνητή Νοημοσύνη και ενδέχεται να κάνει λάθη.
+          Μην εισάγετε ευαίσθητα προσωπικά δεδομένα.
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -523,6 +529,21 @@ onMounted(() => {
   border-top: 1px solid var(--border-color);
   gap: 0.5rem;
   background: var(--bg-secondary);
+}
+
+/* Disclaimer */
+.chat-disclaimer {
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.disclaimer-text {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+  text-align: center;
 }
 
 .chat-input {

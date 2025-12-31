@@ -106,6 +106,21 @@ export function evaluateMatch(
     missingFields.push("educationLevel");
   }
 
+  // Hard Skills matching
+  if (criteriaRules.requirementsNormalized?.hardSkillsRequired) {
+    totalConditions++;
+    const hardSkillsMatch = checkHardSkills(
+      profile.hardSkills || [],
+      criteriaRules.requirementsNormalized.hardSkillsRequired
+    );
+    if (hardSkillsMatch.matched) {
+      matchedCount++;
+      reasons.push(hardSkillsMatch.reason);
+    } else {
+      missingFields.push("hardSkills");
+    }
+  }
+
   // ASEP-specific matching (if opportunity is ASEP)
   if (opportunity && (opportunity as any).type === "asep_competition") {
     const asepMatch = evaluateASEPMatch(profile as IUserProfile, opportunity);
@@ -398,5 +413,78 @@ function checkEducationLevel(
   return {
     matched: true,
     reason: `Εκπαιδευτικό επίπεδο ${educationLevel} αντιστοιχεί στα κριτήρια`,
+  };
+}
+
+/**
+ * Check if user's hard skills match job requirements
+ */
+function checkHardSkills(
+  userSkills: Array<{ name: string; category?: string; level?: string; yearsOfExperience?: number }>,
+  requirements: Array<{
+    name?: string;
+    category?: string;
+    levelMin?: string;
+    yearsMin?: number;
+  }>
+): { matched: boolean; reason: string } {
+  if (userSkills.length === 0) {
+    return { matched: false, reason: "" };
+  }
+
+  const levelOrder = ["beginner", "intermediate", "advanced", "expert"];
+  const matchedSkills: string[] = [];
+
+  // Check each requirement
+  for (const req of requirements) {
+    let foundMatch = false;
+
+    for (const userSkill of userSkills) {
+      // Check name match (if specified)
+      if (req.name) {
+        const reqNameLower = req.name.toLowerCase();
+        const userNameLower = userSkill.name.toLowerCase();
+        if (!userNameLower.includes(reqNameLower) && !reqNameLower.includes(userNameLower)) {
+          continue; // Name doesn't match
+        }
+      }
+
+      // Check category match (if specified)
+      if (req.category && userSkill.category !== req.category) {
+        continue; // Category doesn't match
+      }
+
+      // Check level match (if specified)
+      if (req.levelMin) {
+        const reqLevelIndex = levelOrder.indexOf(req.levelMin);
+        const userLevelIndex = userSkill.level ? levelOrder.indexOf(userSkill.level) : -1;
+        if (userLevelIndex === -1 || userLevelIndex < reqLevelIndex) {
+          continue; // Level doesn't meet minimum
+        }
+      }
+
+      // Check years of experience (if specified)
+      if (req.yearsMin !== undefined) {
+        const userYears = userSkill.yearsOfExperience || 0;
+        if (userYears < req.yearsMin) {
+          continue; // Years don't meet minimum
+        }
+      }
+
+      // All checks passed
+      foundMatch = true;
+      matchedSkills.push(userSkill.name);
+      break; // Found a match for this requirement
+    }
+
+    if (!foundMatch) {
+      return { matched: false, reason: "" };
+    }
+  }
+
+  // All requirements matched
+  return {
+    matched: true,
+    reason: `Δεξιότητες ${matchedSkills.join(", ")} αντιστοιχούν στα κριτήρια`,
   };
 }

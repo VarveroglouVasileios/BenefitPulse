@@ -1,5 +1,6 @@
 <template>
   <div class="admin-audit">
+    <AdminBreadcrumbs />
     <h1>Audit Log</h1>
     <div v-if="loading" class="loading">Φόρτωση...</div>
     <div v-else class="table">
@@ -28,6 +29,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { api } from "../../api/endpoints";
+import AdminBreadcrumbs from "../../components/AdminBreadcrumbs.vue";
 
 const audits = ref([]);
 const loading = ref(true);

@@ -22,6 +22,20 @@ export interface UserITSkills {
   certs?: string[]; // e.g., ["ECDL", "ACTA"]
 }
 
+// Hard Skills for Job Matching
+export interface HardSkill {
+  name: string; // e.g., "JavaScript", "Microsoft Office", "Project Management"
+  category: 
+    | "technical"      // Programming, IT tools
+    | "software"       // MS Office, Adobe, etc.
+    | "language"       // Foreign languages (separate from UserLanguage)
+    | "certification"  // Professional certifications
+    | "professional"   // Project management, accounting, etc.
+    | "other";
+  level?: "beginner" | "intermediate" | "advanced" | "expert";
+  yearsOfExperience?: number; // Optional: years of experience with this skill
+}
+
 export interface IUserProfile extends Document {
   userId: mongoose.Types.ObjectId;
   ageRange?: AgeRange;
@@ -36,7 +50,14 @@ export interface IUserProfile extends Document {
   region?: Region;
   theme?: "light" | "dark";
   lastVisitAt?: Date;
-  // ASEP Qualifications (NEW)
+  // Education & Work Experience (for Job Matching)
+  educationLevel?: "None" | "YE" | "DE" | "TE" | "PE" | "Master" | "PhD";
+  degreeCategories?: string[]; // e.g., ["Computer Science", "Economics"]
+  workExperienceYears?: number; // Years of work experience
+  driverLicense?: boolean;
+  // Hard Skills (for Job Matching)
+  hardSkills?: HardSkill[];
+  // ASEP Qualifications (for ASEP-specific matching)
   highestEducationLevel?: "ΠΕ" | "ΤΕ" | "ΔΕ" | "ΥΕ";
   degrees?: UserDegree[];
   languages?: UserLanguage[];
@@ -74,19 +95,19 @@ const UserProfileSchema = new Schema<IUserProfile>(
     region: {
       type: String,
       enum: [
-        "attiki",
-        "thessaloniki",
-        "crete",
-        "peloponnese",
-        "macedonia",
-        "thrace",
-        "epirus",
-        "thessaly",
-        "central_greece",
-        "western_greece",
-        "aegean_islands",
-        "ionian_islands",
-        "other",
+        "eastern_macedonia_thrace", // Ανατολική Μακεδονία και Θράκη
+        "central_macedonia", // Κεντρική Μακεδονία
+        "western_macedonia", // Δυτική Μακεδονία
+        "epirus", // Ήπειρος
+        "thessaly", // Θεσσαλία
+        "central_greece", // Στερεά Ελλάδα
+        "ionian_islands", // Ιόνια Νησιά
+        "western_greece", // Δυτική Ελλάδα
+        "peloponnese", // Πελοπόννησος
+        "attiki", // Αττική
+        "north_aegean", // Βόρειο Αιγαίο
+        "south_aegean", // Νότιο Αιγαίο
+        "crete", // Κρήτη
       ],
     },
     theme: {
@@ -96,7 +117,48 @@ const UserProfileSchema = new Schema<IUserProfile>(
     lastVisitAt: {
       type: Date,
     },
-    // ASEP Qualifications (NEW)
+    // Education & Work Experience (for Job Matching)
+    educationLevel: {
+      type: String,
+      enum: ["None", "YE", "DE", "TE", "PE", "Master", "PhD"],
+    },
+    degreeCategories: {
+      type: [String],
+      default: [],
+    },
+    workExperienceYears: {
+      type: Number,
+      min: 0,
+      max: 50,
+    },
+    driverLicense: {
+      type: Boolean,
+      default: false,
+    },
+    // Hard Skills (for Job Matching)
+    hardSkills: {
+      type: [
+        {
+          name: { type: String, required: true },
+          category: {
+            type: String,
+            enum: ["technical", "software", "language", "certification", "professional", "other"],
+            required: true,
+          },
+          level: {
+            type: String,
+            enum: ["beginner", "intermediate", "advanced", "expert"],
+          },
+          yearsOfExperience: {
+            type: Number,
+            min: 0,
+            max: 50,
+          },
+        },
+      ],
+      default: [],
+    },
+    // ASEP Qualifications (for ASEP-specific matching)
     highestEducationLevel: {
       type: String,
       enum: ["ΠΕ", "ΤΕ", "ΔΕ", "ΥΕ"],

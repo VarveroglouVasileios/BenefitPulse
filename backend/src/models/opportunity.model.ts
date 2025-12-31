@@ -114,19 +114,19 @@ const OpportunitySchema = new Schema<IOpportunity>(
     region: {
       type: String,
       enum: [
-        "attiki",
-        "thessaloniki",
-        "crete",
-        "peloponnese",
-        "macedonia",
-        "thrace",
-        "epirus",
-        "thessaly",
-        "central_greece",
-        "western_greece",
-        "aegean_islands",
-        "ionian_islands",
-        "other",
+        "eastern_macedonia_thrace", // Ανατολική Μακεδονία και Θράκη
+        "central_macedonia", // Κεντρική Μακεδονία
+        "western_macedonia", // Δυτική Μακεδονία
+        "epirus", // Ήπειρος
+        "thessaly", // Θεσσαλία
+        "central_greece", // Στερεά Ελλάδα
+        "ionian_islands", // Ιόνια Νησιά
+        "western_greece", // Δυτική Ελλάδα
+        "peloponnese", // Πελοπόννησος
+        "attiki", // Αττική
+        "north_aegean", // Βόρειο Αιγαίο
+        "south_aegean", // Νότιο Αιγαίο
+        "crete", // Κρήτη
       ],
     },
     criteriaJson: {

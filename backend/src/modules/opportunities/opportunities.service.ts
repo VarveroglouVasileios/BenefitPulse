@@ -852,6 +852,63 @@ export class OpportunitiesService {
     const matchedIds = matchedLinks.map((uo) => uo.opportunityId);
     const unknownIds = unknownLinks.map((uo) => uo.opportunityId);
 
+    // FALLBACK: If no pre-computed matches exist (worker not running), do real-time matching
+    if (matchedIds.length === 0 && unknownIds.length === 0) {
+      // Fetch recent published opportunities
+      const recentOpportunities = await Opportunity.find({
+        status: "published",
+        deletedAt: null,
+        kind: { $ne: "service_info" },
+        $and: [
+          {
+            $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+          },
+          {
+            $or: [
+              { applicationEndAt: null },
+              { applicationEndAt: { $gte: now } },
+            ],
+          },
+        ],
+      })
+        .sort({ publishedAt: -1 })
+        .limit(50); // Limit to recent 50 for performance
+
+      const matched: IOpportunity[] = [];
+      const unknown: IOpportunity[] = [];
+
+      for (const opp of recentOpportunities) {
+        const hasRules =
+          opp.criteriaRulesJson &&
+          Object.keys(opp.criteriaRulesJson || {}).length > 0;
+
+        if (!hasRules) {
+          unknown.push(opp);
+          continue;
+        }
+
+        const matchResult = evaluateMatch(
+          profile.toObject(),
+          opp.criteriaRulesJson as CriteriaRules,
+          opp
+        );
+
+        if (matchResult.matched) {
+          matched.push(opp);
+        } else if (matchResult.confidence > 0) {
+          // Partial match or unknown
+          unknown.push(opp);
+        }
+      }
+
+      return {
+        hasProfile: true,
+        matched: matched.slice(0, 20), // Limit results
+        unknown: unknown.slice(0, 20),
+      };
+    }
+
+    // Normal path: Use pre-computed matches
     const [matched, unknown] = await Promise.all([
       Opportunity.find({
         _id: { $in: matchedIds },

@@ -24,6 +24,116 @@ const DEFAULT_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
 };
 
+/**
+ * Clean HTML content by removing non-content tags (script, style, nav, etc.)
+ * Returns clean text content
+ * @param $ - Cheerio instance
+ * @param selectorOrElement - CSS selector string or DOM Element
+ */
+function cleanHtmlContent(
+  $: cheerio.CheerioAPI,
+  selectorOrElement?: string | any
+): string {
+  let $container: cheerio.Cheerio<any>;
+
+  if (!selectorOrElement) {
+    $container = $("body");
+  } else if (typeof selectorOrElement === "string") {
+    $container = $(selectorOrElement);
+  } else {
+    // Element object (from DOM or Cheerio)
+    $container = $(selectorOrElement);
+  }
+
+  // Clone to avoid mutating original
+  const $clean = $container.clone();
+
+  // Remove non-content tags
+  $clean.find("script, style, noscript, iframe, nav, footer, header").remove();
+  $clean
+    .find(
+      ".cookie-banner, .sidebar, .menu, .navigation, [role='navigation'], [role='banner'], [role='contentinfo']"
+    )
+    .remove();
+  $clean
+    .find("aside, .advertisement, .ads, [class*='ad-'], [id*='ad-']")
+    .remove();
+
+  // Extract text
+  return $clean.text().trim();
+}
+
+/**
+ * Check if text is mostly Greek (contains Greek characters)
+ * Returns true if at least 30% of non-whitespace characters are Greek
+ */
+function isGreekText(text: string): boolean {
+  if (!text || text.trim().length === 0) {
+    return false;
+  }
+
+  // Greek character range: \u0370-\u03FF (Greek and Coptic)
+  const greekPattern = /[\u0370-\u03FF\u1F00-\u1FFF]/g;
+  const greekMatches = text.match(greekPattern);
+  const greekCharCount = greekMatches ? greekMatches.length : 0;
+
+  // Count non-whitespace characters
+  const nonWhitespacePattern = /\S/g;
+  const nonWhitespaceMatches = text.match(nonWhitespacePattern);
+  const totalCharCount = nonWhitespaceMatches ? nonWhitespaceMatches.length : 0;
+
+  if (totalCharCount === 0) {
+    return false;
+  }
+
+  // At least 30% Greek characters
+  const greekRatio = greekCharCount / totalCharCount;
+  return greekRatio >= 0.3;
+}
+
+/**
+ * Extract deadline date from content using common Greek patterns
+ * Returns Date | null
+ */
+function extractDeadlineFromContent(content: string): Date | null {
+  if (!content || content.trim().length === 0) {
+    return null;
+  }
+
+  const lowerContent = content.toLowerCase();
+
+  // Patterns for deadline extraction
+  const deadlinePatterns = [
+    // "Υποβολή αιτήσεων από... έως..."
+    /(?:υποβολή|υποβολη)\s+(?:αιτήσεων|αιτησεων|αιτήσεως|αιτησεως)[\s\S]{0,200}?έως\s+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Λήξη προθεσμίας: DD/MM/YYYY"
+    /(?:λήξη|ληξη)\s+(?:προθεσμίας|προθεσμιας|προθεσμια)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Προθεσμία υποβολής: DD/MM/YYYY"
+    /(?:προθεσμία|προθεσμια)\s+(?:υποβολής|υποβολης)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Ημερομηνία λήξης: DD/MM/YYYY"
+    /(?:ημερομηνία|ημερομηνια)\s+(?:λήξης|ληξης)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Έως DD/MM/YYYY"
+    /(?:έως|εως|μέχρι|μεχρι)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Deadline: DD/MM/YYYY"
+    /(?:deadline|προθεσμια)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Αιτήσεις έως DD/MM/YYYY"
+    /(?:αιτήσεις|αιτησεις)[\s\S]{0,100}?έως\s+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+  ];
+
+  for (const pattern of deadlinePatterns) {
+    const match = content.match(pattern);
+    if (match && match[1]) {
+      const dateStr = match[1];
+      const parseResult = parseDate(dateStr);
+      if (parseResult.date) {
+        return normalizeDate(parseResult.date);
+      }
+    }
+  }
+
+  return null;
+}
+
 // Headers per source type
 function getHeadersForSourceType(sourceType: string): Record<string, string> {
   const baseHeaders = {
@@ -33,7 +143,8 @@ function getHeadersForSourceType(sourceType: string): Record<string, string> {
   if (sourceType === "rss") {
     return {
       ...baseHeaders,
-      Accept: "application/rss+xml,application/xml;q=0.9,text/xml;q=0.9,*/*;q=0.8",
+      Accept:
+        "application/rss+xml,application/xml;q=0.9,text/xml;q=0.9,*/*;q=0.8",
     };
   } else if (sourceType === "api") {
     return {
@@ -54,10 +165,10 @@ function getHeadersForSourceType(sourceType: string): Record<string, string> {
 async function fetchWithRedirects(
   url: string,
   options: any = {}
-): Promise<{ 
-  data: any; 
-  finalUrl: string; 
-  statusCode: number; 
+): Promise<{
+  data: any;
+  finalUrl: string;
+  statusCode: number;
   is404: boolean;
   contentType?: string;
   contentLength?: number;
@@ -71,21 +182,24 @@ async function fetchWithRedirects(
 
     const finalUrl = response.request?.responseURL || url;
     const statusCode = response.status;
-    const contentType = response.headers['content-type'] || '';
-    const contentLength = response.headers['content-length'] 
-      ? parseInt(response.headers['content-length'], 10) 
-      : (typeof response.data === 'string' ? response.data.length : 0);
-    
+    const contentType = response.headers["content-type"] || "";
+    const contentLength = response.headers["content-length"]
+      ? parseInt(response.headers["content-length"], 10)
+      : typeof response.data === "string"
+      ? response.data.length
+      : 0;
+
     // Check for 404 or error page
     let is404 = false;
     if (statusCode === 404) {
       is404 = true;
-    } else if (typeof response.data === 'string') {
+    } else if (typeof response.data === "string") {
       const lowerData = response.data.toLowerCase();
-      is404 = lowerData.includes("δεν ήταν δυνατή η εύρεση") ||
-              lowerData.includes("404") ||
-              lowerData.includes("not found") ||
-              lowerData.includes("page not found");
+      is404 =
+        lowerData.includes("δεν ήταν δυνατή η εύρεση") ||
+        lowerData.includes("404") ||
+        lowerData.includes("not found") ||
+        lowerData.includes("page not found");
     }
 
     return {
@@ -103,9 +217,9 @@ async function fetchWithRedirects(
         finalUrl: url,
         statusCode: error.response.status,
         is404: error.response.status === 404,
-        contentType: error.response.headers['content-type'] || '',
-        contentLength: error.response.headers['content-length'] 
-          ? parseInt(error.response.headers['content-length'], 10) 
+        contentType: error.response.headers["content-type"] || "",
+        contentLength: error.response.headers["content-length"]
+          ? parseInt(error.response.headers["content-length"], 10)
           : 0,
       };
     }
@@ -150,14 +264,19 @@ function shouldAutoPublish(officialUrl: string, extracted: any) {
 }
 
 export class IngestionService {
-  async fetchRSS(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+  async fetchRSS(
+    source: any,
+    reporter?: IngestionReporter,
+    sourceId?: string
+  ): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("rss");
-      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRedirects(source.url, {
-        headers: { ...headers, ...(source.config?.headers || {}) },
-        responseType: "text",
-        timeout: 15000,
-      });
+      const { data, finalUrl, statusCode, is404, contentType, contentLength } =
+        await fetchWithRedirects(source.url, {
+          headers: { ...headers, ...(source.config?.headers || {}) },
+          responseType: "text",
+          timeout: 15000,
+        });
 
       // Store fetch metadata
       source.lastHttpStatus = statusCode;
@@ -168,7 +287,12 @@ export class IngestionService {
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, contentType || 'application/rss+xml', data);
+        await reporter.saveRawResponse(
+          sourceId,
+          source.name,
+          contentType || "application/rss+xml",
+          data
+        );
       }
 
       if (is404 || statusCode === 404) {
@@ -179,43 +303,82 @@ export class IngestionService {
 
       try {
         const feed = await rssParser.parseString(data);
-        
-        return (feed.items || []).map((item: any) => {
-          // Parse date with unified parser (never Invalid Date)
-          let publishedAt: Date | null = null;
-          let parseError = false;
-          
-          if (item.pubDate) {
-            const parseResult = parseDate(item.pubDate);
-            if (parseResult.date) {
-              publishedAt = normalizeDate(parseResult.date);
-            } else {
-              parseError = true;
-              console.warn(`⚠️  Invalid pubDate for RSS item: "${item.title?.substring(0, 50)}" - "${item.pubDate}"`);
-              if (reporter && sourceId) {
-                reporter.trackInvalidDate(sourceId, source.name, item.pubDate, 'rssParser');
+
+        return (feed.items || [])
+          .map((item: any) => {
+            // Parse date with unified parser (never Invalid Date)
+            let publishedAt: Date | null = null;
+            let parseError = false;
+
+            if (item.pubDate) {
+              const parseResult = parseDate(item.pubDate);
+              if (parseResult.date) {
+                publishedAt = normalizeDate(parseResult.date);
+              } else {
+                parseError = true;
+                console.warn(
+                  `⚠️  Invalid pubDate for RSS item: "${item.title?.substring(
+                    0,
+                    50
+                  )}" - "${item.pubDate}"`
+                );
+                if (reporter && sourceId) {
+                  reporter.trackInvalidDate(
+                    sourceId,
+                    source.name,
+                    item.pubDate,
+                    "rssParser"
+                  );
+                }
               }
             }
-          }
-          
-          // Fallback to current date if parsing failed
-          if (!publishedAt) {
-            publishedAt = new Date();
-          }
-          
-          return {
-            title: item.title || "",
-            content:
-              item.content || item.contentSnippet || item.description || "",
-            url: item.link || "",
-            publishedAt: publishedAt,
-            metadata: {
-              guid: item.guid,
-              categories: item.categories || item.category,
-              parseError: parseError,
-            },
-          };
-        });
+
+            // Fallback to current date if parsing failed
+            if (!publishedAt) {
+              publishedAt = new Date();
+            }
+
+            // Get raw content
+            let rawContent =
+              item.content || item.contentSnippet || item.description || "";
+
+            // Clean HTML content if it contains HTML tags
+            if (rawContent.includes("<") && rawContent.includes(">")) {
+              const $ = cheerio.load(rawContent);
+              rawContent = cleanHtmlContent($, "body");
+            }
+
+            // Filter non-Greek content
+            const title = item.title || "";
+            const combinedText = `${title} ${rawContent}`;
+            if (!isGreekText(combinedText)) {
+              console.log(
+                `   ⏭️  SKIP: Non-Greek content - "${title.substring(0, 50)}"`
+              );
+              return null; // Will be filtered out
+            }
+
+            // Extract deadline from content
+            let deadlineAt: Date | null = null;
+            if (rawContent) {
+              deadlineAt = extractDeadlineFromContent(rawContent);
+            }
+
+            return {
+              title: title,
+              content: rawContent,
+              url: item.link || "",
+              publishedAt: publishedAt,
+              deadlineAt: deadlineAt, // Add extracted deadline
+              metadata: {
+                guid: item.guid,
+                categories: item.categories || item.category,
+                parseError: parseError,
+                deadlineExtracted: !!deadlineAt,
+              },
+            };
+          })
+          .filter((item: any) => item !== null); // Remove filtered items
       } catch (parseErr: any) {
         // Fallback: lenient XML parsing for Diavgeia/broken feeds
         const parser = new XMLParser({
@@ -228,49 +391,101 @@ export class IngestionService {
           parsed?.channel?.item ||
           parsed?.feed?.entry ||
           [];
-        return items.map((item: any) => {
-          // Parse date with unified parser (never Invalid Date)
-          let publishedAt: Date | null = null;
-          
-          if (item.pubDate) {
-            const parseResult = parseDate(item.pubDate);
-            if (parseResult.date) {
-              publishedAt = normalizeDate(parseResult.date);
-            } else {
-              console.warn(`⚠️  Invalid pubDate for RSS item (fallback parser): "${item.title?.substring(0, 50)}" - "${item.pubDate}"`);
-              if (reporter && sourceId) {
-                reporter.trackInvalidDate(sourceId, source.name, item.pubDate, 'fallbackParser');
+        return items
+          .map((item: any) => {
+            // Parse date with unified parser (never Invalid Date)
+            let publishedAt: Date | null = null;
+
+            if (item.pubDate) {
+              const parseResult = parseDate(item.pubDate);
+              if (parseResult.date) {
+                publishedAt = normalizeDate(parseResult.date);
+              } else {
+                console.warn(
+                  `⚠️  Invalid pubDate for RSS item (fallback parser): "${item.title?.substring(
+                    0,
+                    50
+                  )}" - "${item.pubDate}"`
+                );
+                if (reporter && sourceId) {
+                  reporter.trackInvalidDate(
+                    sourceId,
+                    source.name,
+                    item.pubDate,
+                    "fallbackParser"
+                  );
+                }
+              }
+            } else if (item.updated) {
+              const parseResult = parseDate(item.updated);
+              if (parseResult.date) {
+                publishedAt = normalizeDate(parseResult.date);
+              } else {
+                console.warn(
+                  `⚠️  Invalid updated date for RSS item (fallback parser): "${item.title?.substring(
+                    0,
+                    50
+                  )}" - "${item.updated}"`
+                );
+                if (reporter && sourceId) {
+                  reporter.trackInvalidDate(
+                    sourceId,
+                    source.name,
+                    item.updated,
+                    "fallbackParser"
+                  );
+                }
               }
             }
-          } else if (item.updated) {
-            const parseResult = parseDate(item.updated);
-            if (parseResult.date) {
-              publishedAt = normalizeDate(parseResult.date);
-            } else {
-              console.warn(`⚠️  Invalid updated date for RSS item (fallback parser): "${item.title?.substring(0, 50)}" - "${item.updated}"`);
-              if (reporter && sourceId) {
-                reporter.trackInvalidDate(sourceId, source.name, item.updated, 'fallbackParser');
-              }
+
+            // Fallback to current date if parsing failed
+            if (!publishedAt) {
+              publishedAt = new Date();
             }
-          }
-          
-          // Fallback to current date if parsing failed
-          if (!publishedAt) {
-            publishedAt = new Date();
-          }
-          
-          return {
-            title: item.title || "",
-            content:
-              item.description || item.content || item["content:encoded"] || "",
-            url: item.link?.["@_href"] || item.link || "",
-            publishedAt: publishedAt,
-            metadata: {
-              ...item,
-              parseError: parseErr?.message || String(parseErr) || false,
-            },
-          };
-        });
+
+            // Get raw content
+            let rawContent =
+              item.description || item.content || item["content:encoded"] || "";
+
+            // Clean HTML content if it contains HTML tags
+            if (rawContent.includes("<") && rawContent.includes(">")) {
+              const $ = cheerio.load(rawContent);
+              rawContent = cleanHtmlContent($, "body");
+            }
+
+            // Filter non-Greek content
+            const title = item.title || "";
+            const combinedText = `${title} ${rawContent}`;
+            if (!isGreekText(combinedText)) {
+              console.log(
+                `   ⏭️  SKIP: Non-Greek content (fallback parser) - "${title.substring(
+                  0,
+                  50
+                )}"`
+              );
+              return null; // Will be filtered out
+            }
+
+            // Extract deadline from content
+            let deadlineAt: Date | null = null;
+            if (rawContent) {
+              deadlineAt = extractDeadlineFromContent(rawContent);
+            }
+
+            return {
+              title: title,
+              content: rawContent,
+              url: item.link?.["@_href"] || item.link || "",
+              publishedAt: publishedAt,
+              deadlineAt: deadlineAt, // Add extracted deadline
+              metadata: {
+                ...item,
+                parseError: parseErr?.message || String(parseErr) || false,
+                deadlineExtracted: !!deadlineAt,
+              },
+            };
+          })
+          .filter((item: any) => item !== null); // Remove filtered items
       }
     } catch (error: any) {
       console.error(`Error fetching RSS from ${source.url}:`, error);
@@ -279,7 +494,11 @@ export class IngestionService {
     }
   }
 
-  async fetchAPI(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+  async fetchAPI(
+    source: any,
+    reporter?: IngestionReporter,
+    sourceId?: string
+  ): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("api");
       const response = await axios.get(source.url, {
@@ -291,44 +510,66 @@ export class IngestionService {
       // Store fetch metadata
       source.lastHttpStatus = response.status;
       source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : JSON.stringify(response.data).length);
+      source.lastContentType = response.headers["content-type"] || "";
+      source.lastBytes = response.headers["content-length"]
+        ? parseInt(response.headers["content-length"], 10)
+        : typeof response.data === "string"
+        ? response.data.length
+        : JSON.stringify(response.data).length;
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, rawData);
+        const rawData =
+          typeof response.data === "string"
+            ? response.data
+            : JSON.stringify(response.data);
+        await reporter.saveRawResponse(
+          sourceId,
+          source.name,
+          source.lastContentType,
+          rawData
+        );
       }
 
       // Handle different API response formats
       let items: any[] = [];
-      
+
       // Διαύγεια API format: response.data.response.docs
       if (response.data?.response?.docs) {
         items = response.data.response.docs;
       } else if (Array.isArray(response.data)) {
         items = response.data;
       } else if (response.data?.data) {
-        items = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
+        items = Array.isArray(response.data.data)
+          ? response.data.data
+          : [response.data.data];
       } else if (response.data?.decisions) {
-        items = Array.isArray(response.data.decisions) ? response.data.decisions : [response.data.decisions];
+        items = Array.isArray(response.data.decisions)
+          ? response.data.decisions
+          : [response.data.decisions];
       }
 
       // Filter Διαύγεια items by keyword relevance in subject
       const isDiavgeia = source.url.includes("diavgeia.gov.gr");
       let filteredItems = items;
-      
+
       if (isDiavgeia) {
         // Keywords that must appear in subject
         const requiredKeywords = [
-          "επίδομα", "επιδότηση", "voucher", "pass", "youth pass",
-          "tourism4all", "north evia pass", "thessaly-evros pass",
-          "thessaly evros pass", "north evia", "thessaly evros"
+          "επίδομα",
+          "επιδότηση",
+          "voucher",
+          "pass",
+          "youth pass",
+          "tourism4all",
+          "north evia pass",
+          "thessaly-evros pass",
+          "thessaly evros pass",
+          "north evia",
+          "thessaly evros",
         ];
-        
+
         // Irrelevant subjects (reject unless they also contain keyword)
         const irrelevantPatterns = [
           /υπερωριακή\s+απασχόληση/i,
@@ -338,65 +579,68 @@ export class IngestionService {
           /προμήθειες/i,
           /διαγωνισμός\s+προμηθειών/i,
         ];
-        
+
         filteredItems = items.filter((item: any) => {
           const subject = (item.subject || "").toLowerCase();
-          
+
           // Check if subject contains at least one required keyword
-          const hasKeyword = requiredKeywords.some(keyword => 
+          const hasKeyword = requiredKeywords.some((keyword) =>
             subject.includes(keyword.toLowerCase())
           );
-          
+
           if (!hasKeyword) {
             return false; // Reject: no keyword match
           }
-          
+
           // Check if subject matches irrelevant pattern
-          const matchesIrrelevant = irrelevantPatterns.some(pattern => 
+          const matchesIrrelevant = irrelevantPatterns.some((pattern) =>
             pattern.test(subject)
           );
-          
+
           // Reject if matches irrelevant pattern (even if has keyword, it's likely noise)
           if (matchesIrrelevant) {
             return false;
           }
-          
+
           return true; // Accept: has keyword and not irrelevant
         });
       }
-      
+
       return filteredItems.map((item: any) => {
         // For Διαύγεια: build content from metadata if no body exists
-        let content = item.content ||
+        let content =
+          item.content ||
           item.description ||
           item.summary ||
           item.excerpt ||
           item.text ||
           "";
-        
+
         // Διαύγεια: build summary from metadata fields (always, not just if content is short)
         if (isDiavgeia) {
           const parts: string[] = [];
           if (item.subject) parts.push(item.subject);
-          if (item.decisionTypeLabel) parts.push(`Τύπος: ${item.decisionTypeLabel}`);
-          if (item.organizationLabel) parts.push(`Φορέας: ${item.organizationLabel}`);
+          if (item.decisionTypeLabel)
+            parts.push(`Τύπος: ${item.decisionTypeLabel}`);
+          if (item.organizationLabel)
+            parts.push(`Φορέας: ${item.organizationLabel}`);
           if (item.issueDate) parts.push(`Ημερομηνία: ${item.issueDate}`);
           if (item.ada) parts.push(`ΑΔΑ: ${item.ada}`);
-          
+
           // Use metadata summary as content (don't require body)
           content = parts.join(". ");
         }
-        
+
         // Build URL for Διαύγεια
         let url = item.url || item.link || item.documentUrl || "";
         if (isDiavgeia && item.ada && !url) {
           url = `https://diavgeia.gov.gr/doc/${item.ada}`;
         }
-        
+
         // Parse date for Διαύγεια
         // Parse date with unified parser (never Invalid Date)
         let publishedAt: Date | null = null;
-        
+
         const dateFields = [
           item.publishedAt,
           item.published_at,
@@ -404,7 +648,7 @@ export class IngestionService {
           item.issueDate,
           item.date,
         ];
-        
+
         for (const dateField of dateFields) {
           if (dateField) {
             const parseResult = parseDate(dateField);
@@ -414,12 +658,12 @@ export class IngestionService {
             }
           }
         }
-        
+
         // Fallback to current date if parsing failed
         if (!publishedAt) {
           publishedAt = new Date();
         }
-        
+
         return {
           title: item.title || item.name || item.subject || "",
           content: content,
@@ -439,7 +683,7 @@ export class IngestionService {
       if (error.response) {
         source.lastHttpStatus = error.response.status;
         source.lastFinalUrl = source.url;
-        source.lastContentType = error.response.headers['content-type'] || '';
+        source.lastContentType = error.response.headers["content-type"] || "";
         source.lastBytes = 0;
         source.lastError = error.message || String(error);
       } else {
@@ -452,7 +696,11 @@ export class IngestionService {
     }
   }
 
-  async fetchHTMLCatalog(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+  async fetchHTMLCatalog(
+    source: any,
+    reporter?: IngestionReporter,
+    sourceId?: string
+  ): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("html_catalog");
       const response = await axios.get(source.url, {
@@ -464,23 +712,40 @@ export class IngestionService {
       // Store fetch metadata
       source.lastHttpStatus = response.status;
       source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : 0);
+      source.lastContentType = response.headers["content-type"] || "";
+      source.lastBytes = response.headers["content-length"]
+        ? parseInt(response.headers["content-length"], 10)
+        : typeof response.data === "string"
+        ? response.data.length
+        : 0;
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, response.data);
+        await reporter.saveRawResponse(
+          sourceId,
+          source.name,
+          source.lastContentType,
+          response.data
+        );
       }
 
       const $ = cheerio.load(response.data);
       const items: any[] = [];
       $("a").each((_, el) => {
         const href = $(el).attr("href");
-        const text = $(el).text().trim();
+        // Clean HTML before extracting text
+        const $link = $(el).clone();
+        $link
+          .find("script, style, noscript, iframe, nav, footer, header")
+          .remove();
+        const text = cleanHtmlContent($, el).trim() || $link.text().trim();
         if (!href || !text) return;
+
+        // Filter non-Greek content
+        if (!isGreekText(text)) {
+          return; // Skip non-Greek items
+        }
 
         // Build absolute URL
         const url = href.startsWith("http")
@@ -505,12 +770,20 @@ export class IngestionService {
         if (u.pathname === "/") return;
 
         const canonical = `${u.hostname}${u.pathname}`;
+
+        // Extract deadline from text
+        let deadlineAt: Date | null = null;
+        if (text) {
+          deadlineAt = extractDeadlineFromContent(text);
+        }
+
         items.push({
           title: text,
           content: text,
           url: u.toString(),
           publishedAt: new Date(),
-          metadata: { canonical },
+          deadlineAt: deadlineAt, // Add extracted deadline
+          metadata: { canonical, deadlineExtracted: !!deadlineAt },
         });
       });
 
@@ -530,7 +803,7 @@ export class IngestionService {
       if (error.response) {
         source.lastHttpStatus = error.response.status;
         source.lastFinalUrl = source.url;
-        source.lastContentType = error.response.headers['content-type'] || '';
+        source.lastContentType = error.response.headers["content-type"] || "";
         source.lastBytes = 0;
         source.lastError = error.message || String(error);
       } else {
@@ -543,14 +816,19 @@ export class IngestionService {
     }
   }
 
-  async fetchHTMLListing(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+  async fetchHTMLListing(
+    source: any,
+    reporter?: IngestionReporter,
+    sourceId?: string
+  ): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("html_listing");
-      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRedirects(source.url, {
-        headers: { ...headers, ...(source.config?.headers || {}) },
-        responseType: "text",
-        timeout: 15000,
-      });
+      const { data, finalUrl, statusCode, is404, contentType, contentLength } =
+        await fetchWithRedirects(source.url, {
+          headers: { ...headers, ...(source.config?.headers || {}) },
+          responseType: "text",
+          timeout: 15000,
+        });
 
       // Store fetch metadata
       source.lastHttpStatus = statusCode;
@@ -561,14 +839,25 @@ export class IngestionService {
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, contentType || 'text/html', data);
+        await reporter.saveRawResponse(
+          sourceId,
+          source.name,
+          contentType || "text/html",
+          data
+        );
       }
 
       if (is404 || statusCode === 404) {
         console.error(`❌ Source ${source.name} returned 404: ${source.url}`);
         // If URL doesn't have /el/ and it's prosvasis, try with /el/
-        if (source.url.includes("prosvasis.dypa.gov.gr") && !source.url.includes("/el/")) {
-          const elUrl = source.url.replace("prosvasis.dypa.gov.gr/", "prosvasis.dypa.gov.gr/el/");
+        if (
+          source.url.includes("prosvasis.dypa.gov.gr") &&
+          !source.url.includes("/el/")
+        ) {
+          const elUrl = source.url.replace(
+            "prosvasis.dypa.gov.gr/",
+            "prosvasis.dypa.gov.gr/el/"
+          );
           console.log(`⚠️  Trying with /el/ prefix: ${elUrl}`);
           // Update source URL in DB
           const Source = (await import("../../models/source.model")).Source;
@@ -580,14 +869,26 @@ export class IngestionService {
       }
 
       const $ = cheerio.load(data);
-      
+
       // Check HTML title for 404
       const pageTitle = $("title").text().toLowerCase();
-      if (pageTitle.includes("δεν ήταν δυνατή") || pageTitle.includes("404") || pageTitle.includes("not found")) {
-        console.error(`❌ Source ${source.name} has 404 page title: ${source.url}`);
+      if (
+        pageTitle.includes("δεν ήταν δυνατή") ||
+        pageTitle.includes("404") ||
+        pageTitle.includes("not found")
+      ) {
+        console.error(
+          `❌ Source ${source.name} has 404 page title: ${source.url}`
+        );
         // Try with /el/ if prosvasis
-        if (source.url.includes("prosvasis.dypa.gov.gr") && !source.url.includes("/el/")) {
-          const elUrl = source.url.replace("prosvasis.dypa.gov.gr/", "prosvasis.dypa.gov.gr/el/");
+        if (
+          source.url.includes("prosvasis.dypa.gov.gr") &&
+          !source.url.includes("/el/")
+        ) {
+          const elUrl = source.url.replace(
+            "prosvasis.dypa.gov.gr/",
+            "prosvasis.dypa.gov.gr/el/"
+          );
           console.log(`⚠️  Trying with /el/ prefix: ${elUrl}`);
           const Source = (await import("../../models/source.model")).Source;
           await Source.updateOne({ _id: source._id }, { $set: { url: elUrl } });
@@ -596,103 +897,170 @@ export class IngestionService {
         throw new Error(`HTTP 404: Source has 404 page title - ${source.url}`);
       }
       const items: any[] = [];
-      
+
       // Blocklist keywords for menu/FAQ/guides (ignore these)
       const blocklistKeywords = [
-        "faq", "συχνές ερωτήσεις", "συχνες ερωτησεις",
-        "menu", "μενού", "menou",
-        "cookies", "πολιτική", "πολιτικη",
-        "privacy", "προστασία", "προστασια",
-        "επικοινωνία", "επικοινωνια", "contact",
-        "σημεία εξυπηρέτησης", "σημεια εξυπηρετησης",
-        "οδηγίες", "οδηγιες", "guides",
-        "footer", "header", "navigation",
-        "sitemap", "site map",
+        "faq",
+        "συχνές ερωτήσεις",
+        "συχνες ερωτησεις",
+        "menu",
+        "μενού",
+        "menou",
+        "cookies",
+        "πολιτική",
+        "πολιτικη",
+        "privacy",
+        "προστασία",
+        "προστασια",
+        "επικοινωνία",
+        "επικοινωνια",
+        "contact",
+        "σημεία εξυπηρέτησης",
+        "σημεια εξυπηρετησης",
+        "οδηγίες",
+        "οδηγιες",
+        "guides",
+        "footer",
+        "header",
+        "navigation",
+        "sitemap",
+        "site map",
       ];
-      
+
       const baseHost = new URL(finalUrl || source.url).hostname;
-      
+
       // Special handling for dypa.gov.gr/proghrammata-anoikhta and proghrammata-apaskholisis-11
-      if (source.url.includes("dypa.gov.gr/proghrammata-anoikhta") || 
-          source.url.includes("dypa.gov.gr/proghrammata-apaskholisis-11")) {
+      if (
+        source.url.includes("dypa.gov.gr/proghrammata-anoikhta") ||
+        source.url.includes("dypa.gov.gr/proghrammata-apaskholisis-11")
+      ) {
         // Find "Ανοιχτό πρόγραμμα" blocks or program links
         // Try multiple selectors for program cards/items
-        $(".program-card, .program-item, [class*='program'], [class*='anoikto'], article, .card, [class*='card'], a[href*='programma'], a[href*='proghramma']").each((_, block) => {
+        $(
+          ".program-card, .program-item, [class*='program'], [class*='anoikto'], article, .card, [class*='card'], a[href*='programma'], a[href*='proghramma']"
+        ).each((_, block) => {
           const $block = $(block);
           const linkEl = $block.is("a") ? $block : $block.find("a").first();
-          
+
           if (!linkEl.length) return;
-          
+
           const href = linkEl.attr("href");
           if (!href) return;
-          
+
           // Try to get title from multiple sources (priority order):
           // 1. Image alt/aria-label (if link contains image)
           // 2. Anchor text
           // 3. Heading inside link
           // 4. Heading near link (in block)
           let title = "";
-          
+
           // First, try img alt/aria-label (highest priority for DYPA pages)
           const imgEl = linkEl.find("img").first();
           if (imgEl.length) {
-            title = imgEl.attr("alt") || imgEl.attr("aria-label") || imgEl.attr("title") || "";
+            title =
+              imgEl.attr("alt") ||
+              imgEl.attr("aria-label") ||
+              imgEl.attr("title") ||
+              "";
           }
-          
-          // If no img title, try anchor text
+
+          // If no img title, try anchor text (clean HTML first)
           if (!title || title.length < 5) {
-            title = linkEl.text().trim();
+            const $linkClone = linkEl.clone();
+            $linkClone
+              .find("script, style, noscript, iframe, nav, footer, header")
+              .remove();
+            title = cleanHtmlContent($, linkEl[0]) || $linkClone.text().trim();
           }
-          
+
           // If still no title, try heading inside link
           if (!title || title.length < 5) {
-            const headingEl = linkEl.find("h1, h2, h3, h4, h5, h6, .title, [class*='title']").first();
+            const headingEl = linkEl
+              .find("h1, h2, h3, h4, h5, h6, .title, [class*='title']")
+              .first();
             if (headingEl.length) {
-              title = headingEl.text().trim();
+              title =
+                cleanHtmlContent($, headingEl.get(0)) ||
+                headingEl.text().trim();
             }
           }
-          
+
           // If still no title, try heading near link (in parent block)
           if (!title || title.length < 5) {
-            const headingEl = $block.find("h1, h2, h3, h4, h5, h6, .title, [class*='title']").first();
+            const headingEl = $block
+              .find("h1, h2, h3, h4, h5, h6, .title, [class*='title']")
+              .first();
             if (headingEl.length) {
-              title = headingEl.text().trim();
+              title =
+                cleanHtmlContent($, headingEl.get(0)) ||
+                headingEl.text().trim();
             }
           }
-          
+
           // Skip if still no valid title
           if (!title || title.length < 5) return;
-          
+
+          // Filter non-Greek content
+          if (!isGreekText(title)) {
+            return; // Skip non-Greek items
+          }
+
           const url = href.startsWith("http")
             ? href
             : new URL(href, finalUrl || source.url).toString();
-          
+
           try {
             const u = new URL(url);
-            if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`) return;
-            
+            if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`)
+              return;
+
             const canonical = `${u.hostname}${u.pathname}`;
-            // Get content from block, or from link's parent/siblings
-            let content = $block.text().trim();
+            // Get content from block (clean HTML first)
+            let content = cleanHtmlContent($, block) || $block.text().trim();
             if (!content || content.length < 50) {
               // Try to get content from link's parent or nearby elements
-              const parentContent = linkEl.parent().text().trim();
-              const siblingContent = linkEl.siblings().text().trim();
+              const parentEl = linkEl.parent();
+              const siblingEl = linkEl.siblings().first();
+              const parentContent =
+                (parentEl.length > 0
+                  ? cleanHtmlContent($, parentEl.get(0))
+                  : null) || parentEl.text().trim();
+              const siblingContent =
+                (siblingEl.length > 0
+                  ? cleanHtmlContent($, siblingEl.get(0))
+                  : null) || siblingEl.text().trim();
               content = parentContent || siblingContent || title;
             }
-            
+
+            // Filter non-Greek content
+            if (!isGreekText(`${title} ${content}`)) {
+              return; // Skip non-Greek items
+            }
+
+            // Extract deadline from content
+            let deadlineAt: Date | null = null;
+            if (content) {
+              deadlineAt = extractDeadlineFromContent(content);
+            }
+
             items.push({
               title: title.trim(),
               content: content.substring(0, 2000), // Limit content
               url: u.toString(),
               publishedAt: new Date(),
-              metadata: { canonical, isOpenProgram: true, titleSource: imgEl.length ? "img-alt" : "anchor-text" },
+              deadlineAt: deadlineAt, // Add extracted deadline
+              metadata: {
+                canonical,
+                isOpenProgram: true,
+                titleSource: imgEl.length ? "img-alt" : "anchor-text",
+                deadlineExtracted: !!deadlineAt,
+              },
             });
           } catch {
             return;
           }
         });
-        
+
         // Fallback: find links with "Ανοιχτό" or "πρόγραμμα" in nearby text
         if (items.length === 0) {
           $("a").each((_, el) => {
@@ -700,31 +1068,54 @@ export class IngestionService {
             const text = $el.text().trim();
             const href = $el.attr("href");
             if (!text || !href) return;
-            
+
             // Check if link or nearby text contains "ανοιχτό" or "πρόγραμμα"
             const parentText = $el.parent().text().toLowerCase();
-            const hasOpenProgram = text.toLowerCase().includes("ανοιχτό") ||
-                                  text.toLowerCase().includes("πρόγραμμα") ||
-                                  parentText.includes("ανοιχτό");
-            
+            const hasOpenProgram =
+              text.toLowerCase().includes("ανοιχτό") ||
+              text.toLowerCase().includes("πρόγραμμα") ||
+              parentText.includes("ανοιχτό");
+
             if (!hasOpenProgram) return;
-            
+
             const url = href.startsWith("http")
               ? href
               : new URL(href, finalUrl || source.url).toString();
-            
+
             try {
               const u = new URL(url);
-              if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`) return;
-              if (u.pathname === "/" || u.pathname.split("/").filter(Boolean).length < 1) return;
-              
+              if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`)
+                return;
+              if (
+                u.pathname === "/" ||
+                u.pathname.split("/").filter(Boolean).length < 1
+              )
+                return;
+
               const canonical = `${u.hostname}${u.pathname}`;
+
+              // Filter non-Greek content
+              if (!isGreekText(text)) {
+                return; // Skip non-Greek items
+              }
+
+              // Extract deadline from text
+              let deadlineAt: Date | null = null;
+              if (text) {
+                deadlineAt = extractDeadlineFromContent(text);
+              }
+
               items.push({
                 title: text,
                 content: text,
                 url: u.toString(),
                 publishedAt: new Date(),
-                metadata: { canonical, isOpenProgram: true },
+                deadlineAt: deadlineAt, // Add extracted deadline
+                metadata: {
+                  canonical,
+                  isOpenProgram: true,
+                  deadlineExtracted: !!deadlineAt,
+                },
               });
             } catch {
               return;
@@ -732,55 +1123,82 @@ export class IngestionService {
           });
         }
       }
-      
+
       // Regular listing: find links ONLY in main content (ignore header/footer/nav)
       // Try to find main content container first
-      const mainContent = $("main, article, [role='main'], .content, .main-content, #content, .main, [class*='content']").first();
+      const mainContent = $(
+        "main, article, [role='main'], .content, .main-content, #content, .main, [class*='content']"
+      ).first();
       const searchContainer = mainContent.length > 0 ? mainContent : $("body");
-      
+
       searchContainer.find("a").each((_, el) => {
         const $el = $(el);
         const href = $el.attr("href");
-        const text = $el.text().trim();
+        // Clean HTML before extracting text
+        const text = cleanHtmlContent($, el) || $el.text().trim();
         if (!href || !text) return;
-        
+
+        // Filter non-Greek content
+        if (!isGreekText(text)) {
+          return; // Skip non-Greek items
+        }
+
         // Skip if link is in header/footer/nav
-        const parent = $el.parents("header, footer, nav, [role='navigation'], .header, .footer, .navigation, [class*='header'], [class*='footer'], [class*='nav']");
+        const parent = $el.parents(
+          "header, footer, nav, [role='navigation'], .header, .footer, .navigation, [class*='header'], [class*='footer'], [class*='nav']"
+        );
         if (parent.length > 0) return;
-        
+
         // Skip blocklisted items (menu/FAQ/guides)
         const lowerText = text.toLowerCase();
         const lowerHref = href.toLowerCase();
-        if (blocklistKeywords.some((kw) => lowerText.includes(kw) || lowerHref.includes(kw))) {
+        if (
+          blocklistKeywords.some(
+            (kw) => lowerText.includes(kw) || lowerHref.includes(kw)
+          )
+        ) {
           return;
         }
-        
+
         const url = href.startsWith("http")
           ? href
           : new URL(href, finalUrl || source.url).toString();
         try {
           const u = new URL(url);
           // allow only same-domain links (service pages)
-          if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`) return;
+          if (u.hostname !== baseHost && u.hostname !== `www.${baseHost}`)
+            return;
           // avoid navigation/root
           if (
             u.pathname === "/" ||
             u.pathname.split("/").filter(Boolean).length < 1
           )
             return;
-          
+
           // Skip if URL contains blocklist keywords
-          if (blocklistKeywords.some((kw) => u.pathname.toLowerCase().includes(kw))) {
+          if (
+            blocklistKeywords.some((kw) =>
+              u.pathname.toLowerCase().includes(kw)
+            )
+          ) {
             return;
           }
 
           const canonical = `${u.hostname}${u.pathname}`;
+
+          // Extract deadline from text
+          let deadlineAt: Date | null = null;
+          if (text) {
+            deadlineAt = extractDeadlineFromContent(text);
+          }
+
           items.push({
             title: text,
             content: text,
             url: u.toString(),
             publishedAt: new Date(),
-            metadata: { canonical },
+            deadlineAt: deadlineAt, // Add extracted deadline
+            metadata: { canonical, deadlineExtracted: !!deadlineAt },
           });
         } catch {
           return;
@@ -801,7 +1219,7 @@ export class IngestionService {
       if (error.response) {
         source.lastHttpStatus = error.response.status;
         source.lastFinalUrl = source.url;
-        source.lastContentType = error.response.headers['content-type'] || '';
+        source.lastContentType = error.response.headers["content-type"] || "";
         source.lastBytes = 0;
         source.lastError = error.message || String(error);
       } else {
@@ -811,7 +1229,11 @@ export class IngestionService {
     }
   }
 
-  async fetchSinglePage(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+  async fetchSinglePage(
+    source: any,
+    reporter?: IngestionReporter,
+    sourceId?: string
+  ): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("single_page");
       const response = await axios.get(source.url, {
@@ -823,28 +1245,55 @@ export class IngestionService {
       // Store fetch metadata
       source.lastHttpStatus = response.status;
       source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : 0);
+      source.lastContentType = response.headers["content-type"] || "";
+      source.lastBytes = response.headers["content-length"]
+        ? parseInt(response.headers["content-length"], 10)
+        : typeof response.data === "string"
+        ? response.data.length
+        : 0;
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, response.data);
+        await reporter.saveRawResponse(
+          sourceId,
+          source.name,
+          source.lastContentType,
+          response.data
+        );
       }
 
       const $ = cheerio.load(response.data);
-      const text = $("body").text().trim();
+
+      // Clean HTML content before extracting text
+      const text = cleanHtmlContent($, "body");
+
+      // Filter non-Greek content
+      const title = $("title").text().trim() || source.name || source.url;
+      const combinedText = `${title} ${text}`;
+      if (!isGreekText(combinedText)) {
+        console.log(
+          `   ⏭️  SKIP: Non-Greek content - "${title.substring(0, 50)}"`
+        );
+        return []; // Return empty array for non-Greek content
+      }
+
+      // Extract deadline from content
+      let deadlineAt: Date | null = null;
+      if (text) {
+        deadlineAt = extractDeadlineFromContent(text);
+      }
+
       const canonical =
         new URL(source.url).hostname + new URL(source.url).pathname;
       return [
         {
-          title: $("title").text().trim() || source.name || source.url,
+          title: title,
           content: text.substring(0, 2000),
           url: source.url,
           publishedAt: new Date(),
-          metadata: { canonical },
+          deadlineAt: deadlineAt, // Add extracted deadline
+          metadata: { canonical, deadlineExtracted: !!deadlineAt },
         },
       ];
     } catch (error: any) {
@@ -852,7 +1301,7 @@ export class IngestionService {
       if (error.response) {
         source.lastHttpStatus = error.response.status;
         source.lastFinalUrl = source.url;
-        source.lastContentType = error.response.headers['content-type'] || '';
+        source.lastContentType = error.response.headers["content-type"] || "";
         source.lastBytes = 0;
         source.lastError = error.message || String(error);
       } else {
@@ -865,7 +1314,10 @@ export class IngestionService {
     }
   }
 
-  async processSource(sourceId: string, reporter?: IngestionReporter): Promise<{ processedCount: number; skipReasons: Record<string, number> }> {
+  async processSource(
+    sourceId: string,
+    reporter?: IngestionReporter
+  ): Promise<{ processedCount: number; skipReasons: Record<string, number> }> {
     const source = await Source.findById(sourceId);
     if (!source || !source.enabled) {
       return { processedCount: 0, skipReasons: {} };
@@ -874,19 +1326,23 @@ export class IngestionService {
     // Source health check and URL fix
     let sourceUrl = source.url;
     const healthCheck = await checkSourceHealth(sourceUrl, source.type);
-    
+
     if (healthCheck.replacementUrl) {
-      console.log(`🔧 Source ${source.name}: URL fixed: ${sourceUrl} → ${healthCheck.replacementUrl}`);
+      console.log(
+        `🔧 Source ${source.name}: URL fixed: ${sourceUrl} → ${healthCheck.replacementUrl}`
+      );
       sourceUrl = healthCheck.replacementUrl;
       // Update source URL in DB
       source.url = healthCheck.replacementUrl;
       await source.save();
     }
-    
+
     // Fix endpoint URL if needed
     sourceUrl = fixEndpointUrl(sourceUrl, source.type);
     if (sourceUrl !== source.url) {
-      console.log(`🔧 Source ${source.name}: Endpoint fixed: ${source.url} → ${sourceUrl}`);
+      console.log(
+        `🔧 Source ${source.name}: Endpoint fixed: ${source.url} → ${sourceUrl}`
+      );
       source.url = sourceUrl;
       await source.save();
     }
@@ -897,60 +1353,88 @@ export class IngestionService {
     try {
       // Use fixed URL
       const sourceWithFixedUrl = { ...source.toObject(), url: sourceUrl };
-      
+
       if (source.type === "rss") {
         items = await this.fetchRSS(sourceWithFixedUrl, reporter, sourceId);
       } else if (source.type === "api") {
         items = await this.fetchAPI(sourceWithFixedUrl, reporter, sourceId);
       } else if (source.type === "html_catalog") {
-        items = await this.fetchHTMLCatalog(sourceWithFixedUrl, reporter, sourceId);
+        items = await this.fetchHTMLCatalog(
+          sourceWithFixedUrl,
+          reporter,
+          sourceId
+        );
       } else if (source.type === "html_listing") {
-        items = await this.fetchHTMLListing(sourceWithFixedUrl, reporter, sourceId);
+        items = await this.fetchHTMLListing(
+          sourceWithFixedUrl,
+          reporter,
+          sourceId
+        );
       } else if (source.type === "single_page") {
-        items = await this.fetchSinglePage(sourceWithFixedUrl, reporter, sourceId);
+        items = await this.fetchSinglePage(
+          sourceWithFixedUrl,
+          reporter,
+          sourceId
+        );
       } else {
         return { processedCount: 0, skipReasons: {} };
       }
     } catch (error: any) {
       fetchError = error;
-      console.error(`❌ Error fetching source ${source.name} (${source.url}):`, error.message);
-      
+      console.error(
+        `❌ Error fetching source ${source.name} (${source.url}):`,
+        error.message
+      );
+
       // Track consecutive failures
       source.consecutiveFailures = (source.consecutiveFailures || 0) + 1;
       source.lastError = error.message || String(error);
-      
+
       // Auto-disable after 3 consecutive failures
       if (source.consecutiveFailures >= 3) {
-        console.warn(`⚠️  Auto-disabling source after ${source.consecutiveFailures} consecutive failures: ${source.name}`);
+        console.warn(
+          `⚠️  Auto-disabling source after ${source.consecutiveFailures} consecutive failures: ${source.name}`
+        );
         source.enabled = false;
         await source.save();
         if (reporter) {
-          reporter.trackError(sourceId, `Auto-disabled after ${source.consecutiveFailures} failures: ${error.message}`);
+          reporter.trackError(
+            sourceId,
+            `Auto-disabled after ${source.consecutiveFailures} failures: ${error.message}`
+          );
         }
-        throw new Error(`Auto-disabled: ${source.consecutiveFailures} consecutive failures`);
+        throw new Error(
+          `Auto-disabled: ${source.consecutiveFailures} consecutive failures`
+        );
       }
-      
+
       // If source returns 400/404/500, increment failures and throw
-      if (error.response?.status === 400 || error.response?.status === 404 || error.response?.status >= 500) {
+      if (
+        error.response?.status === 400 ||
+        error.response?.status === 404 ||
+        error.response?.status >= 500
+      ) {
         await source.save();
         // Throw error so it's caught as failed in processAllEnabledSources
-        throw new Error(`HTTP ${error.response?.status}: ${error.message || 'Request failed'}`);
+        throw new Error(
+          `HTTP ${error.response?.status}: ${error.message || "Request failed"}`
+        );
       }
-      
+
       // For network/timeout errors, save and throw
       if (!error.response) {
         await source.save();
-        throw new Error(`Network error: ${error.message || 'Failed to fetch'}`);
+        throw new Error(`Network error: ${error.message || "Failed to fetch"}`);
       }
-      
+
       // For other errors (e.g., parsing), save and throw
       await source.save();
-      throw new Error(`Processing error: ${error.message || 'Unknown error'}`);
+      throw new Error(`Processing error: ${error.message || "Unknown error"}`);
     }
 
     let processedCount = 0;
     let itemsKept = 0; // Items that passed filters and were processed
-    
+
     // Track skip reasons
     const skipReasons: Record<string, number> = {
       duplicate: 0,
@@ -1001,7 +1485,10 @@ export class IngestionService {
       return genericTitles.some((g) => t === g || t.startsWith(g + " "));
     };
 
-    const isBlockedBySourceHeuristics = (source: any, item: any): { blocked: boolean; reason?: string } => {
+    const isBlockedBySourceHeuristics = (
+      source: any,
+      item: any
+    ): { blocked: boolean; reason?: string } => {
       try {
         const u = new URL(item.url);
         const hostname = u.hostname.toLowerCase();
@@ -1009,7 +1496,7 @@ export class IngestionService {
 
         const title = (item.title || "").toLowerCase();
         const urlStr = item.url.toLowerCase();
-        const content = ((item.content || "").toLowerCase()).substring(0, 500); // Check first 500 chars
+        const content = (item.content || "").toLowerCase().substring(0, 500); // Check first 500 chars
 
         // Vouchers Catalog rules
         if (hostname.endsWith("vouchers.gov.gr")) {
@@ -1018,7 +1505,10 @@ export class IngestionService {
           }
           const segments = pathname.split("/").filter(Boolean);
           if (segments.length !== 1) {
-            return { blocked: true, reason: `vouchers: path has ${segments.length} segments (expected 1)` };
+            return {
+              blocked: true,
+              reason: `vouchers: path has ${segments.length} segments (expected 1)`,
+            };
           }
           const denyKeywords = [
             "privacy",
@@ -1034,7 +1524,10 @@ export class IngestionService {
             (kw) => pathname.includes(kw) || title.includes(kw)
           );
           if (matchedKeyword) {
-            return { blocked: true, reason: `vouchers: denied keyword "${matchedKeyword}"` };
+            return {
+              blocked: true,
+              reason: `vouchers: denied keyword "${matchedKeyword}"`,
+            };
           }
         }
 
@@ -1067,13 +1560,14 @@ export class IngestionService {
             "αποτελεσματα",
           ];
           const hasAllowKeyword = allowKeywords.some(
-            (kw) => title.includes(kw) || urlStr.includes(kw) || content.includes(kw)
+            (kw) =>
+              title.includes(kw) || urlStr.includes(kw) || content.includes(kw)
           );
-          
+
           if (hasAllowKeyword) {
             return { blocked: false }; // Allow legitimate opportunities
           }
-          
+
           const denyKeywords = [
             "πολιτική",
             "πολιτικη",
@@ -1096,7 +1590,10 @@ export class IngestionService {
               urlStr.includes(kw)
           );
           if (matchedKeyword) {
-            return { blocked: true, reason: `gov.gr: denied keyword "${matchedKeyword}"` };
+            return {
+              blocked: true,
+              reason: `gov.gr: denied keyword "${matchedKeyword}"`,
+            };
           }
         }
 
@@ -1112,16 +1609,16 @@ export class IngestionService {
           programHosts.some((h) => hostname === h || hostname === `www.${h}`)
         ) {
           const segments = pathname.split("/").filter(Boolean);
-          
+
           // Special handling for dypa.gov.gr: allow 1-segment slugs (valid articles)
           // OVERRIDE: Disable "path too short" rule for dypa.gov.gr (WordPress slugs are 1 segment)
           if (hostname.includes("dypa.gov.gr")) {
             // Block root, language paths, search, node paths, hash-only, query-only
             if (
-              pathname === "/" || 
-              pathname === "" || 
-              pathname === "/#" || 
-              pathname === "/el" || 
+              pathname === "/" ||
+              pathname === "" ||
+              pathname === "/#" ||
+              pathname === "/el" ||
               pathname === "/en" ||
               pathname === "/search" ||
               pathname.startsWith("/search?") ||
@@ -1129,38 +1626,57 @@ export class IngestionService {
               (pathname === "/#" && !u.search) ||
               (u.search && (!pathname || pathname === "/"))
             ) {
-              return { blocked: true, reason: `dypa.gov.gr: root/menu/search/node path` };
+              return {
+                blocked: true,
+                reason: `dypa.gov.gr: root/menu/search/node path`,
+              };
             }
-            
+
             // Block known hub pages without content (denylist)
             const hubPagesDenylist = [
-              "arxiki", "home", "anakoinoseis", "nea", "news", "search", 
-              "el", "en", "menu", "sitemap", "contact", "epikoinonia"
+              "arxiki",
+              "home",
+              "anakoinoseis",
+              "nea",
+              "news",
+              "search",
+              "el",
+              "en",
+              "menu",
+              "sitemap",
+              "contact",
+              "epikoinonia",
             ];
-            if (segments.length === 1 && hubPagesDenylist.includes(segments[0].toLowerCase())) {
-              return { blocked: true, reason: `dypa.gov.gr: hub page "${segments[0]}"` };
+            if (
+              segments.length === 1 &&
+              hubPagesDenylist.includes(segments[0].toLowerCase())
+            ) {
+              return {
+                blocked: true,
+                reason: `dypa.gov.gr: hub page "${segments[0]}"`,
+              };
             }
-            
+
             // OVERRIDE: Allow ALL 1-segment paths for dypa.gov.gr (WordPress slugs are valid)
             // Only block if it's in the denylist (already checked above)
             if (segments.length === 1) {
               return { blocked: false }; // Allow all 1-segment paths (WordPress slugs)
             }
-            
+
             // Allow multi-segment paths for active employment policies and other valid paths
             if (pathname.startsWith("/active-employment-policies/")) {
               return { blocked: false }; // Allow active employment policies paths
             }
-            
+
             // Allow multi-segment paths by default (they're likely valid article/category paths)
             if (segments.length > 1) {
               return { blocked: false }; // Allow multi-segment paths
             }
-            
+
             // Default: allow (shouldn't reach here, but safety fallback)
             return { blocked: false };
           }
-          
+
           // For other hosts: block very short paths (root only)
           if (pathname === "/" || pathname === "" || segments.length === 0) {
             return { blocked: true, reason: `${hostname}: root path` };
@@ -1195,15 +1711,18 @@ export class IngestionService {
             "πρόγραμμα",
             "προγραμμα",
           ];
-          
+
           // Don't block if title/content contains allow keywords
           const hasAllowKeyword = allowKeywords.some(
-            (kw) => title.includes(kw) || content.includes(kw) || pathname.includes(kw)
+            (kw) =>
+              title.includes(kw) ||
+              content.includes(kw) ||
+              pathname.includes(kw)
           );
           if (hasAllowKeyword) {
             return { blocked: false }; // Allow it
           }
-          
+
           const listingKeywords = [
             "faq",
             "politiki",
@@ -1220,13 +1739,16 @@ export class IngestionService {
             (kw) => pathname.includes(kw) || title.includes(kw)
           );
           if (matchedKeyword) {
-            return { blocked: true, reason: `${hostname}: listing keyword "${matchedKeyword}"` };
+            return {
+              blocked: true,
+              reason: `${hostname}: listing keyword "${matchedKeyword}"`,
+            };
           }
         }
       } catch {
         return { blocked: false };
       }
-      
+
       return { blocked: false };
     };
 
@@ -1328,7 +1850,12 @@ export class IngestionService {
       const hash = generateHash(canonical);
 
       // Log extracted item
-      console.log(`\n📥 EXTRACTED: "${item.title?.substring(0, 60)}..." | URL: ${item.url?.substring(0, 80)}...`);
+      console.log(
+        `\n📥 EXTRACTED: "${item.title?.substring(
+          0,
+          60
+        )}..." | URL: ${item.url?.substring(0, 80)}...`
+      );
 
       // Check if already exists - upsert instead of skip
       const existingRawItem = await RawItem.findOne({ hash });
@@ -1348,22 +1875,29 @@ export class IngestionService {
       // Min content filter: apply ONLY to body/summary, NOT title
       const content = (item.content || "").trim();
       const title = (item.title || "").trim();
-      
+
       // Skip generic titles
       if (isGenericTitle(title)) {
         skipReasons.genericTitle++;
         console.log(`   ⏭️  SKIP: Generic title`);
         if (reporter) {
-          reporter.trackSkipped(sourceId, 'genericTitle', title, item.url, content.length, source.type);
+          reporter.trackSkipped(
+            sourceId,
+            "genericTitle",
+            title,
+            item.url,
+            content.length,
+            source.type
+          );
         }
         continue;
       }
-      
+
       // Skip if content (body/summary) is too short (per-source thresholds)
       const isDiavgeia = source.url.includes("diavgeia.gov.gr");
       const isRSS = source.type === "rss";
       const isAPI = source.type === "api";
-      
+
       // Per-source minimum content length
       let minContentLength = 50; // Default
       if (isDiavgeia) {
@@ -1373,29 +1907,58 @@ export class IngestionService {
       } else if (isAPI && isDiavgeia) {
         minContentLength = 0; // Διαύγεια API: metadata-based
       }
-      
+
       // Skip only if content is too short AND we don't have title+url
       if (content.length < minContentLength) {
         // Allow if we have title + url (for RSS/API metadata-based items)
         if (title.length < 10 || !item.url) {
           skipReasons.contentTooShort++;
-          console.log(`   ⏭️  SKIP: Content body too short (${content.length} chars, min ${minContentLength}) - title: "${title.substring(0, 50)}"`);
+          console.log(
+            `   ⏭️  SKIP: Content body too short (${
+              content.length
+            } chars, min ${minContentLength}) - title: "${title.substring(
+              0,
+              50
+            )}"`
+          );
           if (reporter) {
-            reporter.trackSkipped(sourceId, 'contentTooShort', title, item.url, content.length, source.type);
+            reporter.trackSkipped(
+              sourceId,
+              "contentTooShort",
+              title,
+              item.url,
+              content.length,
+              source.type
+            );
           }
           continue;
         }
         // For RSS/API: allow with title+url even if content is short
-        console.log(`   ℹ️  Allowing short content (${content.length} chars) - has title+url: "${title.substring(0, 50)}"`);
+        console.log(
+          `   ℹ️  Allowing short content (${
+            content.length
+          } chars) - has title+url: "${title.substring(0, 50)}"`
+        );
       }
 
       // Source-specific allow/deny filters
       const heuristicResult = isBlockedBySourceHeuristics(source, item);
       if (heuristicResult.blocked) {
         skipReasons.blockedByHeuristics++;
-        console.log(`   ⏭️  SKIP: Blocked by source heuristics - ${heuristicResult.reason || 'unknown reason'}`);
+        console.log(
+          `   ⏭️  SKIP: Blocked by source heuristics - ${
+            heuristicResult.reason || "unknown reason"
+          }`
+        );
         if (reporter) {
-          reporter.trackSkipped(sourceId, 'blockedByHeuristics', title, item.url, content.length, source.type);
+          reporter.trackSkipped(
+            sourceId,
+            "blockedByHeuristics",
+            title,
+            item.url,
+            content.length,
+            source.type
+          );
         }
         continue;
       }
@@ -1404,9 +1967,21 @@ export class IngestionService {
       const existingByTitle = await RawItem.findOne({ title: item.title });
       if (existingByTitle) {
         skipReasons.duplicateTitle = (skipReasons.duplicateTitle || 0) + 1;
-        console.log(`   ⏭️  SKIP: Skipping duplicate title - "${item.title.substring(0, 50)}"`);
+        console.log(
+          `   ⏭️  SKIP: Skipping duplicate title - "${item.title.substring(
+            0,
+            50
+          )}"`
+        );
         if (reporter) {
-          reporter.trackSkipped(sourceId, 'duplicateTitle', item.title, item.url, item.content?.length || 0, source.type);
+          reporter.trackSkipped(
+            sourceId,
+            "duplicateTitle",
+            item.title,
+            item.url,
+            item.content?.length || 0,
+            source.type
+          );
         }
         continue;
       }
@@ -1468,40 +2043,62 @@ export class IngestionService {
 
         // AUTO-PUBLISH TRUSTED SOURCES: Check if source is trusted and confidence is sufficient
         const sourceName = source.name || "";
-        const isTrustedSource = 
-          sourceName.includes("ΔΥΠΑ") || 
-          sourceName.includes("DYPA") || 
-          sourceName.includes("ASEP") || 
-          sourceName.includes("ΑΣΕΠ") || 
-          sourceName.includes("Gov") || 
+        const isTrustedSource =
+          sourceName.includes("ΔΥΠΑ") ||
+          sourceName.includes("DYPA") ||
+          sourceName.includes("ASEP") ||
+          sourceName.includes("ΑΣΕΠ") ||
+          sourceName.includes("Gov") ||
           sourceName.includes("Vouchers") ||
           sourceName.toLowerCase().includes("asep") ||
           sourceName.toLowerCase().includes("dypa");
-        
+
         // Auto-publish trusted sources with sufficient confidence
-        if (isTrustedSource && (extracted.confidence > 0.6 || cleaned.confidence > 0.6)) {
+        if (
+          isTrustedSource &&
+          (extracted.confidence > 0.6 || cleaned.confidence > 0.6)
+        ) {
           if (cleaned.status === "draft") {
-            console.log(`   🔓 AUTO-PUBLISH: Trusted source "${sourceName}" with confidence ${Math.max(extracted.confidence, cleaned.confidence)} - overriding draft status`);
+            console.log(
+              `   🔓 AUTO-PUBLISH: Trusted source "${sourceName}" with confidence ${Math.max(
+                extracted.confidence,
+                cleaned.confidence
+              )} - overriding draft status`
+            );
             cleaned.status = "published";
-            
-            // If dates are unknown, set default expiration to 2 months in the future
+
+            // DO NOT set fake default dates - if no deadline found, leave it null
+            // The UI will show "Διαρκές" (Ongoing) for items without deadlines
             if (!cleaned.deadlineAt && !cleaned.applicationEndAt) {
-              const twoMonthsFromNow = new Date();
-              twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-              cleaned.applicationEndAt = twoMonthsFromNow.toISOString();
-              console.log(`   📅 AUTO-DATE: Set default expiration to 2 months from now (${twoMonthsFromNow.toISOString().split('T')[0]})`);
+              console.log(
+                `   📅 NO-DATE: No deadline found - will be marked as ongoing/indefinite`
+              );
             }
           }
         }
 
         // Log cleaning result
-        console.log(`   🧹 CLEANED: kind=${cleaned.kind}, type=${cleaned.type}, status=${cleaned.status}, applicationStatus=${cleaned.applicationStatus}`);
+        console.log(
+          `   🧹 CLEANED: kind=${cleaned.kind}, type=${cleaned.type}, status=${cleaned.status}, applicationStatus=${cleaned.applicationStatus}`
+        );
         if (cleaned.status === "rejected") {
-          console.log(`   ❌ REJECTED: ${cleaned.evidence?.notes?.join("; ") || "No reason provided"}`);
+          console.log(
+            `   ❌ REJECTED: ${
+              cleaned.evidence?.notes?.join("; ") || "No reason provided"
+            }`
+          );
         } else if (cleaned.status === "draft") {
-          console.log(`   📝 DRAFT: ${cleaned.evidence?.notes?.join("; ") || "No reason provided"}`);
+          console.log(
+            `   📝 DRAFT: ${
+              cleaned.evidence?.notes?.join("; ") || "No reason provided"
+            }`
+          );
         } else if (cleaned.status === "archived") {
-          console.log(`   📦 ARCHIVED: ${cleaned.evidence?.notes?.join("; ") || "No reason provided"}`);
+          console.log(
+            `   📦 ARCHIVED: ${
+              cleaned.evidence?.notes?.join("; ") || "No reason provided"
+            }`
+          );
         }
 
         // If rejected, skip opportunity creation
@@ -1510,21 +2107,48 @@ export class IngestionService {
           rawItem.processed = true;
           await rawItem.save();
           if (reporter) {
-            reporter.trackSkipped(sourceId, 'rejected', item.title, item.url, item.content.length, source.type, cleaned.kind, cleaned.status);
+            reporter.trackSkipped(
+              sourceId,
+              "rejected",
+              item.title,
+              item.url,
+              item.content.length,
+              source.type,
+              cleaned.kind,
+              cleaned.status
+            );
           }
           continue;
         }
-        
+
         // Track draft/archived status (only if not auto-published)
         if (cleaned.status === "draft") {
           skipReasons.draft++;
           if (reporter) {
-            reporter.trackSkipped(sourceId, 'draft', item.title, item.url, item.content.length, source.type, cleaned.kind, cleaned.status);
+            reporter.trackSkipped(
+              sourceId,
+              "draft",
+              item.title,
+              item.url,
+              item.content.length,
+              source.type,
+              cleaned.kind,
+              cleaned.status
+            );
           }
         } else if (cleaned.status === "archived") {
           skipReasons.archived++;
           if (reporter) {
-            reporter.trackSkipped(sourceId, 'archived', item.title, item.url, item.content.length, source.type, cleaned.kind, cleaned.status);
+            reporter.trackSkipped(
+              sourceId,
+              "archived",
+              item.title,
+              item.url,
+              item.content.length,
+              source.type,
+              cleaned.kind,
+              cleaned.status
+            );
           }
         }
 
@@ -1533,18 +2157,24 @@ export class IngestionService {
 
         // Merge eligibility rules from extractor and cleaner
         let criteriaRulesJson = extracted.criteriaRulesJson || {};
-        
+
         // Add requirementsNormalized from cleaner if available
         if (cleaned.requirementsNormalized) {
-          criteriaRulesJson.requirementsNormalized = cleaned.requirementsNormalized;
+          criteriaRulesJson.requirementsNormalized =
+            cleaned.requirementsNormalized;
         }
-        
+
         // Add requirementsSummaryBullets if available
-        if (cleaned.requirementsSummaryBullets && cleaned.requirementsSummaryBullets.length > 0) {
-          criteriaRulesJson.requirementsSummaryBullets = cleaned.requirementsSummaryBullets;
+        if (
+          cleaned.requirementsSummaryBullets &&
+          cleaned.requirementsSummaryBullets.length > 0
+        ) {
+          criteriaRulesJson.requirementsSummaryBullets =
+            cleaned.requirementsSummaryBullets;
         }
-        
-        let criteriaUnknown = cleaned.criteriaUnknown ?? extracted.criteriaUnknown ?? false;
+
+        let criteriaUnknown =
+          cleaned.criteriaUnknown ?? extracted.criteriaUnknown ?? false;
 
         const hasRules =
           criteriaRulesJson && Object.keys(criteriaRulesJson || {}).length > 0;
@@ -1552,9 +2182,12 @@ export class IngestionService {
         if (!hasRules || (extracted.confidence ?? 0) < 0.75) {
           // Keep requirementsNormalized even if other rules are missing
           if (cleaned.requirementsNormalized) {
-            criteriaRulesJson = { requirementsNormalized: cleaned.requirementsNormalized };
+            criteriaRulesJson = {
+              requirementsNormalized: cleaned.requirementsNormalized,
+            };
             if (cleaned.requirementsSummaryBullets) {
-              criteriaRulesJson.requirementsSummaryBullets = cleaned.requirementsSummaryBullets;
+              criteriaRulesJson.requirementsSummaryBullets =
+                cleaned.requirementsSummaryBullets;
             }
             criteriaUnknown = false; // We have some requirements
           } else {
@@ -1564,9 +2197,28 @@ export class IngestionService {
         }
 
         // Parse dates from cleaned output using unified parser (never Invalid Date)
-        const deadlineAt = cleaned.deadlineAt
-          ? normalizeDate(parseDate(cleaned.deadlineAt).date) || undefined
-          : undefined;
+        // Priority: extracted deadline from content > cleaned.deadlineAt
+        let deadlineAt: Date | undefined = undefined;
+
+        // First, try deadline extracted from content (from fetch methods)
+        if (item.deadlineAt) {
+          deadlineAt = normalizeDate(item.deadlineAt) || undefined;
+        }
+
+        // Fallback to cleaned.deadlineAt if no extracted deadline
+        if (!deadlineAt && cleaned.deadlineAt) {
+          deadlineAt =
+            normalizeDate(parseDate(cleaned.deadlineAt).date) || undefined;
+        }
+
+        // If still no deadline, try extracting from combined content
+        if (!deadlineAt) {
+          const combinedContent = `${item.title} ${item.content}`;
+          const extractedDeadline = extractDeadlineFromContent(combinedContent);
+          if (extractedDeadline) {
+            deadlineAt = normalizeDate(extractedDeadline) || undefined;
+          }
+        }
         const startAt = cleaned.startAt
           ? normalizeDate(parseDate(cleaned.startAt).date) || undefined
           : undefined;
@@ -1577,11 +2229,13 @@ export class IngestionService {
           ? normalizeDate(parseDate(cleaned.applicationStartAt).date) || startAt
           : startAt; // Fallback to startAt
         const applicationEndAt = cleaned.applicationEndAt
-          ? normalizeDate(parseDate(cleaned.applicationEndAt).date) || deadlineAt
+          ? normalizeDate(parseDate(cleaned.applicationEndAt).date) ||
+            deadlineAt
           : deadlineAt; // Fallback to deadlineAt
 
         // Use tags from cleaner if available, otherwise from extractor
-        const tags = cleaned.tags.length > 0 ? cleaned.tags : (extracted.tags || []);
+        const tags =
+          cleaned.tags.length > 0 ? cleaned.tags : extracted.tags || [];
 
         // DEDUPLICATION: Check if opportunity already exists by officialUrl
         const existingOpp = await Opportunity.findOne({
@@ -1592,16 +2246,55 @@ export class IngestionService {
         // ASEP-specific kind override: If ASEP source and title contains news keywords, set kind to 'news'
         let finalKind = cleaned.kind;
         let finalSummary = cleaned.summary;
-        
+
         // Use summary from extractor if it's better (e.g., ASEP "no description" fix)
-        if (extracted.summary && extracted.summary.trim().length > 0 && 
-            (cleaned.summary.trim().length === 0 || cleaned.summary.toLowerCase().includes("no description"))) {
+        if (
+          extracted.summary &&
+          extracted.summary.trim().length > 0 &&
+          (cleaned.summary.trim().length === 0 ||
+            cleaned.summary.toLowerCase().includes("no description"))
+        ) {
           finalSummary = extracted.summary;
         }
-        
+
+        // AI Kind Classification: Check if AI returned explicit 'kind' in criteriaJson
+        const aiKind = extracted.criteriaJson?.aiKind;
+        if (aiKind) {
+          // Use AI's kind classification directly
+          const normalizedKind = (aiKind || "").toLowerCase();
+          if (normalizedKind === "news" && cleaned.kind !== "news") {
+            finalKind = "news";
+            console.log(
+              `   📰 AI-NEWS: AI classified as news (kind: ${aiKind}) - overriding kind to "news"`
+            );
+          } else if (normalizedKind === "job" && cleaned.kind !== "job") {
+            finalKind = "job";
+            console.log(
+              `   💼 AI-JOB: AI classified as job (kind: ${aiKind}) - overriding kind to "job"`
+            );
+          } else if (normalizedKind === "benefit" && cleaned.kind !== "benefit") {
+            finalKind = "benefit";
+            console.log(
+              `   💰 AI-BENEFIT: AI classified as benefit (kind: ${aiKind}) - overriding kind to "benefit"`
+            );
+          } else if (normalizedKind === "program" && cleaned.kind !== "program") {
+            finalKind = "program";
+            console.log(
+              `   📚 AI-PROGRAM: AI classified as program (kind: ${aiKind}) - overriding kind to "program"`
+            );
+          } else if (normalizedKind === "voucher" && cleaned.kind !== "voucher_pass") {
+            finalKind = "voucher_pass";
+            console.log(
+              `   🎫 AI-VOUCHER: AI classified as voucher (kind: ${aiKind}) - overriding kind to "voucher_pass"`
+            );
+          }
+        }
+
         // ASEP kind detection: If ASEP source and title contains news keywords, override kind
         const lowerTitle = cleaned.title.toLowerCase();
-        const isAsepSource = sourceName.toLowerCase().includes("asep") || sourceName.toLowerCase().includes("ασεπ");
+        const isAsepSource =
+          sourceName.toLowerCase().includes("asep") ||
+          sourceName.toLowerCase().includes("ασεπ");
         if (isAsepSource) {
           // News-like keywords: results, tables, lottery, objections
           if (
@@ -1615,7 +2308,9 @@ export class IngestionService {
             lowerTitle.includes("ενστασεις")
           ) {
             finalKind = "news";
-            console.log(`   📰 ASEP NEWS: Overriding kind to 'news' for ASEP results/announcements`);
+            console.log(
+              `   📰 ASEP NEWS: Overriding kind to 'news' for ASEP results/announcements`
+            );
           }
         }
 
@@ -1638,54 +2333,73 @@ export class IngestionService {
           (existingOpp as any).applicationStatus = cleaned.applicationStatus;
           existingOpp.updatedAt = new Date();
           await existingOpp.save();
-          console.log(`   ✅ UPDATED existing opportunity (status=${cleaned.status})`);
+          console.log(
+            `   ✅ UPDATED existing opportunity (status=${cleaned.status})`
+          );
         } else {
           // Create new opportunity
-        // Store applicationStatus in model field
-        await Opportunity.create({
-          type: cleaned.type,
-          kind: finalKind,
-          title: cleaned.title,
-          summary: finalSummary,
-          officialUrl: cleaned.officialUrl,
-          source: cleaned.source,
-          publishedAt: item.publishedAt,
-          deadlineAt,
-          startAt,
-          announcedAt,
-          applicationStartAt,
-          applicationEndAt,
-          tags,
-          region: extracted.region,
-          criteriaJson: extracted.criteriaJson || {},
-          criteriaRulesJson,
-          criteriaUnknown: cleaned.criteriaUnknown,
-          confidence: cleaned.confidence,
-          applicationStatus: cleaned.applicationStatus,
-          status: cleaned.status,
-        });
-        console.log(`   ✅ CREATED new opportunity (status=${cleaned.status})`);
+          // Store applicationStatus in model field
+          await Opportunity.create({
+            type: cleaned.type,
+            kind: finalKind,
+            title: cleaned.title,
+            summary: finalSummary,
+            officialUrl: cleaned.officialUrl,
+            source: cleaned.source,
+            publishedAt: item.publishedAt,
+            deadlineAt,
+            startAt,
+            announcedAt,
+            applicationStartAt,
+            applicationEndAt,
+            tags,
+            region: extracted.region,
+            criteriaJson: extracted.criteriaJson || {},
+            criteriaRulesJson,
+            criteriaUnknown: cleaned.criteriaUnknown,
+            confidence: cleaned.confidence,
+            applicationStatus: cleaned.applicationStatus,
+            status: cleaned.status,
+          });
+          console.log(
+            `   ✅ CREATED new opportunity (status=${cleaned.status})`
+          );
         }
 
         rawItem.processed = true;
         await rawItem.save();
         processedCount++;
-        
+
         // Track published/updated with status
         if (reporter) {
           if (isDuplicate) {
             reporter.trackUpdated(sourceId);
             // Also track status for updated items
-            reporter.trackPublished(sourceId, cleaned.status, cleaned.applicationStatus);
+            reporter.trackPublished(
+              sourceId,
+              cleaned.status,
+              cleaned.applicationStatus
+            );
           } else {
-            reporter.trackPublished(sourceId, cleaned.status, cleaned.applicationStatus);
+            reporter.trackPublished(
+              sourceId,
+              cleaned.status,
+              cleaned.applicationStatus
+            );
           }
         }
       } catch (error: any) {
         skipReasons.error++;
         console.error(`Error processing raw item ${rawItem._id}:`, error);
         if (reporter) {
-          reporter.trackSkipped(sourceId, 'error', item.title, item.url, item.content.length, source.type);
+          reporter.trackSkipped(
+            sourceId,
+            "error",
+            item.title,
+            item.url,
+            item.content.length,
+            source.type
+          );
           reporter.trackError(sourceId, error.message || String(error));
         }
       }
@@ -1705,46 +2419,61 @@ export class IngestionService {
     console.log(`   Extracted: ${source.lastItemsExtracted || 0} items`);
     console.log(`   Kept (passed filters): ${itemsKept} items`);
     console.log(`   Published: ${processedCount} items`);
-    console.log(`   HTTP Status: ${source.lastHttpStatus || 'N/A'}`);
-    console.log(`   Content-Type: ${source.lastContentType || 'N/A'}`);
+    console.log(`   HTTP Status: ${source.lastHttpStatus || "N/A"}`);
+    console.log(`   Content-Type: ${source.lastContentType || "N/A"}`);
     console.log(`   Bytes: ${source.lastBytes || 0}`);
-    
+
     // Show skip reasons breakdown
-    const totalSkipped = Object.values(skipReasons).reduce((sum, count) => sum + count, 0);
+    const totalSkipped = Object.values(skipReasons).reduce(
+      (sum, count) => sum + count,
+      0
+    );
     if (totalSkipped > 0) {
       console.log(`\n   ⏭️  SKIPPED ITEMS (${totalSkipped} total):`);
       if (skipReasons.duplicate > 0) {
         console.log(`      • Duplicate: ${skipReasons.duplicate}`);
       }
       if (skipReasons.contentTooShort > 0) {
-        console.log(`      • Content too short: ${skipReasons.contentTooShort}`);
+        console.log(
+          `      • Content too short: ${skipReasons.contentTooShort}`
+        );
       }
       if (skipReasons.genericTitle > 0) {
         console.log(`      • Generic title: ${skipReasons.genericTitle}`);
       }
       if (skipReasons.blockedByHeuristics > 0) {
-        console.log(`      • Blocked by heuristics: ${skipReasons.blockedByHeuristics}`);
+        console.log(
+          `      • Blocked by heuristics: ${skipReasons.blockedByHeuristics}`
+        );
       }
       if (skipReasons.rejected > 0) {
-        console.log(`      • Rejected (service_info/invalid): ${skipReasons.rejected}`);
+        console.log(
+          `      • Rejected (service_info/invalid): ${skipReasons.rejected}`
+        );
       }
       if (skipReasons.draft > 0) {
-        console.log(`      • Draft (unknown status/no dates): ${skipReasons.draft}`);
+        console.log(
+          `      • Draft (unknown status/no dates): ${skipReasons.draft}`
+        );
       }
       if (skipReasons.archived > 0) {
-        console.log(`      • Archived (closed/expired): ${skipReasons.archived}`);
+        console.log(
+          `      • Archived (closed/expired): ${skipReasons.archived}`
+        );
       }
       if (skipReasons.error > 0) {
         console.log(`      • Processing error: ${skipReasons.error}`);
       }
     }
-    
+
     if (source.lastError) {
       console.log(`   ⚠️  Error: ${source.lastError}`);
     }
     if (itemsKept > processedCount) {
       const notPublished = itemsKept - processedCount;
-      console.log(`   ⚠️  ${notPublished} items kept but not published (see skip reasons above)`);
+      console.log(
+        `   ⚠️  ${notPublished} items kept but not published (see skip reasons above)`
+      );
     }
 
     return { processedCount, skipReasons };
@@ -1754,39 +2483,51 @@ export class IngestionService {
     // Initialize reporter
     const debugMode = config.ingestion?.debug || false;
     const reporter = new IngestionReporter(debugMode);
-    
+
     const sources = await Source.find({ enabled: true }).sort({ name: 1 });
     let totalProcessed = 0;
-    const successfulSources: Array<{ name: string; itemsProcessed: number }> = [];
+    const successfulSources: Array<{ name: string; itemsProcessed: number }> =
+      [];
     const failedSources: Array<{ name: string; error: string }> = [];
     const emptySources: Array<{ name: string; reason: string }> = [];
-    
+
     // Aggregate skip reasons from all sources
-    const allSkipReasons: Record<string, { source: string; reasons: Record<string, number> }> = {};
+    const allSkipReasons: Record<
+      string,
+      { source: string; reasons: Record<string, number> }
+    > = {};
 
     for (const source of sources) {
       const sourceStartTime = Date.now();
       try {
-        const result = await this.processSource(source._id.toString(), reporter);
+        const result = await this.processSource(
+          source._id.toString(),
+          reporter
+        );
         const sourceDuration = Date.now() - sourceStartTime;
         reporter.setSourceDuration(source._id.toString(), sourceDuration);
         totalProcessed += result.processedCount;
-        
+
         // Store skip reasons for this source
-        if (Object.values(result.skipReasons).some(count => count > 0)) {
+        if (Object.values(result.skipReasons).some((count) => count > 0)) {
           allSkipReasons[source.name] = {
             source: source.name,
             reasons: result.skipReasons,
           };
         }
-        
+
         if (result.processedCount > 0) {
-          successfulSources.push({ name: source.name, itemsProcessed: result.processedCount });
+          successfulSources.push({
+            name: source.name,
+            itemsProcessed: result.processedCount,
+          });
         } else {
           // Source processed 0 items - might be empty or no new items
-          emptySources.push({ 
-            name: source.name, 
-            reason: source.lastFetchedAt ? "No new items" : "Empty or no items found" 
+          emptySources.push({
+            name: source.name,
+            reason: source.lastFetchedAt
+              ? "No new items"
+              : "Empty or no items found",
           });
         }
       } catch (error: any) {
@@ -1796,7 +2537,7 @@ export class IngestionService {
         console.error(`❌ Error processing source ${source.name}:`, errorMsg);
         failedSources.push({ name: source.name, error: errorMsg });
         reporter.trackError(source._id.toString(), errorMsg);
-        
+
         // If critical error, disable source
         if (error.response?.status === 400 || error.response?.status === 404) {
           console.warn(`⚠️  Disabling source due to API error: ${source.name}`);
@@ -1810,29 +2551,32 @@ export class IngestionService {
     console.log("\n" + "=".repeat(60));
     console.log("📊 INGESTION SUMMARY");
     console.log("=".repeat(60));
-    console.log(`✅ Successful sources: ${successfulSources.length}/${sources.length}`);
+    console.log(
+      `✅ Successful sources: ${successfulSources.length}/${sources.length}`
+    );
     if (successfulSources.length > 0) {
       console.log("\n✅ Successful sources:");
       successfulSources.forEach((s) => {
         console.log(`   • ${s.name}: ${s.itemsProcessed} items processed`);
       });
     }
-    
+
     if (emptySources.length > 0) {
       console.log(`\nℹ️  Empty/No new items: ${emptySources.length} sources`);
       emptySources.forEach((s) => {
         console.log(`   • ${s.name}: ${s.reason}`);
       });
     }
-    
+
     if (failedSources.length > 0) {
       console.log(`\n❌ Failed sources: ${failedSources.length} sources`);
       failedSources.forEach((s) => {
-        const errorPreview = s.error.length > 150 ? s.error.substring(0, 150) + "..." : s.error;
+        const errorPreview =
+          s.error.length > 150 ? s.error.substring(0, 150) + "..." : s.error;
         console.log(`   • ${s.name}: ${errorPreview}`);
       });
     }
-    
+
     console.log(`\n📦 Total items processed: ${totalProcessed}`);
     console.log("=".repeat(60) + "\n");
 
@@ -1856,7 +2600,11 @@ export class IngestionService {
           sourcesWithSkips: Object.keys(allSkipReasons).length,
           skipReasons: allSkipReasons,
         };
-        await fs.writeFile(skipReasonsFile, JSON.stringify(skipReasonsData, null, 2), "utf-8");
+        await fs.writeFile(
+          skipReasonsFile,
+          JSON.stringify(skipReasonsData, null, 2),
+          "utf-8"
+        );
         console.log(`\n💾 Skip reasons saved to: ${skipReasonsFile}`);
       } catch (error) {
         console.error(`⚠️  Failed to save skip reasons to JSON:`, error);
