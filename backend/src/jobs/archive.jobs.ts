@@ -48,8 +48,11 @@ function hasExpiredKeywords(text: string): boolean {
 
 /**
  * Fetch full page content if RawItem content is too short
+ * Returns object with content and dead link status
  */
-async function fetchFullPageContent(url: string): Promise<string | null> {
+async function fetchFullPageContent(
+  url: string
+): Promise<{ content: string | null; isDead: boolean }> {
   try {
     const response = await axios.get(url, {
       headers: {
@@ -57,17 +60,36 @@ async function fetchFullPageContent(url: string): Promise<string | null> {
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
       timeout: 10000,
+      validateStatus: (status) => status < 500, // Don't throw on 4xx
     });
+
+    // Check for dead links (404, 410)
+    if (response.status === 404 || response.status === 410) {
+      return { content: null, isDead: true };
+    }
+
     const $ = cheerio.load(response.data);
     $("script, style").remove();
     const content = $("main, article, .content, body").text().trim();
-    return content || null;
-  } catch (error) {
+
+    // Mitigate SPA/Empty Content Issues: if content is extremely small (< 50 chars),
+    // treat as failed fetch but not dead (Zombie Killer will eventually clean these up)
+    if (content.length < 50) {
+      return { content: null, isDead: false };
+    }
+
+    return { content: content || null, isDead: false };
+  } catch (error: any) {
+    // Check if it's a 404/410 error in the catch block
+    if (error.response?.status === 404 || error.response?.status === 410) {
+      return { content: null, isDead: true };
+    }
+
     console.error(
       `Failed to fetch ${url}:`,
       error instanceof Error ? error.message : error
     );
-    return null;
+    return { content: null, isDead: false };
   }
 }
 
@@ -93,27 +115,55 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
   let deadlineExpiredCount = 0;
   let summaryExpiredCount = 0;
   let cleanerExpiredCount = 0;
+  let deadLinkCount = 0;
+  let zombieKilledCount = 0;
+
+  // Calculate 6 months ago for Zombie Killer
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   for (const opp of published) {
     checkedCount++;
     let shouldArchive = false;
+    let archiveReason = "";
 
     // Check 1: deadlineAt < today
     if (opp.deadlineAt && opp.deadlineAt < now) {
       shouldArchive = true;
+      archiveReason = "deadline expired";
       deadlineExpiredCount++;
     }
 
-    // Check 2: Summary/title contains expired keywords
+    // Check 2: Zombie Killer - opportunities published > 6 months ago without deadline
+    if (!shouldArchive) {
+      if (
+        opp.publishedAt &&
+        opp.publishedAt < sixMonthsAgo &&
+        (!opp.deadlineAt || opp.deadlineAt === null)
+      ) {
+        shouldArchive = true;
+        archiveReason =
+          "Zombie safety net hit (published > 6 months ago without deadline)";
+        zombieKilledCount++;
+        console.log(
+          `🧟 [Archive] Zombie Killer: Archiving opportunity ${
+            opp._id
+          } (${opp.title.substring(0, 50)}...) - ${archiveReason}`
+        );
+      }
+    }
+
+    // Check 3: Summary/title contains expired keywords
     if (!shouldArchive) {
       const combinedText = `${opp.title} ${opp.summary}`;
       if (hasExpiredKeywords(combinedText)) {
         shouldArchive = true;
+        archiveReason = "expired keywords in summary/title";
         summaryExpiredCount++;
       }
     }
 
-    // Check 3: Try to find raw item and re-validate with Cleaner
+    // Check 4: Try to find raw item and re-validate with Cleaner
     if (!shouldArchive) {
       try {
         // Try exact URL match first
@@ -147,17 +197,32 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
 
           // If RawItem content is too short (< 500 chars), try to fetch full page
           if (rawItem.content.length < 500 && opp.officialUrl) {
-            const fullContent = await fetchFullPageContent(opp.officialUrl);
-            if (fullContent && fullContent.length > rawItem.content.length) {
-              contentToCheck = fullContent;
+            const fetchResult = await fetchFullPageContent(opp.officialUrl);
+
+            // Handle dead links (404/410)
+            if (fetchResult.isDead) {
+              shouldArchive = true;
+              archiveReason = "dead link (404/410)";
+              deadLinkCount++;
+              console.log(
+                `💀 [Archive] Dead link detected: Archiving opportunity ${
+                  opp._id
+                } (${opp.title.substring(0, 50)}...) - ${opp.officialUrl}`
+              );
+            } else if (
+              fetchResult.content &&
+              fetchResult.content.length > rawItem.content.length
+            ) {
+              contentToCheck = fetchResult.content;
             }
           }
 
-          // Check raw content for expired keywords
-          if (hasExpiredKeywords(contentToCheck)) {
+          // Check raw content for expired keywords (only if not already marked for archive)
+          if (!shouldArchive && hasExpiredKeywords(contentToCheck)) {
             shouldArchive = true;
+            archiveReason = "expired keywords in content";
             summaryExpiredCount++;
-          } else {
+          } else if (!shouldArchive) {
             const nowIso = new Date().toISOString();
             const cleanerInput: CleanerInput = {
               nowIso: nowIso,
@@ -179,6 +244,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
               cleaned.applicationStatus === "closed"
             ) {
               shouldArchive = true;
+              archiveReason = `cleaner detected: ${cleaned.status}/${cleaned.applicationStatus}`;
               cleanerExpiredCount++;
             }
           }
@@ -200,6 +266,9 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
         { $set: { status: "archived" } }
       );
       archivedCount++;
+      if (archiveReason) {
+        console.log(`📦 [Archive] Archived ${opp._id}: ${archiveReason}`);
+      }
     }
   }
 
@@ -207,6 +276,6 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     `✅ [Archive] Completed: archived ${archivedCount}/${checkedCount} opportunities`
   );
   console.log(
-    `   Breakdown: deadline=${deadlineExpiredCount}, summary=${summaryExpiredCount}, cleaner=${cleanerExpiredCount}, noRawItem=${noRawItemCount}`
+    `   Breakdown: deadline=${deadlineExpiredCount}, summary=${summaryExpiredCount}, cleaner=${cleanerExpiredCount}, deadLink=${deadLinkCount}, zombie=${zombieKilledCount}, noRawItem=${noRawItemCount}`
   );
 }
