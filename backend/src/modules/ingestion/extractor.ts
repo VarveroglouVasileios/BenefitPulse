@@ -83,31 +83,57 @@ async function extractWithAI(
   groq: Groq,
   content: string
 ): Promise<ExtractedOpportunity | null> {
+  // Get current date for comparison
+  const now = new Date();
+  const currentDateStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+  const currentDateFormatted = now.toLocaleDateString('el-GR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }); // Greek format for better understanding
+
   const systemPrompt = `### ROLE
 You are a Senior Data Analyst for the Greek Public Sector. Your task is to extract structured data from raw HTML text.
 
 ### INPUT
 You will receive a TITLE and CONTENT (HTML/Text).
 
+### CURRENT DATE CONTEXT
+**IMPORTANT**: Today's date is ${currentDateStr} (${currentDateFormatted}).
+You MUST use this date to determine if deadlines are in the past, present, or future.
+
 ### OBJECTIVES
 1.  **Analyze Content**: Read the full text to understand the program.
 2.  **Generate Summary**: Write a NEW, high-quality summary in Greek (1-2 sentences).
 3.  **Classify**: Determine the 'kind' and 'status' of the item.
-4.  **Extract Date**: Find the deadline if it exists.
+4.  **Extract Date**: Find the deadline if it exists, and COMPARE it with today's date (${currentDateStr}).
 
 ### CRITICAL RULES (DO NOT BREAK)
 * **SUMMARY**: Never copy-paste the title. Summarize *who* is eligible and *what* they receive. If content is empty, return "".
 * **DEADLINE**: Extract dates ONLY if explicitly stated (e.g., "Λήξη: 20/05/2025"). Return 'null' if no specific date is found. DO NOT GUESS.
-* **KIND**:
-    * 'news': For Results, Tables, Announcements, Press Releases (Αποτελέσματα, Πίνακες, Ανακοίνωση).
-    * 'job': For Active Job Openings (Προκηρύξεις ΑΣΕΠ, Θέσεις).
+* **DATE COMPARISON**: 
+    - Compare the extracted deadline date with today's date (${currentDateStr}).
+    - If the deadline date is BEFORE today's date, the opportunity is CLOSED/EXPIRED.
+    - If the deadline date is TODAY or in the FUTURE, the opportunity is OPEN (if accepting applications).
+    - Always use today's date (${currentDateStr}) as the reference point for comparison.
+* **KIND** (CRITICAL - Classify accurately):
+    * 'news': For Results, Announcements, Press Releases, News Items. Use 'news' when you see:
+        - Results/Outcomes: "Αποτελέσματα", "Πίνακες", "Οριστικά αποτελέσματα", "Προσωρινά αποτελέσματα"
+        - Announcements: "Ανακοίνωση", "Ανακοινώθηκε", "Ανακοίνωση αποτελεσμάτων"
+        - News items: "Νέα", "Ειδήσεις", "Press Release", "Δελτίο Τύπου"
+        - Results of competitions/contests: "Αποτελέσματα προκήρυξης", "Αποτελέσματα διαγωνισμού"
+        - Tables/Lists: "Πίνακας τοποθετήσεων", "Πίνακας επιλαχόντων"
+        - Objections/Appeals: "Ενστάσεις", "Αναβολή"
+        - Lottery results: "Κληρωτίδα"
+        - Any item that reports outcomes/results rather than accepting new applications
+    * 'job': For Active Job Openings (Προκηρύξεις ΑΣΕΠ, Θέσεις) - ONLY if actively accepting applications.
     * 'benefit': For Financial Aid (Επιδόματα, Market Pass).
     * 'program': For Training/Employment (Κατάρτιση, Κοινωφελής).
     * 'voucher': For Vouchers.
-* **STATUS**:
-    * 'active': For news items (always active/visible).
-    * 'open': For active opportunities accepting applications.
-    * 'closed': For opportunities with past deadlines.
+* **STATUS** (MUST compare with today's date ${currentDateStr}):
+    * 'active': For news items (always active/visible, regardless of dates).
+    * 'open': For active opportunities accepting applications (deadline is today or in the future).
+    * 'closed': For opportunities where the deadline date is BEFORE today's date (${currentDateStr}). If you find a deadline that has passed, you MUST set status to 'closed'.
 
 ### OUTPUT JSON SCHEMA
 You must return a valid JSON object matching this structure exactly:
@@ -122,7 +148,8 @@ You must return a valid JSON object matching this structure exactly:
 CRITICAL:
 - Return ONLY valid JSON, no markdown formatting or additional text.
 - If uncertain about any field, use null or empty string rather than guessing.
-- The summary must add value beyond the title - do not repeat it.`;
+- The summary must add value beyond the title - do not repeat it.
+- **ALWAYS compare deadline dates with today's date (${currentDateStr}) to determine if status should be 'closed'**.`;
 
   const userPrompt = `Ανάλυσε το ακόλουθο κείμενο και εξάγαγε τα δεδομένα:\n\n${content.substring(
     0,
@@ -497,6 +524,53 @@ function extractWithRegex(content: string): ExtractedOpportunity {
   // Simple tag extraction (declare tags array first)
   const tags: string[] = [];
 
+  // General news detection (not just ASEP) - check for results, announcements, news items
+  const newsKeywords = [
+    "αποτελέσματα", "αποτελεσματα",
+    "πίνακες", "πινακες", "πίνακας", "πινakas",
+    "προσωρινά αποτελέσματα", "προσωρινα αποτελεσματα",
+    "οριστικά αποτελέσματα", "οριστικα αποτελεσματα",
+    "πίνακας τοποθετήσεων", "πινakas τοποθετησεων",
+    "επιλαχόντων", "επιλαχοντων",
+    "ενστάσεις", "ενστασεις",
+    "ανακοίνωση", "ανακοινωση",
+    "ανακοινώθηκε", "ανακοινωθηκε",
+    "ανακοίνωση αποτελεσμάτων", "ανακοινωση αποτελεσματων",
+    "έκδοση αποτελεσμάτων", "εκδοση αποτελεσματων",
+    "κληρωτίδα", "κληρωτιδα",
+    "νέα", "nea",
+    "ειδήσεις", "ειδησεις",
+    "press release", "δελτίο τύπου", "δελτιο τυπου",
+    "αποτελέσματα προκήρυξης", "αποτελεσματα προκηρυξης",
+    "αποτελέσματα διαγωνισμού", "αποτελεσματα διαγωνισμου"
+  ];
+
+  // Check if title or content contains news keywords
+  const hasNewsKeywords = newsKeywords.some(keyword => 
+    lowerTitle.includes(keyword) || lowerContent.includes(keyword)
+  );
+
+  // Check if it's a news item (results/announcements) rather than an active opportunity
+  // News items typically don't have application windows or submission deadlines
+  const hasNoApplicationWindow = !lowerContent.includes("αίτηση") && 
+                                 !lowerContent.includes("αιτηση") &&
+                                 !lowerContent.includes("υποβολή") &&
+                                 !lowerContent.includes("υποβολη") &&
+                                 !lowerContent.includes("πρόσκληση") &&
+                                 !lowerContent.includes("προσκληση") &&
+                                 !lowerContent.includes("προθεσμία") &&
+                                 !lowerContent.includes("προθεσμια");
+
+  if (hasNewsKeywords && hasNoApplicationWindow) {
+    // This is news - add tag to help cleaner.ts identify it
+    if (!tags.includes("news")) {
+      tags.push("news");
+    }
+    if (!tags.includes("public-sector") && (lowerContent.includes("asep") || lowerContent.includes("ασεπ"))) {
+      tags.push("public-sector");
+    }
+  }
+
   // ASEP-specific kind detection based on title keywords (lowerTitle already declared above)
   const isAsepContent =
     lowerContent.includes("asep") ||
@@ -522,6 +596,9 @@ function extractWithRegex(content: string): ExtractedOpportunity {
       // But we can add a tag to help identify it
       if (!tags.includes("public-sector")) {
         tags.push("public-sector");
+      }
+      if (!tags.includes("news")) {
+        tags.push("news");
       }
     }
 

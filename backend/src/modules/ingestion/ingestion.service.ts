@@ -1389,6 +1389,8 @@ export class IngestionService {
       // Track consecutive failures
       source.consecutiveFailures = (source.consecutiveFailures || 0) + 1;
       source.lastError = error.message || String(error);
+      // Update lastFetchedAt even on error - we did attempt to scan
+      source.lastFetchedAt = new Date();
 
       // Auto-disable after 3 consecutive failures
       if (source.consecutiveFailures >= 3) {
@@ -2290,8 +2292,55 @@ export class IngestionService {
           }
         }
 
-        // ASEP kind detection: If ASEP source and title contains news keywords, override kind
+        // General news detection: Check for results, announcements, news items (for all sources)
         const lowerTitle = cleaned.title.toLowerCase();
+        const lowerContent = (cleaned.summary || "").toLowerCase();
+        
+        // News keywords that indicate results/announcements/news items
+        const newsKeywords = [
+          "αποτελέσματα", "αποτελεσματα",
+          "πίνακες", "πινακες", "πίνακας", "πινakas",
+          "προσωρινά αποτελέσματα", "προσωρινα αποτελεσματα",
+          "οριστικά αποτελέσματα", "οριστικα αποτελεσματα",
+          "πίνακας τοποθετήσεων", "πινakas τοποθετησεων",
+          "επιλαχόντων", "επιλαχοντων",
+          "ενστάσεις", "ενστασεις",
+          "ανακοίνωση", "ανακοινωση",
+          "ανακοινώθηκε", "ανακοινωθηκε",
+          "ανακοίνωση αποτελεσμάτων", "ανακοινωση αποτελεσματων",
+          "έκδοση αποτελεσμάτων", "εκδοση αποτελεσματων",
+          "κληρωτίδα", "κληρωτιδα",
+          "νέα", "nea",
+          "ειδήσεις", "ειδησεις",
+          "press release", "δελτίο τύπου", "δελτιο τυπου",
+          "αποτελέσματα προκήρυξης", "αποτελεσματα προκηρυξης",
+          "αποτελέσματα διαγωνισμού", "αποτελεσματα διαγωνισμου"
+        ];
+
+        // Check if title or content contains news keywords
+        const hasNewsKeywords = newsKeywords.some(keyword => 
+          lowerTitle.includes(keyword) || lowerContent.includes(keyword)
+        );
+
+        // Check if it's a news item (results/announcements) rather than an active opportunity
+        // News items typically don't have application windows or submission deadlines
+        const hasNoApplicationWindow = !lowerContent.includes("αίτηση") && 
+                                       !lowerContent.includes("αιτηση") &&
+                                       !lowerContent.includes("υποβολή") &&
+                                       !lowerContent.includes("υποβολη") &&
+                                       !lowerContent.includes("πρόσκληση") &&
+                                       !lowerContent.includes("προσκληση") &&
+                                       !lowerContent.includes("προθεσμία") &&
+                                       !lowerContent.includes("προθεσμια");
+
+        if (hasNewsKeywords && hasNoApplicationWindow && finalKind !== "news") {
+          finalKind = "news";
+          console.log(
+            `   📰 NEWS DETECTED: Overriding kind to 'news' for results/announcements (keywords found in title/content)`
+          );
+        }
+
+        // ASEP kind detection: If ASEP source and title contains news keywords, override kind
         const isAsepSource =
           sourceName.toLowerCase().includes("asep") ||
           sourceName.toLowerCase().includes("ασεπ");
