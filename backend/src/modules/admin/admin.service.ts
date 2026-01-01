@@ -528,7 +528,10 @@ export class AdminService {
           console.log(
             `🧟 [Admin Archive] Zombie Killer: Archiving opportunity ${
               opp._id
-            } (${opp.title.substring(0, 50)}...) - published > 6 months ago without deadline`
+            } (${opp.title.substring(
+              0,
+              50
+            )}...) - published > 6 months ago without deadline`
           );
         }
       }
