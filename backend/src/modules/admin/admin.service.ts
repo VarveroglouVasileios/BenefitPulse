@@ -172,7 +172,7 @@ export class AdminService {
   // 4. Items with unknown criteria
   async getDraftQueue(): Promise<IOpportunity[]> {
     const now = new Date();
-    
+
     // Find items that need review
     // Exclude service_info, tender, news (same filter as getOpportunities for consistency)
     const drafts = await Opportunity.find({
@@ -197,7 +197,7 @@ export class AdminService {
     })
       .sort({ createdAt: -1 })
       .limit(100); // Limit to most recent 100 items
-    
+
     return drafts;
   }
 
@@ -400,8 +400,10 @@ export class AdminService {
     checked: number;
     breakdown: {
       deadlineExpired: number;
+      zombie: number;
       summaryExpired: number;
       cleanerExpired: number;
+      deadLink: number;
       noRawItem: number;
     };
   }> {
@@ -419,6 +421,12 @@ export class AdminService {
     let deadlineExpiredCount = 0;
     let summaryExpiredCount = 0;
     let cleanerExpiredCount = 0;
+    let deadLinkCount = 0;
+    let zombieKilledCount = 0;
+
+    // Calculate 6 months ago for Zombie Killer
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     function hasExpiredKeywords(text: string): boolean {
       const lowerText = text.toLowerCase();
@@ -455,7 +463,9 @@ export class AdminService {
       }
     }
 
-    async function fetchFullPageContent(url: string): Promise<string | null> {
+    async function fetchFullPageContent(
+      url: string
+    ): Promise<{ content: string | null; isDead: boolean }> {
       try {
         const response = await axios.get(url, {
           headers: {
@@ -463,13 +473,36 @@ export class AdminService {
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           },
           timeout: 10000,
+          validateStatus: (status) => status < 500, // Don't throw on 4xx
         });
+
+        // Check for dead links (404, 410)
+        if (response.status === 404 || response.status === 410) {
+          return { content: null, isDead: true };
+        }
+
         const $ = cheerio.load(response.data);
         $("script, style").remove();
         const content = $("main, article, .content, body").text().trim();
-        return content || null;
-      } catch {
-        return null;
+
+        // Mitigate SPA/Empty Content Issues: if content is extremely small (< 50 chars),
+        // treat as failed fetch but not dead (Zombie Killer will eventually clean these up)
+        if (content.length < 50) {
+          return { content: null, isDead: false };
+        }
+
+        return { content: content || null, isDead: false };
+      } catch (error: any) {
+        // Check if it's a 404/410 error in the catch block
+        if (error.response?.status === 404 || error.response?.status === 410) {
+          return { content: null, isDead: true };
+        }
+
+        console.error(
+          `Failed to fetch ${url}:`,
+          error instanceof Error ? error.message : error
+        );
+        return { content: null, isDead: false };
       }
     }
 
@@ -483,7 +516,24 @@ export class AdminService {
         deadlineExpiredCount++;
       }
 
-      // Check 2: Summary/title contains expired keywords
+      // Check 2: Zombie Killer - opportunities published > 6 months ago without deadline
+      if (!shouldArchive) {
+        if (
+          opp.publishedAt &&
+          opp.publishedAt < sixMonthsAgo &&
+          (!opp.deadlineAt || opp.deadlineAt === null)
+        ) {
+          shouldArchive = true;
+          zombieKilledCount++;
+          console.log(
+            `🧟 [Admin Archive] Zombie Killer: Archiving opportunity ${
+              opp._id
+            } (${opp.title.substring(0, 50)}...) - published > 6 months ago without deadline`
+          );
+        }
+      }
+
+      // Check 3: Summary/title contains expired keywords
       if (!shouldArchive) {
         const combinedText = `${opp.title} ${opp.summary}`;
         if (hasExpiredKeywords(combinedText)) {
@@ -492,7 +542,7 @@ export class AdminService {
         }
       }
 
-      // Check 3: Try to find raw item and re-validate with Cleaner
+      // Check 4: Try to find raw item and re-validate with Cleaner
       if (!shouldArchive) {
         try {
           let rawItem = await RawItem.findOne({
@@ -524,16 +574,30 @@ export class AdminService {
             let contentToCheck = rawItem.content;
 
             if (rawItem.content.length < 500 && opp.officialUrl) {
-              const fullContent = await fetchFullPageContent(opp.officialUrl);
-              if (fullContent && fullContent.length > rawItem.content.length) {
-                contentToCheck = fullContent;
+              const fetchResult = await fetchFullPageContent(opp.officialUrl);
+
+              // Handle dead links (404/410)
+              if (fetchResult.isDead) {
+                shouldArchive = true;
+                deadLinkCount++;
+                console.log(
+                  `💀 [Admin Archive] Dead link detected: Archiving opportunity ${
+                    opp._id
+                  } (${opp.title.substring(0, 50)}...) - ${opp.officialUrl}`
+                );
+              } else if (
+                fetchResult.content &&
+                fetchResult.content.length > rawItem.content.length
+              ) {
+                contentToCheck = fetchResult.content;
               }
             }
 
-            if (hasExpiredKeywords(contentToCheck)) {
+            // Check raw content for expired keywords (only if not already marked for archive)
+            if (!shouldArchive && hasExpiredKeywords(contentToCheck)) {
               shouldArchive = true;
               summaryExpiredCount++;
-            } else {
+            } else if (!shouldArchive) {
               const nowIso = new Date().toISOString();
               const cleanerInput: CleanerInput = {
                 nowIso: nowIso,
@@ -587,8 +651,10 @@ export class AdminService {
       checked: checkedCount,
       breakdown: {
         deadlineExpired: deadlineExpiredCount,
+        zombie: zombieKilledCount,
         summaryExpired: summaryExpiredCount,
         cleanerExpired: cleanerExpiredCount,
+        deadLink: deadLinkCount,
         noRawItem: noRawItemCount,
       },
     };
@@ -752,7 +818,7 @@ export class AdminService {
       adminId,
       action: "reply_to_contact",
       resourceType: "contact",
-      resourceId: submissionId,
+      resourceId: submission._id,
       after: {
         to: contactData.email,
         subject: contactData.subject,

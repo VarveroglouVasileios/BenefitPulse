@@ -2,6 +2,21 @@ import { Event } from "../../models/event.model";
 import { sendEmail } from "../../utils/email";
 import { config } from "../../config/env";
 
+/**
+ * Escape HTML special characters to prevent XSS attacks
+ */
+function escapeHtml(text: string): string {
+  if (!text) return "";
+  const map: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 interface ContactData {
   name: string;
   email: string;
@@ -36,16 +51,23 @@ export class ContactService {
           general: "Γενική επικοινωνία",
         };
 
+        // Escape user input to prevent XSS attacks
+        const safeName = escapeHtml(data.name);
+        const safeEmail = escapeHtml(data.email);
+        const safeSubject = escapeHtml(data.subject);
+        const safeMessage = escapeHtml(data.message);
+        const safeTypeLabel = typeLabels[data.type] || data.type;
+
         await sendEmail({
           to: config.admin.email,
-          subject: `[BenefitPulse] Νέα υποβολή: ${typeLabels[data.type] || data.type}`,
+          subject: `[BenefitPulse] Νέα υποβολή: ${safeTypeLabel}`,
           html: `
             <h2>Νέα υποβολή επικοινωνίας</h2>
-            <p><strong>Τύπος:</strong> ${typeLabels[data.type] || data.type}</p>
-            <p><strong>Από:</strong> ${data.name} (${data.email})</p>
-            <p><strong>Θέμα:</strong> ${data.subject}</p>
+            <p><strong>Τύπος:</strong> ${safeTypeLabel}</p>
+            <p><strong>Από:</strong> ${safeName} (${safeEmail})</p>
+            <p><strong>Θέμα:</strong> ${safeSubject}</p>
             <p><strong>Μήνυμα:</strong></p>
-            <div style="background: #f5f5f5; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap;">${data.message}</div>
+            <div style="background: #f5f5f5; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap;">${safeMessage}</div>
             <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
               Απάντησε από το admin panel: <a href="${config.frontendUrl}/admin/contact">${config.frontendUrl}/admin/contact</a>
             </p>

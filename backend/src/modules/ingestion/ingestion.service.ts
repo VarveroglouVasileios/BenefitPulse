@@ -1448,6 +1448,7 @@ export class IngestionService {
       draft: 0,
       archived: 0,
       error: 0,
+      unchanged: 0, // New: content unchanged (smart deduplication)
     };
 
     // Store fetch metadata and items extracted count
@@ -1846,7 +1847,15 @@ export class IngestionService {
       return "benefit";
     };
 
-    for (const item of items) {
+    /**
+     * Process a single item with smart change detection
+     * Returns: { processed: boolean, skipped: boolean, reason?: string }
+     */
+    const processItem = async (item: any): Promise<{
+      processed: boolean;
+      skipped: boolean;
+      reason?: string;
+    }> => {
       const canonical =
         item.metadata?.canonical || canonicalizeUrl(item.url || source.url);
       const hash = generateHash(canonical);
@@ -1859,10 +1868,35 @@ export class IngestionService {
         )}..." | URL: ${item.url?.substring(0, 80)}...`
       );
 
-      // Check if already exists - upsert instead of skip
+      // Smart Change Detection: Check if content has changed
       const existingRawItem = await RawItem.findOne({ hash });
       if (existingRawItem) {
-        // Update existing raw item (upsert)
+        // Compare title and content
+        const titleUnchanged = existingRawItem.title === item.title;
+        const contentUnchanged = existingRawItem.content === item.content;
+
+        if (titleUnchanged && contentUnchanged) {
+          // Content unchanged - skip expensive processing
+          existingRawItem.updatedAt = new Date();
+          await existingRawItem.save();
+          console.log(
+            `⏭️ SKIP: Content unchanged for "${item.title?.substring(0, 50)}..."`
+          );
+          skipReasons.unchanged++;
+          if (reporter) {
+            reporter.trackSkipped(
+              sourceId,
+              "unchanged",
+              item.title,
+              item.url,
+              item.content?.length || 0,
+              source.type
+            );
+          }
+          return { processed: false, skipped: true, reason: "unchanged" };
+        }
+
+        // Content changed - update and continue processing
         existingRawItem.title = item.title;
         existingRawItem.content = item.content;
         existingRawItem.url = item.url;
@@ -1870,8 +1904,7 @@ export class IngestionService {
         existingRawItem.metadata = item.metadata || {};
         existingRawItem.updatedAt = new Date();
         await existingRawItem.save();
-        console.log(`   🔄 UPDATED existing raw item (will reprocess)`);
-        // Continue processing (don't skip) - will update opportunity too
+        console.log(`   🔄 UPDATED existing raw item (content changed, will reprocess)`);
       }
 
       // Min content filter: apply ONLY to body/summary, NOT title
@@ -1892,7 +1925,7 @@ export class IngestionService {
             source.type
           );
         }
-        continue;
+        return { processed: false, skipped: true, reason: "genericTitle" };
       }
 
       // Skip if content (body/summary) is too short (per-source thresholds)
@@ -1933,7 +1966,7 @@ export class IngestionService {
               source.type
             );
           }
-          continue;
+          return { processed: false, skipped: true, reason: "contentTooShort" };
         }
         // For RSS/API: allow with title+url even if content is short
         console.log(
@@ -1962,7 +1995,7 @@ export class IngestionService {
             source.type
           );
         }
-        continue;
+        return { processed: false, skipped: true, reason: "blockedByHeuristics" };
       }
 
       // Prevent duplicates from RSS/Discovery: Check for duplicate title before creating RawItem
@@ -1985,7 +2018,7 @@ export class IngestionService {
             source.type
           );
         }
-        continue;
+        return { processed: false, skipped: true, reason: "duplicateTitle" };
       }
 
       // Save raw item (upsert if exists)
@@ -2120,7 +2153,7 @@ export class IngestionService {
               cleaned.status
             );
           }
-          continue;
+          return { processed: false, skipped: true, reason: "rejected" };
         }
 
         // Track draft/archived status (only if not auto-published)
@@ -2437,21 +2470,39 @@ export class IngestionService {
             );
           }
         }
+
+        return { processed: true, skipped: false };
       } catch (error: any) {
         skipReasons.error++;
-        console.error(`Error processing raw item ${rawItem._id}:`, error);
+        console.error(`Error processing raw item:`, error);
         if (reporter) {
           reporter.trackSkipped(
             sourceId,
             "error",
             item.title,
             item.url,
-            item.content.length,
+            item.content?.length || 0,
             source.type
           );
           reporter.trackError(sourceId, error.message || String(error));
         }
+        return { processed: false, skipped: true, reason: "error" };
       }
+    };
+
+    // Parallel processing with batching (batch size: 5)
+    const BATCH_SIZE = 5;
+    const batches: any[][] = [];
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      batches.push(items.slice(i, i + BATCH_SIZE));
+    }
+
+    console.log(
+      `🔄 Processing ${items.length} items in ${batches.length} batches (${BATCH_SIZE} items per batch)`
+    );
+
+    for (const batch of batches) {
+      await Promise.all(batch.map((item) => processItem(item)));
     }
 
     // Update source with processing stats
@@ -2508,6 +2559,11 @@ export class IngestionService {
       if (skipReasons.archived > 0) {
         console.log(
           `      • Archived (closed/expired): ${skipReasons.archived}`
+        );
+      }
+      if (skipReasons.unchanged > 0) {
+        console.log(
+          `      • Skipped (Unchanged): ${skipReasons.unchanged}`
         );
       }
       if (skipReasons.error > 0) {

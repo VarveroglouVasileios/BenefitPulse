@@ -77,7 +77,7 @@ export async function extractOpportunity(
 }
 
 /**
- * Extract opportunity using Groq AI
+ * Extract opportunity using Groq AI with model fallback for rate limit handling
  */
 async function extractWithAI(
   groq: Groq,
@@ -85,12 +85,26 @@ async function extractWithAI(
 ): Promise<ExtractedOpportunity | null> {
   // Get current date for comparison
   const now = new Date();
-  const currentDateStr = now.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-  const currentDateFormatted = now.toLocaleDateString('el-GR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+  const currentDateStr = now.toISOString().split("T")[0]; // Format: YYYY-MM-DD
+  const currentDateFormatted = now.toLocaleDateString("el-GR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
   }); // Greek format for better understanding
+
+  // Model fallback priority list (try in order if rate limited)
+  const FALLBACK_MODELS = [
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "qwen/qwen3-32b",
+  ];
+
+  // Use configured model as primary, or default to first in fallback list
+  const primaryModel = config.chatbot.model || FALLBACK_MODELS[0];
+  const modelsToTry = [
+    primaryModel,
+    ...FALLBACK_MODELS.filter((m) => m !== primaryModel),
+  ];
 
   const systemPrompt = `### ROLE
 You are a Senior Data Analyst for the Greek Public Sector. Your task is to extract structured data from raw HTML text.
@@ -156,169 +170,205 @@ CRITICAL:
     4000
   )}`;
 
-  try {
-    // Try with response_format first (if supported by Groq)
-    let completion;
+  // Try each model in the fallback list until one succeeds
+  let lastError: any = null;
+  let usedModel: string | null = null;
+
+  for (const model of modelsToTry) {
     try {
-      completion = await groq.chat.completions.create({
-        model: config.chatbot.model || "llama-3.3-70b-versatile",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.3, // Lower temperature for more consistent extraction
-        max_tokens: 500,
-        response_format: { type: "json_object" }, // Force JSON output (may not be supported by all Groq models)
-      } as any);
-    } catch (formatError: any) {
-      // If response_format is not supported, retry without it
-      if (
-        formatError.message?.includes("response_format") ||
-        formatError.status === 400
-      ) {
+      usedModel = model;
+      // Try with response_format first (if supported by Groq)
+      let completion;
+      try {
         completion = await groq.chat.completions.create({
-          model: config.chatbot.model || "llama-3.3-70b-versatile",
+          model: model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          temperature: 0.3,
+          temperature: 0.3, // Lower temperature for more consistent extraction
           max_tokens: 500,
-        });
-      } else {
-        throw formatError;
-      }
-    }
-
-    const responseContent = completion.choices[0]?.message?.content?.trim();
-    if (!responseContent) {
-      throw new Error("Empty response from Groq API");
-    }
-
-    // Parse JSON response
-    let aiData: any;
-    try {
-      aiData = JSON.parse(responseContent);
-    } catch (parseError) {
-      // Try to extract JSON from markdown code blocks if present
-      const jsonMatch = responseContent.match(
-        /```(?:json)?\s*(\{[\s\S]*\})\s*```/
-      );
-      if (jsonMatch) {
-        aiData = JSON.parse(jsonMatch[1]);
-      } else {
-        throw new Error("Failed to parse JSON from AI response");
-      }
-    }
-
-    // Map AI response to ExtractedOpportunity
-    // New format: AI returns 'kind' instead of 'type'
-    const aiKind = (aiData.kind || "").toLowerCase();
-    const mappedType = mapAIKindToOpportunityType(aiKind);
-    const tags: string[] = [];
-
-    // Add "news" tag if AI classified it as news
-    if (aiKind === "news" && !tags.includes("news")) {
-      tags.push("news");
-    }
-
-    // Add kind-specific tags
-    if (aiKind === "job" && !tags.includes("public-sector")) {
-      tags.push("public-sector");
-    }
-    if (aiKind === "benefit" && !tags.includes("benefit")) {
-      tags.push("benefit");
-    }
-    if (aiKind === "program" && !tags.includes("katartisi")) {
-      tags.push("katartisi");
-    }
-    if (aiKind === "voucher" && !tags.includes("voucher")) {
-      tags.push("voucher");
-    }
-
-    // Build criteriaRulesJson (simplified - AI doesn't extract criteria in new format)
-    const criteriaRulesJson: CriteriaRules = {};
-
-    // Parse deadlineAt if provided (strict: only if explicitly found)
-    let deadlineAt: Date | undefined;
-    if (
-      aiData.deadlineAt &&
-      aiData.deadlineAt !== "null" &&
-      aiData.deadlineAt !== null &&
-      aiData.deadlineAt !== ""
-    ) {
-      try {
-        deadlineAt = new Date(aiData.deadlineAt);
-        if (isNaN(deadlineAt.getTime())) {
-          deadlineAt = undefined; // Invalid date, treat as null
+          response_format: { type: "json_object" }, // Force JSON output (may not be supported by all Groq models)
+        } as any);
+      } catch (formatError: any) {
+        // If response_format is not supported, retry without it
+        if (
+          formatError.message?.includes("response_format") ||
+          formatError.status === 400
+        ) {
+          completion = await groq.chat.completions.create({
+            model: model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature: 0.3,
+            max_tokens: 500,
+          });
+        } else {
+          // For other errors (including rate limits), throw to outer catch
+          throw formatError;
         }
-      } catch {
-        deadlineAt = undefined; // Parse error, treat as null
       }
-    }
-    // If deadlineAt is explicitly null or empty, leave it as undefined (no default)
 
-    // Store kind and status in criteriaJson for use by cleaner.ts
-    const criteriaJson: Record<string, any> = {
-      aiKind: aiKind, // Store kind for cleaner.ts to use
-      aiStatus: aiData.status || undefined, // Store status for cleaner.ts to use
-    };
-
-    // Extract region from tags or content if possible
-    let region: Region | undefined;
-    const regionTagMap: Record<string, Region> = {
-      athens: "attiki",
-      attiki: "attiki",
-      thessaloniki: "central_macedonia", // Θεσσαλονίκη is in Central Macedonia
-      crete: "crete",
-      peloponnese: "peloponnese",
-      macedonia: "central_macedonia", // Default to Central Macedonia
-      "eastern macedonia": "eastern_macedonia_thrace",
-      "western macedonia": "western_macedonia",
-      thrace: "eastern_macedonia_thrace",
-      epirus: "epirus",
-      thessaly: "thessaly",
-      "central greece": "central_greece",
-      "western greece": "western_greece",
-      "ionian islands": "ionian_islands",
-      "north aegean": "north_aegean",
-      "south aegean": "south_aegean",
-    };
-
-    for (const tag of tags) {
-      if (regionTagMap[tag.toLowerCase()]) {
-        region = regionTagMap[tag.toLowerCase()];
-        break;
+      // Successfully got completion - process it (only reached if no errors)
+      const responseContent = completion.choices[0]?.message?.content?.trim();
+      if (!responseContent) {
+        throw new Error("Empty response from Groq API");
       }
+
+      // Parse JSON response
+      let aiData: any;
+      try {
+        aiData = JSON.parse(responseContent);
+      } catch (parseError) {
+        // Try to extract JSON from markdown code blocks if present
+        const jsonMatch = responseContent.match(
+          /```(?:json)?\s*(\{[\s\S]*\})\s*```/
+        );
+        if (jsonMatch) {
+          aiData = JSON.parse(jsonMatch[1]);
+        } else {
+          throw new Error("Failed to parse JSON from AI response");
+        }
+      }
+
+      // Map AI response to ExtractedOpportunity
+      // New format: AI returns 'kind' instead of 'type'
+      const aiKind = (aiData.kind || "").toLowerCase();
+      const mappedType = mapAIKindToOpportunityType(aiKind);
+      const tags: string[] = [];
+
+      // Add "news" tag if AI classified it as news
+      if (aiKind === "news" && !tags.includes("news")) {
+        tags.push("news");
+      }
+
+      // Add kind-specific tags
+      if (aiKind === "job" && !tags.includes("public-sector")) {
+        tags.push("public-sector");
+      }
+      if (aiKind === "benefit" && !tags.includes("benefit")) {
+        tags.push("benefit");
+      }
+      if (aiKind === "program" && !tags.includes("katartisi")) {
+        tags.push("katartisi");
+      }
+      if (aiKind === "voucher" && !tags.includes("voucher")) {
+        tags.push("voucher");
+      }
+
+      // Build criteriaRulesJson (simplified - AI doesn't extract criteria in new format)
+      const criteriaRulesJson: CriteriaRules = {};
+
+      // Parse deadlineAt if provided (strict: only if explicitly found)
+      let deadlineAt: Date | undefined;
+      if (
+        aiData.deadlineAt &&
+        aiData.deadlineAt !== "null" &&
+        aiData.deadlineAt !== null &&
+        aiData.deadlineAt !== ""
+      ) {
+        try {
+          deadlineAt = new Date(aiData.deadlineAt);
+          if (isNaN(deadlineAt.getTime())) {
+            deadlineAt = undefined; // Invalid date, treat as null
+          }
+        } catch {
+          deadlineAt = undefined; // Parse error, treat as null
+        }
+      }
+      // If deadlineAt is explicitly null or empty, leave it as undefined (no default)
+
+      // Store kind and status in criteriaJson for use by cleaner.ts
+      // Also track which model was used for this extraction
+      const criteriaJson: Record<string, any> = {
+        aiKind: aiKind, // Store kind for cleaner.ts to use
+        aiStatus: aiData.status || undefined, // Store status for cleaner.ts to use
+        extractedWithModel: usedModel, // Track which model was used
+      };
+
+      // Extract region from tags or content if possible
+      let region: Region | undefined;
+      const regionTagMap: Record<string, Region> = {
+        athens: "attiki",
+        attiki: "attiki",
+        thessaloniki: "central_macedonia", // Θεσσαλονίκη is in Central Macedonia
+        crete: "crete",
+        peloponnese: "peloponnese",
+        macedonia: "central_macedonia", // Default to Central Macedonia
+        "eastern macedonia": "eastern_macedonia_thrace",
+        "western macedonia": "western_macedonia",
+        thrace: "eastern_macedonia_thrace",
+        epirus: "epirus",
+        thessaly: "thessaly",
+        "central greece": "central_greece",
+        "western greece": "western_greece",
+        "ionian islands": "ionian_islands",
+        "north aegean": "north_aegean",
+        "south aegean": "south_aegean",
+      };
+
+      for (const tag of tags) {
+        if (regionTagMap[tag.toLowerCase()]) {
+          region = regionTagMap[tag.toLowerCase()];
+          break;
+        }
+      }
+
+      if (region) {
+        criteriaRulesJson.region = { includes: [region] };
+      }
+
+      // Extract title and summary
+      const extractedTitle =
+        aiData.title || content.split("\n")[0].substring(0, 100) || "Untitled";
+      let extractedSummary = aiData.summary || content.substring(0, 500);
+
+      // Remove title repetition from summary (deduplication)
+      extractedSummary = removeTitleFromSummary(
+        extractedTitle,
+        extractedSummary
+      );
+
+      // Successfully extracted with this model - return result
+      return {
+        type: mappedType,
+        title: extractedTitle,
+        summary: extractedSummary,
+        deadlineAt,
+        tags,
+        region,
+        criteriaJson, // Contains aiKind, aiStatus, and extractedWithModel for cleaner.ts
+        criteriaRulesJson,
+        confidence: 0.85, // High confidence for AI-extracted data
+      };
+    } catch (error: any) {
+      // Check if it's a rate limit error (429) or service unavailable (503)
+      if (error.status === 429 || error.status === 503) {
+        console.warn(
+          `⚠️ [AI Extractor] Rate limit (${error.status}) on model ${model}, trying next fallback model...`
+        );
+        lastError = error;
+        continue; // Try next model
+      }
+
+      // For other errors, log and try next model
+      console.warn(
+        `⚠️ [AI Extractor] Error with model ${model}: ${error.message}, trying next fallback model...`
+      );
+      lastError = error;
+      continue;
     }
-
-    if (region) {
-      criteriaRulesJson.region = { includes: [region] };
-    }
-
-    // Extract title and summary
-    const extractedTitle =
-      aiData.title || content.split("\n")[0].substring(0, 100) || "Untitled";
-    let extractedSummary = aiData.summary || content.substring(0, 500);
-
-    // Remove title repetition from summary (deduplication)
-    extractedSummary = removeTitleFromSummary(extractedTitle, extractedSummary);
-
-    return {
-      type: mappedType,
-      title: extractedTitle,
-      summary: extractedSummary,
-      deadlineAt,
-      tags,
-      region,
-      criteriaJson, // Contains aiKind and aiStatus for cleaner.ts
-      criteriaRulesJson,
-      confidence: 0.85, // High confidence for AI-extracted data
-    };
-  } catch (error: any) {
-    console.error("AI extraction failed:", error.message);
-    return null; // Return null to trigger regex fallback
   }
+
+  // All models failed - log and return null to trigger regex fallback
+  console.error(
+    `❌ [AI Extractor] All models failed. Last error: ${
+      lastError?.message || "Unknown error"
+    }`
+  );
+  return null;
 }
 
 /**
@@ -526,47 +576,71 @@ function extractWithRegex(content: string): ExtractedOpportunity {
 
   // General news detection (not just ASEP) - check for results, announcements, news items
   const newsKeywords = [
-    "αποτελέσματα", "αποτελεσματα",
-    "πίνακες", "πινακες", "πίνακας", "πινakas",
-    "προσωρινά αποτελέσματα", "προσωρινα αποτελεσματα",
-    "οριστικά αποτελέσματα", "οριστικα αποτελεσματα",
-    "πίνακας τοποθετήσεων", "πινakas τοποθετησεων",
-    "επιλαχόντων", "επιλαχοντων",
-    "ενστάσεις", "ενστασεις",
-    "ανακοίνωση", "ανακοινωση",
-    "ανακοινώθηκε", "ανακοινωθηκε",
-    "ανακοίνωση αποτελεσμάτων", "ανακοινωση αποτελεσματων",
-    "έκδοση αποτελεσμάτων", "εκδοση αποτελεσματων",
-    "κληρωτίδα", "κληρωτιδα",
-    "νέα", "nea",
-    "ειδήσεις", "ειδησεις",
-    "press release", "δελτίο τύπου", "δελτιο τυπου",
-    "αποτελέσματα προκήρυξης", "αποτελεσματα προκηρυξης",
-    "αποτελέσματα διαγωνισμού", "αποτελεσματα διαγωνισμου"
+    "αποτελέσματα",
+    "αποτελεσματα",
+    "πίνακες",
+    "πινακες",
+    "πίνακας",
+    "πινakas",
+    "προσωρινά αποτελέσματα",
+    "προσωρινα αποτελεσματα",
+    "οριστικά αποτελέσματα",
+    "οριστικα αποτελεσματα",
+    "πίνακας τοποθετήσεων",
+    "πινakas τοποθετησεων",
+    "επιλαχόντων",
+    "επιλαχοντων",
+    "ενστάσεις",
+    "ενστασεις",
+    "ανακοίνωση",
+    "ανακοινωση",
+    "ανακοινώθηκε",
+    "ανακοινωθηκε",
+    "ανακοίνωση αποτελεσμάτων",
+    "ανακοινωση αποτελεσματων",
+    "έκδοση αποτελεσμάτων",
+    "εκδοση αποτελεσματων",
+    "κληρωτίδα",
+    "κληρωτιδα",
+    "νέα",
+    "nea",
+    "ειδήσεις",
+    "ειδησεις",
+    "press release",
+    "δελτίο τύπου",
+    "δελτιο τυπου",
+    "αποτελέσματα προκήρυξης",
+    "αποτελεσματα προκηρυξης",
+    "αποτελέσματα διαγωνισμού",
+    "αποτελεσματα διαγωνισμου",
   ];
 
   // Check if title or content contains news keywords
-  const hasNewsKeywords = newsKeywords.some(keyword => 
-    lowerTitle.includes(keyword) || lowerContent.includes(keyword)
+  const hasNewsKeywords = newsKeywords.some(
+    (keyword) => lowerTitle.includes(keyword) || lowerContent.includes(keyword)
   );
 
   // Check if it's a news item (results/announcements) rather than an active opportunity
   // News items typically don't have application windows or submission deadlines
-  const hasNoApplicationWindow = !lowerContent.includes("αίτηση") && 
-                                 !lowerContent.includes("αιτηση") &&
-                                 !lowerContent.includes("υποβολή") &&
-                                 !lowerContent.includes("υποβολη") &&
-                                 !lowerContent.includes("πρόσκληση") &&
-                                 !lowerContent.includes("προσκληση") &&
-                                 !lowerContent.includes("προθεσμία") &&
-                                 !lowerContent.includes("προθεσμια");
+  const hasNoApplicationWindow =
+    !lowerContent.includes("αίτηση") &&
+    !lowerContent.includes("αιτηση") &&
+    !lowerContent.includes("υποβολή") &&
+    !lowerContent.includes("υποβολη") &&
+    !lowerContent.includes("πρόσκληση") &&
+    !lowerContent.includes("προσκληση") &&
+    !lowerContent.includes("προθεσμία") &&
+    !lowerContent.includes("προθεσμια");
 
   if (hasNewsKeywords && hasNoApplicationWindow) {
     // This is news - add tag to help cleaner.ts identify it
     if (!tags.includes("news")) {
       tags.push("news");
     }
-    if (!tags.includes("public-sector") && (lowerContent.includes("asep") || lowerContent.includes("ασεπ"))) {
+    if (
+      !tags.includes("public-sector") &&
+      (lowerContent.includes("asep") || lowerContent.includes("ασεπ"))
+    ) {
       tags.push("public-sector");
     }
   }

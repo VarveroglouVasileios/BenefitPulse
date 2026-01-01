@@ -47,11 +47,30 @@ export async function sendEmail(options: EmailOptions): Promise<void> {
   }
 }
 
+/**
+ * Escape HTML special characters to prevent XSS attacks
+ */
+function escapeHtml(text: string): string {
+  if (!text) return "";
+  const map: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return text.replace(/[&<>"']/g, (m) => map[m]);
+}
+
 export function generateContactReplyEmail(
   userName: string,
   originalMessage: string,
   replyMessage: string
 ): string {
+  // Escape user input to prevent XSS
+  const safeUserName = escapeHtml(userName);
+  const safeOriginalMessage = escapeHtml(originalMessage);
+  const safeReplyMessage = escapeHtml(replyMessage).replace(/\n/g, "<br>");
   return `
 <!DOCTYPE html>
 <html lang="el">
@@ -75,7 +94,7 @@ export function generateContactReplyEmail(
           <!-- Content -->
           <tr>
             <td style="padding: 40px 30px;">
-              <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Γεια σας ${userName},</h2>
+              <h2 style="color: #111827; margin: 0 0 20px 0; font-size: 20px; font-weight: 600;">Γεια σας ${safeUserName},</h2>
               
               <p style="color: #6b7280; margin: 0 0 20px 0; font-size: 16px; line-height: 1.6;">
                 Ευχαριστούμε που επικοινωνήσατε μαζί μας. Παρακάτω μπορείτε να δείτε την απάντησή μας στο μήνυμά σας:
@@ -84,13 +103,13 @@ export function generateContactReplyEmail(
               <!-- Original Message -->
               <div style="background-color: #f9fafb; border-left: 4px solid #3b82f6; padding: 20px; margin: 30px 0; border-radius: 4px;">
                 <p style="color: #6b7280; margin: 0 0 10px 0; font-size: 14px; font-weight: 600; text-transform: uppercase;">Το αρχικό σας μήνυμα:</p>
-                <p style="color: #111827; margin: 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap;">${originalMessage}</p>
+                <p style="color: #111827; margin: 0; font-size: 15px; line-height: 1.6; white-space: pre-wrap;">${safeOriginalMessage}</p>
               </div>
               
               <!-- Reply Message -->
               <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 20px; margin: 30px 0; border-radius: 4px;">
                 <p style="color: #1e40af; margin: 0 0 10px 0; font-size: 14px; font-weight: 600; text-transform: uppercase;">Η απάντησή μας:</p>
-                <div style="color: #111827; font-size: 15px; line-height: 1.6; white-space: pre-wrap;">${replyMessage.replace(/\n/g, '<br>')}</div>
+                <div style="color: #111827; font-size: 15px; line-height: 1.6; white-space: pre-wrap;">${safeReplyMessage}</div>
               </div>
               
               <p style="color: #6b7280; margin: 30px 0 0 0; font-size: 14px; line-height: 1.6;">
