@@ -1,3 +1,4 @@
+import { UserOpportunity } from "./models/userOpportunity.model";
 // Polyfill for Node 16 (undici expects Blob/ReadableStream). Remove on Node 18+.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { Blob } = require("buffer");
@@ -77,10 +78,12 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cookieParser()); // Parse cookies
-app.use(cors({ 
-  origin: config.frontendUrl,
-  credentials: true, // Allow cookies to be sent
-}));
+app.use(
+  cors({
+    origin: config.frontendUrl,
+    credentials: true, // Allow cookies to be sent
+  })
+);
 app.use(securityMiddleware);
 
 // Rate limiting - μόνο σε production για να μην ενοχλεί development flows
@@ -138,7 +141,10 @@ if (config.nodeEnv !== "production") {
       const [matchedCount, notMatchedCount, unknownCount, samples] =
         await Promise.all([
           UserOpportunity.countDocuments({ userId, matchStatus: "matched" }),
-          UserOpportunity.countDocuments({ userId, matchStatus: "not_matched" }),
+          UserOpportunity.countDocuments({
+            userId,
+            matchStatus: "not_matched",
+          }),
           UserOpportunity.countDocuments({ userId, matchStatus: "unknown" }),
           UserOpportunity.find({ userId })
             .sort({ updatedAt: -1 })
@@ -188,7 +194,11 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
 app.get("/api/feed", opportunitiesController.getFeed); // New feed endpoint with tabs
 app.get("/api/opportunities/trending", opportunitiesController.getTrending);
-app.get("/api/opportunities/:id", validateObjectId, opportunitiesController.getOpportunityById);
+app.get(
+  "/api/opportunities/:id",
+  validateObjectId,
+  opportunitiesController.getOpportunityById
+);
 app.get("/api/stats", statsController.getStats);
 
 // User opportunities routes
