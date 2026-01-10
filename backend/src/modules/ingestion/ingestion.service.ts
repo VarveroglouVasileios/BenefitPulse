@@ -104,6 +104,8 @@ function extractDeadlineFromContent(content: string): Date | null {
 
   // Patterns for deadline extraction
   const deadlinePatterns = [
+    // "Λήγουν στις [DATE]" - CRITICAL for news/announcements (e.g., "Λήγουν στις 31 Δεκεμβρίου" or "31 Δεκεμβρίου 2025")
+    /(?:λήγουν|λήγει|λήξει|λήξουν)\s+(?:στις|στην|έως\s+τις|μέχρι\s+τις)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{1,2}\s+[α-ωάέήίόύώ]+(?:\s+\d{4})?)/i,
     // "Υποβολή αιτήσεων από... έως..."
     /(?:υποβολή|υποβολη)\s+(?:αιτήσεων|αιτησεων|αιτήσεως|αιτησεως)[\s\S]{0,200}?έως\s+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
     // "Λήξη προθεσμίας: DD/MM/YYYY"
@@ -112,8 +114,8 @@ function extractDeadlineFromContent(content: string): Date | null {
     /(?:προθεσμία|προθεσμια)\s+(?:υποβολής|υποβολης)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
     // "Ημερομηνία λήξης: DD/MM/YYYY"
     /(?:ημερομηνία|ημερομηνια)\s+(?:λήξης|ληξης)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
-    // "Έως DD/MM/YYYY"
-    /(?:έως|εως|μέχρι|μεχρι)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
+    // "Έως DD/MM/YYYY" or "έως τις [DATE]"
+    /(?:έως|εως|μέχρι|μεχρι)(?:\s+τις)?[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4}|\d{1,2}\s+[α-ωάέήίόύώ]+\s+\d{4})/i,
     // "Deadline: DD/MM/YYYY"
     /(?:deadline|προθεσμια)[\s:]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/i,
     // "Αιτήσεις έως DD/MM/YYYY"
@@ -123,7 +125,17 @@ function extractDeadlineFromContent(content: string): Date | null {
   for (const pattern of deadlinePatterns) {
     const match = content.match(pattern);
     if (match && match[1]) {
-      const dateStr = match[1];
+      let dateStr = match[1].trim();
+
+      // If date is in Greek month format without year (e.g., "31 Δεκεμβρίου"), add current year
+      const greekMonthWithoutYear = /^(\d{1,2})\s+([α-ωάέήίόύώ]+)$/i;
+      const monthMatch = dateStr.match(greekMonthWithoutYear);
+      if (monthMatch) {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        dateStr = `${monthMatch[1]} ${monthMatch[2]} ${currentYear}`;
+      }
+
       const parseResult = parseDate(dateStr);
       if (parseResult.date) {
         return normalizeDate(parseResult.date);
@@ -231,6 +243,8 @@ const AUTO_PUBLISH_DOMAINS = new Set([
   "vouchers.gov.gr",
   "www.vouchers.gov.gr",
   "gov.gr",
+  "api.digigov.grnet.gr", // MITOS API
+  "digigov.grnet.gr", // MITOS API domain
   "www.gov.gr",
   "dypa.gov.gr",
   "www.dypa.gov.gr",
@@ -548,10 +562,22 @@ export class IngestionService {
         items = Array.isArray(response.data.decisions)
           ? response.data.decisions
           : [response.data.decisions];
+      } else if (response.data?.services) {
+        // MITOS API format: response.data.services
+        items = Array.isArray(response.data.services)
+          ? response.data.services
+          : [response.data.services];
+      } else if (response.data?.results) {
+        // Alternative paginated API format: response.data.results
+        items = Array.isArray(response.data.results)
+          ? response.data.results
+          : [response.data.results];
       }
 
       // Filter Διαύγεια items by keyword relevance in subject
       const isDiavgeia = source.url.includes("diavgeia.gov.gr");
+      const isMitos =
+        source.url.includes("digigov.grnet.gr") || source.url.includes("mitos");
       let filteredItems = items;
 
       if (isDiavgeia) {
@@ -607,13 +633,14 @@ export class IngestionService {
       }
 
       return filteredItems.map((item: any) => {
-        // For Διαύγεια: build content from metadata if no body exists
+        // For Διαύγεια and MITOS: build content from metadata if no body exists
         let content =
           item.content ||
           item.description ||
           item.summary ||
           item.excerpt ||
           item.text ||
+          item.details ||
           "";
 
         // Διαύγεια: build summary from metadata fields (always, not just if content is short)
@@ -631,13 +658,28 @@ export class IngestionService {
           content = parts.join(". ");
         }
 
-        // Build URL for Διαύγεια
-        let url = item.url || item.link || item.documentUrl || "";
-        if (isDiavgeia && item.ada && !url) {
-          url = `https://diavgeia.gov.gr/doc/${item.ada}`;
+        // MITOS API: build summary from metadata fields
+        if (isMitos && !content) {
+          const parts: string[] = [];
+          if (item.title || item.name) parts.push(item.title || item.name);
+          if (item.description) parts.push(item.description);
+          if (item.category) parts.push(`Κατηγορία: ${item.category}`);
+          if (item.organization) parts.push(`Φορέας: ${item.organization}`);
+
+          content = parts.join(". ");
         }
 
-        // Parse date for Διαύγεια
+        // Build URL for Διαύγεια and MITOS
+        let url = item.url || item.link || item.documentUrl || item.uri || "";
+        if (isDiavgeia && item.ada && !url) {
+          url = `https://diavgeia.gov.gr/doc/${item.ada}`;
+        } else if (isMitos && (item.id || item.serviceId) && !url) {
+          // MITOS: build URL from service ID
+          const serviceId = item.id || item.serviceId || item._id;
+          url = `https://mitos.gov.gr/service/${serviceId}`;
+        }
+
+        // Parse date for Διαύγεια and MITOS
         // Parse date with unified parser (never Invalid Date)
         let publishedAt: Date | null = null;
 
@@ -647,6 +689,12 @@ export class IngestionService {
           item.submissionTimestamp,
           item.issueDate,
           item.date,
+          item.createdAt,
+          item.created_at,
+          item.updatedAt,
+          item.updated_at,
+          item.startDate,
+          item.endDate,
         ];
 
         for (const dateField of dateFields) {
@@ -665,16 +713,18 @@ export class IngestionService {
         }
 
         return {
-          title: item.title || item.name || item.subject || "",
+          title: item.title || item.name || item.subject || item.label || "",
           content: content,
-          url: url || item.id || "",
+          url: url || item.id || item.serviceId || "",
           publishedAt: publishedAt,
           metadata: {
             ...item,
             isDiavgeia: isDiavgeia,
+            isMitos: isMitos,
             ada: item.ada,
-            organizationLabel: item.organizationLabel,
+            organizationLabel: item.organizationLabel || item.organization,
             decisionTypeLabel: item.decisionTypeLabel,
+            serviceId: item.serviceId || item.id,
           },
         };
       });
@@ -1851,7 +1901,9 @@ export class IngestionService {
      * Process a single item with smart change detection
      * Returns: { processed: boolean, skipped: boolean, reason?: string }
      */
-    const processItem = async (item: any): Promise<{
+    const processItem = async (
+      item: any
+    ): Promise<{
       processed: boolean;
       skipped: boolean;
       reason?: string;
@@ -1880,7 +1932,10 @@ export class IngestionService {
           existingRawItem.updatedAt = new Date();
           await existingRawItem.save();
           console.log(
-            `⏭️ SKIP: Content unchanged for "${item.title?.substring(0, 50)}..."`
+            `⏭️ SKIP: Content unchanged for "${item.title?.substring(
+              0,
+              50
+            )}..."`
           );
           skipReasons.unchanged++;
           if (reporter) {
@@ -1904,7 +1959,9 @@ export class IngestionService {
         existingRawItem.metadata = item.metadata || {};
         existingRawItem.updatedAt = new Date();
         await existingRawItem.save();
-        console.log(`   🔄 UPDATED existing raw item (content changed, will reprocess)`);
+        console.log(
+          `   🔄 UPDATED existing raw item (content changed, will reprocess)`
+        );
       }
 
       // Min content filter: apply ONLY to body/summary, NOT title
@@ -1995,7 +2052,11 @@ export class IngestionService {
             source.type
           );
         }
-        return { processed: false, skipped: true, reason: "blockedByHeuristics" };
+        return {
+          processed: false,
+          skipped: true,
+          reason: "blockedByHeuristics",
+        };
       }
 
       // Prevent duplicates from RSS/Discovery: Check for duplicate title before creating RawItem
@@ -2302,22 +2363,35 @@ export class IngestionService {
             console.log(
               `   📰 AI-NEWS: AI classified as news (kind: ${aiKind}) - overriding kind to "news"`
             );
-          } else if (normalizedKind === "job" && cleaned.kind !== "job") {
-            finalKind = "job";
-            console.log(
-              `   💼 AI-JOB: AI classified as job (kind: ${aiKind}) - overriding kind to "job"`
-            );
-          } else if (normalizedKind === "benefit" && cleaned.kind !== "benefit") {
+          } else if (normalizedKind === "job") {
+            // Map "job" to "program" since "job" is not a valid kind type
+            // Jobs from ASEP are typically programs/competitions
+            if (cleaned.kind !== "program") {
+              finalKind = "program";
+              console.log(
+                `   💼 AI-JOB: AI classified as job (kind: ${aiKind}) - mapping to "program"`
+              );
+            }
+          } else if (
+            normalizedKind === "benefit" &&
+            cleaned.kind !== "benefit"
+          ) {
             finalKind = "benefit";
             console.log(
               `   💰 AI-BENEFIT: AI classified as benefit (kind: ${aiKind}) - overriding kind to "benefit"`
             );
-          } else if (normalizedKind === "program" && cleaned.kind !== "program") {
+          } else if (
+            normalizedKind === "program" &&
+            cleaned.kind !== "program"
+          ) {
             finalKind = "program";
             console.log(
               `   📚 AI-PROGRAM: AI classified as program (kind: ${aiKind}) - overriding kind to "program"`
             );
-          } else if (normalizedKind === "voucher" && cleaned.kind !== "voucher_pass") {
+          } else if (
+            normalizedKind === "voucher" &&
+            cleaned.kind !== "voucher_pass"
+          ) {
             finalKind = "voucher_pass";
             console.log(
               `   🎫 AI-VOUCHER: AI classified as voucher (kind: ${aiKind}) - overriding kind to "voucher_pass"`
@@ -2328,43 +2402,73 @@ export class IngestionService {
         // General news detection: Check for results, announcements, news items (for all sources)
         const lowerTitle = cleaned.title.toLowerCase();
         const lowerContent = (cleaned.summary || "").toLowerCase();
-        
+
         // News keywords that indicate results/announcements/news items
         const newsKeywords = [
-          "αποτελέσματα", "αποτελεσματα",
-          "πίνακες", "πινακες", "πίνακας", "πινakas",
-          "προσωρινά αποτελέσματα", "προσωρινα αποτελεσματα",
-          "οριστικά αποτελέσματα", "οριστικα αποτελεσματα",
-          "πίνακας τοποθετήσεων", "πινakas τοποθετησεων",
-          "επιλαχόντων", "επιλαχοντων",
-          "ενστάσεις", "ενστασεις",
-          "ανακοίνωση", "ανακοινωση",
-          "ανακοινώθηκε", "ανακοινωθηκε",
-          "ανακοίνωση αποτελεσμάτων", "ανακοινωση αποτελεσματων",
-          "έκδοση αποτελεσμάτων", "εκδοση αποτελεσματων",
-          "κληρωτίδα", "κληρωτιδα",
-          "νέα", "nea",
-          "ειδήσεις", "ειδησεις",
-          "press release", "δελτίο τύπου", "δελτιο τυπου",
-          "αποτελέσματα προκήρυξης", "αποτελεσματα προκηρυξης",
-          "αποτελέσματα διαγωνισμού", "αποτελεσματα διαγωνισμου"
+          "αποτελέσματα",
+          "αποτελεσματα",
+          "πίνακες",
+          "πινακες",
+          "πίνακας",
+          "πινakas",
+          "προσωρινά αποτελέσματα",
+          "προσωρινα αποτελεσματα",
+          "οριστικά αποτελέσματα",
+          "οριστικα αποτελεσματα",
+          "πίνακας τοποθετήσεων",
+          "πινakas τοποθετησεων",
+          "επιλαχόντων",
+          "επιλαχοντων",
+          "ενστάσεις",
+          "ενστασεις",
+          "παράταση",
+          "παραταση",
+          "παράτασης",
+          "παρατασης",
+          "ανακοίνωση",
+          "ανακοινωση",
+          "ανακοινώθηκε",
+          "ανακοινωθηκε",
+          "ανακοίνωση αποτελεσμάτων",
+          "ανακοινωση αποτελεσματων",
+          "έκδοση αποτελεσμάτων",
+          "εκδοση αποτελεσματων",
+          "κληρωτίδα",
+          "κληρωτιδα",
+          "νέα",
+          "nea",
+          "ειδήσεις",
+          "ειδησεις",
+          "press release",
+          "δελτίο τύπου",
+          "δελτιο τυπου",
+          "αποτελέσματα προκήρυξης",
+          "αποτελεσματα προκηρυξης",
+          "αποτελέσματα διαγωνισμού",
+          "αποτελεσματα διαγωνισμου",
+          "παράταση προθεσμίας",
+          "παραταση προθεσμιας",
+          "παράταση υποβολής",
+          "παραταση υποβολης",
         ];
 
         // Check if title or content contains news keywords
-        const hasNewsKeywords = newsKeywords.some(keyword => 
-          lowerTitle.includes(keyword) || lowerContent.includes(keyword)
+        const hasNewsKeywords = newsKeywords.some(
+          (keyword) =>
+            lowerTitle.includes(keyword) || lowerContent.includes(keyword)
         );
 
         // Check if it's a news item (results/announcements) rather than an active opportunity
         // News items typically don't have application windows or submission deadlines
-        const hasNoApplicationWindow = !lowerContent.includes("αίτηση") && 
-                                       !lowerContent.includes("αιτηση") &&
-                                       !lowerContent.includes("υποβολή") &&
-                                       !lowerContent.includes("υποβολη") &&
-                                       !lowerContent.includes("πρόσκληση") &&
-                                       !lowerContent.includes("προσκληση") &&
-                                       !lowerContent.includes("προθεσμία") &&
-                                       !lowerContent.includes("προθεσμια");
+        const hasNoApplicationWindow =
+          !lowerContent.includes("αίτηση") &&
+          !lowerContent.includes("αιτηση") &&
+          !lowerContent.includes("υποβολή") &&
+          !lowerContent.includes("υποβολη") &&
+          !lowerContent.includes("πρόσκληση") &&
+          !lowerContent.includes("προσκληση") &&
+          !lowerContent.includes("προθεσμία") &&
+          !lowerContent.includes("προθεσμια");
 
         if (hasNewsKeywords && hasNoApplicationWindow && finalKind !== "news") {
           finalKind = "news";
@@ -2562,9 +2666,7 @@ export class IngestionService {
         );
       }
       if (skipReasons.unchanged > 0) {
-        console.log(
-          `      • Skipped (Unchanged): ${skipReasons.unchanged}`
-        );
+        console.log(`      • Skipped (Unchanged): ${skipReasons.unchanged}`);
       }
       if (skipReasons.error > 0) {
         console.log(`      • Processing error: ${skipReasons.error}`);

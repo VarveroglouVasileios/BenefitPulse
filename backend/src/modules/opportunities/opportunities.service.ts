@@ -385,6 +385,17 @@ export class OpportunitiesService {
           ],
         };
       }
+      
+      // Exclude unknown status from "all" tab (poor user experience)
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { applicationStatus: { $exists: false } }, // Legacy items without applicationStatus
+          { applicationStatus: { $ne: "unknown" } }, // Not unknown
+          { "criteriaJson.applicationStatus": { $exists: false } }, // Legacy items
+          { "criteriaJson.applicationStatus": { $ne: "unknown" } }, // Not unknown
+        ],
+      });
 
       // Calculate exclusion stats for All tab
       const baseFilterForStats: any = {

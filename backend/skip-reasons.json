@@ -1,12 +1,42 @@
 {
-  "timestamp": "2025-12-31T22:00:54.881Z",
-  "totalSources": 24,
-  "sourcesWithSkips": 11,
+  "timestamp": "2026-01-02T08:38:45.874Z",
+  "totalSources": 27,
+  "sourcesWithSkips": 15,
   "skipReasons": {
     "AADE - myΘέρμανση (EL)": {
       "source": "AADE - myΘέρμανση (EL)",
       "reasons": {
         "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 1
+      }
+    },
+    "Dentist Pass": {
+      "source": "Dentist Pass",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 1
+      }
+    },
+    "Tourism4All 2025 Page": {
+      "source": "Tourism4All 2025 Page",
+      "reasons": {
+        "duplicate": 0,
         "duplicateTitle": 1,
         "contentTooShort": 0,
         "genericTitle": 0,
@@ -14,123 +44,12 @@
         "rejected": 0,
         "draft": 0,
         "archived": 0,
-        "error": 0
+        "error": 0,
+        "unchanged": 0
       }
     },
-    "ΑΣΕΠ RSS": {
-      "source": "ΑΣΕΠ RSS",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 40,
-        "contentTooShort": 0,
-        "genericTitle": 0,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ - Ανοικτά Προγράμματα": {
-      "source": "ΔΥΠΑ - Ανοικτά Προγράμματα",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 16,
-        "contentTooShort": 0,
-        "genericTitle": 1,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ - Νέα/Ανακοινώσεις": {
-      "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 12,
-        "contentTooShort": 0,
-        "genericTitle": 0,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)": {
-      "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 66,
-        "contentTooShort": 8,
-        "genericTitle": 0,
-        "blockedByHeuristics": 2,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ - Προγράμματα Απασχόλησης (επίσημη λίστα)": {
-      "source": "ΔΥΠΑ - Προγράμματα Απασχόλησης (επίσημη λίστα)",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 15,
-        "contentTooShort": 0,
-        "genericTitle": 1,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη": {
-      "source": "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 9,
-        "contentTooShort": 0,
-        "genericTitle": 1,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης": {
-      "source": "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 1,
-        "contentTooShort": 0,
-        "genericTitle": 1,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "ΔΥΠΑ RSS": {
-      "source": "ΔΥΠΑ RSS",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 18,
-        "contentTooShort": 0,
-        "genericTitle": 0,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
-    "Ελάχιστο Εγγυημένο Εισόδημα": {
-      "source": "Ελάχιστο Εγγυημένο Εισόδημα",
+    "Vouchers Gov": {
+      "source": "Vouchers Gov",
       "reasons": {
         "duplicate": 0,
         "duplicateTitle": 2,
@@ -140,11 +59,12 @@
         "rejected": 0,
         "draft": 0,
         "archived": 0,
-        "error": 0
+        "error": 0,
+        "unchanged": 2
       }
     },
-    "Φοιτητικό Στεγαστικό": {
-      "source": "Φοιτητικό Στεγαστικό",
+    "Youth Pass Page": {
+      "source": "Youth Pass Page",
       "reasons": {
         "duplicate": 0,
         "duplicateTitle": 1,
@@ -154,7 +74,158 @@
         "rejected": 0,
         "draft": 0,
         "archived": 0,
-        "error": 0
+        "error": 0,
+        "unchanged": 0
+      }
+    },
+    "ΑΣΕΠ RSS": {
+      "source": "ΑΣΕΠ RSS",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 40
+      }
+    },
+    "ΔΥΠΑ - Active Employment Policies": {
+      "source": "ΔΥΠΑ - Active Employment Policies",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 1,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 1
+      }
+    },
+    "ΔΥΠΑ - Ανοικτά Προγράμματα": {
+      "source": "ΔΥΠΑ - Ανοικτά Προγράμματα",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 1,
+        "contentTooShort": 0,
+        "genericTitle": 1,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 15
+      }
+    },
+    "ΔΥΠΑ - Νέα/Ανακοινώσεις": {
+      "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 12
+      }
+    },
+    "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)": {
+      "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 10,
+        "contentTooShort": 8,
+        "genericTitle": 0,
+        "blockedByHeuristics": 2,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 55
+      }
+    },
+    "ΔΥΠΑ - Προγράμματα Απασχόλησης (επίσημη λίστα)": {
+      "source": "ΔΥΠΑ - Προγράμματα Απασχόλησης (επίσημη λίστα)",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 1,
+        "contentTooShort": 0,
+        "genericTitle": 1,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 14
+      }
+    },
+    "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη": {
+      "source": "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 1,
+        "contentTooShort": 0,
+        "genericTitle": 1,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 8
+      }
+    },
+    "ΔΥΠΑ RSS": {
+      "source": "ΔΥΠΑ RSS",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 4,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 15
+      }
+    },
+    "Ελάχιστο Εγγυημένο Εισόδημα": {
+      "source": "Ελάχιστο Εγγυημένο Εισόδημα",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 2
+      }
+    },
+    "Φοιτητικό Στεγαστικό": {
+      "source": "Φοιτητικό Στεγαστικό",
+      "reasons": {
+        "duplicate": 0,
+        "duplicateTitle": 0,
+        "contentTooShort": 0,
+        "genericTitle": 0,
+        "blockedByHeuristics": 0,
+        "rejected": 0,
+        "draft": 0,
+        "archived": 0,
+        "error": 0,
+        "unchanged": 1
       }
     }
   }

@@ -144,6 +144,14 @@ async function runCommand() {
         break;
       }
 
+      case "reprocess:dates": {
+        console.log("🔄 Re-processing opportunities with improved date extraction...");
+        const reprocessModule = await import("./scripts/reprocess-date-extraction");
+        await reprocessModule.reprocessDateExtraction();
+        process.exit(0);
+        break;
+      }
+
       case "ingest":
       case "archive":
       case "reset:bad-data": {

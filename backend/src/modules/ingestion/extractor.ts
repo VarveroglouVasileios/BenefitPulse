@@ -93,10 +93,24 @@ async function extractWithAI(
   }); // Greek format for better understanding
 
   // Model fallback priority list (try in order if rate limited)
+  // Priority: Higher rate limits (req/min) and token limits first
   const FALLBACK_MODELS = [
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
-    "qwen/qwen3-32b",
+    // Fast models with 60 req/min
+    "moonshotai/kimi-k2-instruct", // 60 req/min, 10K tokens/min
+    "moonshotai/kimi-k2-instruct-0905", // 60 req/min, 10K tokens/min
+    "qwen/qwen3-32b", // 60 req/min, 6K tokens/min
+
+    // Models with good token limits
+    "meta-llama/llama-4-scout-17b-16e-instruct", // 30 req/min, 30K tokens/min (best token limit!)
+    "meta-llama/llama-4-maverick-17b-128e-instruct", // 30 req/min, 6K tokens/min
+
+    // Standard models
+    "llama-3.1-8b-instant", // 30 req/min, 14.4K req/day, 6K tokens/min
+    "llama-3.3-70b-versatile", // 30 req/min, 1K req/day, 12K tokens/min
+
+    // Additional fallbacks
+    "allam-2-7b", // 30 req/min, 7K req/day, 6K tokens/min
+    "openai/gpt-oss-20b", // 30 req/min, 8K tokens/min
   ];
 
   // Use configured model as primary, or default to first in fallback list
@@ -123,7 +137,8 @@ You MUST use this date to determine if deadlines are in the past, present, or fu
 4.  **Extract Date**: Find the deadline if it exists, and COMPARE it with today's date (${currentDateStr}).
 
 ### CRITICAL RULES (DO NOT BREAK)
-* **SUMMARY**: Never copy-paste the title. Summarize *who* is eligible and *what* they receive. If content is empty, return "".
+* **TITLE**: Extract the FULL, descriptive title. Do NOT use very short titles (less than 3 words). If the title is too short, look for a more complete title in the content. Remove words like "σύνδεσμος" (link) from the end of titles.
+* **SUMMARY**: Never copy-paste the title. Summarize *who* is eligible and *what* they receive. NEVER return "no description" - always provide a meaningful summary or return "" if content is truly empty.
 * **DEADLINE**: Extract dates ONLY if explicitly stated (e.g., "Λήξη: 20/05/2025"). Return 'null' if no specific date is found. DO NOT GUESS.
 * **DATE COMPARISON**: 
     - Compare the extracted deadline date with today's date (${currentDateStr}).
@@ -191,22 +206,36 @@ CRITICAL:
           response_format: { type: "json_object" }, // Force JSON output (may not be supported by all Groq models)
         } as any);
       } catch (formatError: any) {
+        // Check if it's a rate limit error (429) or service unavailable (503) - retry with next model
+        if (formatError.status === 429 || formatError.status === 503) {
+          throw formatError; // Throw to outer catch to try next model
+        }
+
         // If response_format is not supported, retry without it
         if (
           formatError.message?.includes("response_format") ||
           formatError.status === 400
         ) {
-          completion = await groq.chat.completions.create({
-            model: model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            temperature: 0.3,
-            max_tokens: 500,
-          });
+          try {
+            completion = await groq.chat.completions.create({
+              model: model,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.3,
+              max_tokens: 500,
+            });
+          } catch (retryError: any) {
+            // Check if retry also hit rate limit
+            if (retryError.status === 429 || retryError.status === 503) {
+              throw retryError; // Throw to outer catch to try next model
+            }
+            // For other errors in retry, throw to outer catch
+            throw retryError;
+          }
         } else {
-          // For other errors (including rate limits), throw to outer catch
+          // For other errors, throw to outer catch
           throw formatError;
         }
       }
@@ -332,6 +361,13 @@ CRITICAL:
       );
 
       // Successfully extracted with this model - return result
+      // Log success if this is a fallback model (not the primary)
+      if (usedModel !== primaryModel) {
+        console.log(
+          `✅ [AI Extractor] Successfully extracted with fallback model: ${usedModel}`
+        );
+      }
+
       return {
         type: mappedType,
         title: extractedTitle,

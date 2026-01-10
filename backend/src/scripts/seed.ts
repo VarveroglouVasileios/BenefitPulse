@@ -35,7 +35,7 @@ export async function seed() {
       name: "ΑΣΕΠ - Διαγωνισμοί",
       url: "https://info.asep.gr/search/contest",
       type: "html_listing" as const,
-      enabled: false, // Disabled: may return 404, using RSS feed instead
+      enabled: true, // Enabled: cleaned-up ingestion logic filters expired items
     },
     {
       name: "ΑΣΕΠ - Θέσεις Εργασίας",
@@ -60,6 +60,12 @@ export async function seed() {
       url: "https://info.asep.gr/arheio-anakoinoseon-soh-sme",
       type: "html_listing" as const,
       enabled: true, // Fixed: correct URL
+    },
+    {
+      name: "ΑΣΕΠ - Σημαντικές Ενημερώσεις (Πίνακας)",
+      url: "https://info.asep.gr/simantikes-enimerwseis/tabular",
+      type: "html_listing" as const,
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Announcements List (FIXED)",
@@ -122,8 +128,8 @@ export async function seed() {
     {
       name: "ΔΥΠΑ Επιδόματα/Βοηθήματα",
       url: "https://www.dypa.gov.gr/epidomata-boithimata",
-      type: "html_listing" as const,
-      enabled: false, // Disabled: hub page with navigation, needs specific parser
+      type: "html_catalog" as const, // Changed: hub page, scraper needs to follow links
+      enabled: true, // Enabled: hub page for catalog scraping
     },
     // ΔΥΠΑ Sources (Canonical URLs)
     {
@@ -152,10 +158,16 @@ export async function seed() {
     },
     // Prosvasis sections (FIXED URLs - removed broken more-* pages)
     {
-      name: "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης",
+      name: "ΔΥΠΑ - Active Employment Policies",
+      url: "https://www.dypa.gov.gr/active-employment-policies",
+      type: "html_listing" as const,
+      enabled: true, // Using main www.dypa.gov.gr version (more stable)
+    },
+    {
+      name: "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης (fallback)",
       url: "https://prosvasis.dypa.gov.gr/active-employment-policies",
       type: "html_listing" as const,
-      enabled: true, // Fixed: using correct listing page
+      enabled: false, // Fallback: disabled in favor of main www.dypa.gov.gr version
     },
     // Removed broken more-* pages (404) - using RSS feed instead
     {
@@ -200,12 +212,18 @@ export async function seed() {
       enabled: true, // Using efka.gov.gr and discovery
     },
     // NEW SOURCES
-    // MITOS / ΕΜΔΔ (DISABLED: needs API key and specific endpoints)
+    // MITOS / ΕΜΔΔ API - All services endpoint
     {
-      name: "MITOS - EMDD API",
-      url: "https://api.digigov.grnet.gr/v1",
+      name: "MITOS - EMDD API (Services)",
+      url: "https://api.digigov.grnet.gr/v1/services",
       type: "api" as const,
-      enabled: false, // Disabled: needs API key and specific endpoints (e.g., /services)
+      enabled: true, // Enabled: uses /v1/services endpoint with pagination
+      config: {
+        params: {
+          page: 1,
+          limit: 100, // Fetch first 100 services per page
+        },
+      },
     },
     {
       name: "MITOS Portal",
@@ -280,16 +298,23 @@ export async function seed() {
 
   for (const sourceData of sources) {
     const normalizedUrl = sourceData.url.toLowerCase().trim();
-    
+
     // Check if exact URL already exists (case-insensitive)
-    const exists = await Source.findOne({ 
-      url: { $regex: new RegExp(`^${normalizedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    const exists = await Source.findOne({
+      url: {
+        $regex: new RegExp(
+          `^${normalizedUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+          "i"
+        ),
+      },
     });
-    
+
     if (exists) {
       // Exact URL match - update if needed
       if (exists.name !== sourceData.name) {
-        console.log(`⚠️  Updating source name: "${exists.name}" → "${sourceData.name}"`);
+        console.log(
+          `⚠️  Updating source name: "${exists.name}" → "${sourceData.name}"`
+        );
         exists.name = sourceData.name;
       }
       if (!exists.enabled) {
@@ -299,18 +324,28 @@ export async function seed() {
       await exists.save();
     } else {
       // Check for broken URLs that need updating (prosvasis without /el/)
-      if (sourceData.url.includes("prosvasis.dypa.gov.gr") && sourceData.url.includes("/el/")) {
+      if (
+        sourceData.url.includes("prosvasis.dypa.gov.gr") &&
+        sourceData.url.includes("/el/")
+      ) {
         // Check if there's an old version without /el/ (exact path match)
         const urlPath = new URL(sourceData.url).pathname;
         const oldPath = urlPath.replace("/el/", "/");
         const oldUrl = sourceData.url.replace(urlPath, oldPath);
-        
+
         const oldExists = await Source.findOne({
-          url: { $regex: new RegExp(`^${oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+          url: {
+            $regex: new RegExp(
+              `^${oldUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+              "i"
+            ),
+          },
         });
-        
+
         if (oldExists) {
-          console.log(`⚠️  Updating broken URL: "${oldExists.url}" → "${sourceData.url}"`);
+          console.log(
+            `⚠️  Updating broken URL: "${oldExists.url}" → "${sourceData.url}"`
+          );
           oldExists.url = sourceData.url;
           oldExists.name = sourceData.name;
           oldExists.enabled = true;
@@ -320,12 +355,14 @@ export async function seed() {
           continue;
         }
       }
-      
+
       // Check for duplicates in current batch
       if (seenUrls.has(normalizedUrl)) {
         // Duplicate in current batch
         duplicates.push({ name: sourceData.name, url: sourceData.url });
-        console.log(`⚠️  Duplicate URL in batch: ${sourceData.name} (${sourceData.url})`);
+        console.log(
+          `⚠️  Duplicate URL in batch: ${sourceData.name} (${sourceData.url})`
+        );
       } else {
         // New source
         await Source.create(sourceData);
@@ -336,7 +373,9 @@ export async function seed() {
   }
 
   if (duplicates.length > 0) {
-    console.log(`⚠️  Found ${duplicates.length} duplicate URLs (kept first occurrence)`);
+    console.log(
+      `⚠️  Found ${duplicates.length} duplicate URLs (kept first occurrence)`
+    );
   }
 
   console.log("✅ Seeding completed");

@@ -533,6 +533,8 @@ function extractDates(
 
   // Pattern: "Προθεσμία υποβολής έως [date]" or "Αιτήσεις έως [date]" (enhanced for ΔΥΠΑ)
   const deadlinePatterns = [
+    // "Λήγουν στις [date]" or "λήγουν στις [date]" - CRITICAL for news/announcements
+    /(?:λήγουν|λήγει|λήξει|λήξουν)\s+(?:στις|στην|στην|έως\s+τις|μέχρι\s+τις)[\s:]+([^\.\n]{0,80})/gi,
     // "Υποβολή αιτήσεων από ... έως ..."
     /(?:υποβολή\s+αιτήσεων|αιτήσεις)\s+(?:από|απο)[\s:]+([^έως\n]{0,80})\s+(?:έως|μέχρι|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
     // "Προθεσμία υποβολής έως ..."
@@ -1059,6 +1061,11 @@ function cleanTitle(rawTitle: string): string {
   cleaned = cleaned.replace(/\s*[→>]\s*Δείτε περισσότερα$/i, "");
   cleaned = cleaned.replace(/^\.\.\.\s*/, "");
   cleaned = cleaned.replace(/\s*\.\.\.$/, "");
+
+  // Remove "σύνδεσμος" (link) word from title (common artifact from scraping)
+  cleaned = cleaned.replace(/\s*σύνδεσμος\s*$/i, "");
+  cleaned = cleaned.replace(/\s*συνδεσμος\s*$/i, "");
+  cleaned = cleaned.replace(/\s*link\s*$/i, "");
 
   // Remove duplicate spaces
   cleaned = cleaned.replace(/\s+/g, " ").trim();
