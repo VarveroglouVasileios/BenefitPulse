@@ -36,10 +36,14 @@ export const config = {
     apiKey: process.env.AI_EXTRACTOR_API_KEY || '',
   },
   
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+  },
+  
   chatbot: {
-    apiKey: process.env.CHATBOT_API_KEY || process.env.AI_EXTRACTOR_API_KEY || '',
-    apiUrl: process.env.CHATBOT_API_URL || 'https://api.openai.com/v1/chat/completions',
-    model: process.env.CHATBOT_MODEL || 'gpt-4o-mini',
+    apiKey: process.env.GROQ_API_KEY || process.env.CHATBOT_API_KEY || process.env.AI_EXTRACTOR_API_KEY || '',
+    apiUrl: process.env.CHATBOT_API_URL || 'https://api.groq.com/openai/v1/chat/completions',
+    model: process.env.CHATBOT_MODEL || 'llama-3.3-70b-versatile',
   },
   
   rateLimit: {

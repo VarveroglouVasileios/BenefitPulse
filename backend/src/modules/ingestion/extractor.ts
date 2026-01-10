@@ -43,28 +43,89 @@ export async function extractOpportunity(
   // STUB: Return mock extracted data
   // In production, replace this with actual LLM API call
 
-  if (
-    config.aiExtractor.url &&
-    config.aiExtractor.url !== "http://localhost:8000/extract"
-  ) {
-    try {
-      const response = await axios.post(
-        config.aiExtractor.url,
-        { text: content },
-        {
-          headers: {
-            Authorization: `Bearer ${config.aiExtractor.apiKey}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      return response.data as ExtractedOpportunity;
-    } catch (error) {
-      console.error("AI Extractor error, falling back to stub:", error);
-    }
+  // CHECK: If no API key, use fallback stub
+  const apiKey = config.gemini.apiKey;
+  if (!apiKey) {
+    console.warn("⚠️  No GEMINI_API_KEY found, using fallback keyword extractor.");
+    return fallbackStubExtractor(content);
   }
 
-  // Fallback stub implementation - ENHANCED with more keywords
+  // Real Gemini Implementation
+  try {
+    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    
+    const systemPrompt = `You are an expert data extractor for BenefitPulse. Your job is to analyze Greek announcements (subsidies, jobs, vouchers) and extract structured data.
+    
+    Output JSON ONLY. Structure:
+    {
+      "type": "subsidy" | "voucher" | "program" | "public_call" | "asep_competition",
+      "title": "Clean concise title",
+      "summary": "Short summary of the benefit (max 200 chars)",
+      "deadlineAt": "ISO Date string (YYYY-MM-DD) or null",
+      "tags": ["tag1", "tag2"],
+      "region": "attiki" | "thessaloniki" | "crete" | "peloponnese" | "macedonia" | "thrace" | "epirus" | "thessaly" | "central_greece" | "western_greece" | "aegean_islands" | "ionian_islands" | "other" (or null if nationwide),
+      "criteriaRulesJson": {
+        "ageRange": "min-max" (e.g. "18-29") or null,
+        "incomeRange": "range" (e.g. "<10k", "10-20k") or null,
+        "statusFlags": { "required": ["unemployed", "student", "parent", "disabled", "pensioner"] } (only if strictly required)
+      },
+      "confidence": number (0.0 to 1.0 - how likely is this a real benefit/opportunity?)
+    }
+    
+    Rules:
+    - If it's a press release about a future payment, confidence is 0.6.
+    - If it's an active call for applications, confidence is 0.9+.
+    - Convert relative dates (e.g. "next Friday") to absolute if possible, otherwise null.
+    `;
+
+    const response = await axios.post(
+      `${apiUrl}?key=${apiKey}`,
+      {
+        contents: [{
+          role: "user",
+          parts: [{ text: systemPrompt + "\n\nText to analyze:\n" + content.substring(0, 8000) }]
+        }],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.2
+        }
+      },
+      {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 30000 
+      }
+    );
+
+    if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const rawText = response.data.candidates[0].content.parts[0].text;
+      const parsed = JSON.parse(rawText);
+      
+      // Map JSON to ExtractedOpportunity interface
+      return {
+        type: parsed.type || "manual",
+        title: parsed.title || "Untitled",
+        summary: parsed.summary || "",
+        deadlineAt: parsed.deadlineAt ? new Date(parsed.deadlineAt) : undefined,
+        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        region: parsed.region || undefined,
+        criteriaJson: {},
+        criteriaRulesJson: parsed.criteriaRulesJson || {},
+        criteriaUnknown: !parsed.criteriaRulesJson,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+      };
+    }
+    
+    throw new Error("Empty response from Gemini");
+
+  } catch (error: any) {
+    console.error("❌ Gemini Extractor failed:", error.message);
+    // Fallback to stub on error
+    return fallbackStubExtractor(content);
+  }
+}
+
+// Moved original logic to fallback function
+function fallbackStubExtractor(content: string): ExtractedOpportunity {
   const lowerContent = content.toLowerCase();
   
   // Count how many benefit-related keywords we find (for confidence calculation)

@@ -1462,6 +1462,12 @@ export class IngestionService {
         const cleaned = cleanAndValidate(cleanerInput);
 
         // Extract eligibility rules using AI extractor (for criteria and confidence check)
+        // THRROTTLING: Wait 20s to respect Gemini Free Tier limits (avoid 429 errors)
+        if (process.env.GEMINI_API_KEY) {
+          console.log("   ⏳ Throttling AI request (20s)...");
+          await new Promise(resolve => setTimeout(resolve, 20000));
+        }
+
         const extracted = await extractOpportunity(
           item.title + "\n\n" + item.content
         );

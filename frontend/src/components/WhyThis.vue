@@ -65,11 +65,12 @@ onMounted(async () => {
 
 <style scoped>
 .why-this {
-  background: #e7f3ff;
-  border: 1px solid #b3d9ff;
+  background: var(--accent-light);
+  border: 1px solid var(--border-color);
   padding: 1.5rem;
   border-radius: 0.5rem;
   margin-top: 2rem;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .why-this ul {
@@ -80,6 +81,6 @@ onMounted(async () => {
 .missing {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #b3d9ff;
+  border-top: 1px solid var(--border-color);
 }
 </style>

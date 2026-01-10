@@ -150,14 +150,15 @@ export async function restoreOpportunity(req: AuthRequest, res: Response): Promi
 
 export async function getAdminOpportunities(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { page, limit, status, type, showRejected, showTendersNews } = req.query;
+    const { page, limit, status, type, showRejected, showTendersNews, search } = req.query;
     const result = await adminService.getOpportunities({
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
       status: status as string,
       type: type as string,
-      showRejected: showRejected === "true" || showRejected === true,
-      showTendersNews: showTendersNews === "true" || showTendersNews === true,
+      showRejected: (showRejected as unknown) === "true" || (showRejected as unknown) === true,
+      showTendersNews: (showTendersNews as unknown) === "true" || (showTendersNews as unknown) === true,
+      search: search as string,
     });
     res.status(200).json(result);
   } catch (error: any) {

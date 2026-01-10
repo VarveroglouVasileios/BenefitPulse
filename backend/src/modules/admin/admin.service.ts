@@ -107,7 +107,47 @@ export class AdminService {
     id: string,
     adminId: string
   ): Promise<IOpportunity | null> {
-    return this.updateOpportunity(id, { deletedAt: undefined }, adminId);
+    // 1. Check if it already exists (to avoid duplicate key error if soft-delete was used or it wasn't deleted)
+    const existing = await Opportunity.findById(id);
+    if (existing) {
+      if (existing.status === 'archived' || existing.status === 'rejected') {
+         return this.updateOpportunity(id, { status: 'draft' }, adminId);
+      }
+      return existing;
+    }
+
+    // 2. Find the deletion audit log
+    const deletionLog = await AdminAudit.findOne({
+      resourceType: "opportunity",
+      resourceId: id,
+      action: "delete",
+    }).sort({ createdAt: -1 });
+
+    if (!deletionLog || !deletionLog.before) {
+      throw new Error("Cannot restore: No deletion record found or data missing");
+    }
+
+    // 3. Re-create the opportunity
+    const opportunityData = deletionLog.before;
+    
+    // Ensure we don't carry over internal fields that shouldn't be set directly if needed
+    // But usually we want exact restore. Mongoose might complain about _id if we use creation.
+    // simpler to use insertMany or just create with _id
+    
+    const restored = new Opportunity(opportunityData);
+    restored.isNew = true; // Force insert even if _id is set (Mongoose specific)
+    await restored.save();
+
+    // 4. Log the restore action
+    await AdminAudit.create({
+      adminId,
+      action: "restore",
+      resourceType: "opportunity",
+      resourceId: restored._id,
+      after: restored.toObject(),
+    });
+
+    return restored;
   }
 
   async getOpportunities(query: {
@@ -117,6 +157,7 @@ export class AdminService {
     type?: string;
     showRejected?: boolean;
     showTendersNews?: boolean;
+    search?: string;
   }): Promise<{ opportunities: IOpportunity[]; total: number }> {
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -148,6 +189,16 @@ export class AdminService {
     } else {
       // Admin: allow tenders/news but exclude service_info
       filter.kind = { $ne: "service_info" };
+    }
+
+    // Search filter (Title or Summary)
+    if (query.search) {
+      const searchRegex = new RegExp(query.search, "i");
+      filter.$or = [
+        { title: searchRegex },
+        { summary: searchRegex },
+        { officialUrl: searchRegex },
+      ];
     }
 
     const opportunities = await Opportunity.find(filter)

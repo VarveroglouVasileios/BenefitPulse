@@ -208,10 +208,16 @@ export async function seed() {
       enabled: false, // Disabled: needs API key and specific endpoints (e.g., /services)
     },
     {
-      name: "MITOS Portal",
-      url: "https://mitos.gov.gr",
-      type: "html_catalog" as const,
-      enabled: true,
+      name: "MITOS - EMDD API (Services)",
+      url: "https://api.digigov.grnet.gr/v1/services",
+      type: "api" as const,
+      enabled: true, // Enabled: uses /v1/services endpoint with pagination
+      config: {
+        params: {
+          page: 1,
+          limit: 100, // Fetch first 100 services per page
+        },
+      },
     },
     // OPEKA Announcements (discovery)
     {
@@ -271,6 +277,19 @@ export async function seed() {
       url: "https://vouchers.gov.gr/dentistpass",
       type: "single_page" as const,
       enabled: true, // Dentist Pass specific page
+    },
+    // ESPA Extended
+    {
+      name: "ESPA Proclamations",
+      url: "https://www.espa.gr/el/Pages/Rss.aspx?FeedType=Proclamations",
+      type: "rss" as const,
+      enabled: true,
+    },
+    {
+      name: "ESPA Fisheries",
+      url: "https://alieia.mc.gov.gr/metra-eniksis-tis-alieias/",
+      type: "html_listing" as const,
+      enabled: true,
     },
   ];
 

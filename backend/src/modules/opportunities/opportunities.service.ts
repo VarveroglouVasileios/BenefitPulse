@@ -215,13 +215,19 @@ export class OpportunitiesService {
       filter.$and.push({
         $or: [
           // Standard news/program with keywords
+          // Standard news/program with keywords
           {
-            $and: [
-              { $or: [{ kind: "news" }, { kind: "program" }] },
+            $or: [
+              { kind: "news" }, // Explicit news kind - include ALWAYS
               {
-                title: {
-                  $regex: new RegExp(announcementKeywords.join("|"), "i"),
-                },
+                $and: [
+                  { kind: "program" },
+                  {
+                    title: {
+                      $regex: new RegExp(announcementKeywords.join("|"), "i"),
+                    },
+                  },
+                ],
               },
             ],
           },

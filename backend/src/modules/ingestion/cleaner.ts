@@ -82,6 +82,18 @@ const SERVICE_INFO_KEYWORDS = [
   "στατιστικα",
   "κατάλογος",
   "καταλογος",
+  
+  // Administrative / Corporate News (ASEP/Public bodies)
+  "ετήσια έκθεση",
+  "ετησια εκθεση",
+  "παράδοση έκθεσης",
+  "παραδοση εκθεσης",
+  "απολογισμός",
+  "πεπραγμένα",
+  "επίσκεψη",
+  "επισκεψη",
+  "συνάντηση",
+  "συναντηση",
 ];
 
 // Closed/completed indicators (enhanced for ΔΥΠΑ)
@@ -506,7 +518,10 @@ import { parseDate as unifiedParseDate, normalizeDate } from "../../utils/date-p
 /**
  * Extract dates from content
  */
-function extractDates(
+/**
+ * Extract dates from content
+ */
+export function extractDates(
   content: string,
   now: Date
 ): {
@@ -538,15 +553,17 @@ function extractDates(
     // "Προθεσμία υποβολής έως ..."
     /(?:προθεσμία|αιτήσεις|λήξη|καταληκτική\s+ημερομηνία|υποβολή\s+αιτήσεων)\s+(?:έως|μέχρι|μέχρι\s+και|έως\s+και|έκλεισε|έληξε)[\s:]+([^\.\n]{0,80})/gi,
     // "Παράταση έως ..."
-    /(?:παράταση|παραταση)\s+(?:έως|μέχρι)[\s:]+([^\.\n]{0,80})/gi,
+    /(?:παράταση|παραταση)\s+(?:έως|μέχρι|έως\s+και|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
+    // "Παρατείνεται ... έως ..." (Long distance)
+    /(?:παρατείνεται|παρατεινεται)\s+(?:[^.]{0,100})\s+(?:έως|μέχρι|έως\s+και|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
     // "Η δράση έληξε/ολοκληρώθηκε"
     /(?:η\s+δράση|η\s+δραση|οι\s+αιτήσεις|οι\s+αιτησεις)\s+(?:έληξε|εληξε|ολοκληρώθηκε|ολοκληρωθηκε)[\s:]+([^\.\n]{0,80})/gi,
-    /(?:η\s+πλατφόρμα|πλατφόρμα)\s+(?:θα\s+παραμείνει|παραμένει)\s+(?:ανοικτή|κλειστή)\s+(?:έως|μέχρι)[\s:]+([^\.\n]{0,80})/gi,
+    /(?:η\s+πλατφόρμα|πλατφόρμα)\s+(?:θα\s+παραμείνει|παραμένει)\s+(?:ανοικτή|κλειστή)\s+(?:έως|μέχρι|έως\s+και|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
     /(?:από|έναρξη)[\s:]+([^έως\n]{0,80})\s+έως[\s:]+([^\.\n]{0,80})/gi,
     // Enhanced: "λήγει ... στις 23:59" or "προθεσμία ... στις 23:59"
     /(?:λήγει|ληγει|λήξει|ληξει|έληξε|εληξε|προθεσμία|προθεσμια)[\s:]+([^\.\n]{0,100})(?:[\s:]+στις[\s:]+(\d{1,2}):(\d{2}))/gi,
-    // ΔΥΠΑ specific: "ώρα 23:59" patterns
-    /(?:έως|μέχρι)[\s:]+([^\.\n]{0,60})\s+(?:ώρα|ωρα)[\s:]+(\d{1,2}:\d{2})/gi,
+    // ΔΥΠΑ specific: "ώρα 23:59" patterns (handling "και ώρα")
+    /(?:έως|μέχρι|έως\s+και|μέχρι\s+και)[\s:]+([^\.\n]{0,60})\s+(?:και\s+)?(?:ώρα|ωρα)[\s:]+(\d{1,2}):(\d{2})/gi,
   ];
 
   for (const pattern of deadlinePatterns) {
@@ -611,7 +628,7 @@ function extractDates(
 /**
  * Determine application status
  */
-function determineApplicationStatus(
+export function determineApplicationStatus(
   content: string,
   startAt: Date | null,
   deadlineAt: Date | null,
@@ -845,7 +862,7 @@ function determineApplicationStatus(
 /**
  * Classify kind and type (enhanced for ASEP and Diavgeia)
  */
-function classifyKindAndType(
+export function classifyKindAndType(
   title: string,
   content: string,
   url?: string
@@ -939,6 +956,20 @@ function classifyKindAndType(
       return { kind: "voucher_pass", type: "voucher" };
     }
     return { kind: "voucher_pass", type: "voucher" };
+  }
+
+  // News / Events / Career Days
+  if (
+    lowerTitle.includes("ημέρα καριέρας") ||
+    lowerTitle.includes("ημερα καριερας") ||
+    lowerTitle.includes("εκδήλωση") ||
+    lowerTitle.includes("εκδηλωση") ||
+    lowerTitle.includes("ημερίδα") ||
+    lowerTitle.includes("ημεριδα") ||
+    lowerTitle.includes("σεμινάριο") ||
+    lowerTitle.includes("σεμιναριο")
+  ) {
+    return { kind: "news", type: "manual" };
   }
 
   // Benefit (allowance/subsidy) - enhanced for ΔΥΠΑ
@@ -1046,7 +1077,7 @@ function cleanTitle(rawTitle: string): string {
 /**
  * Clean summary
  */
-function cleanSummary(title: string, content: string): string {
+export function cleanSummary(title: string, content: string): string {
   // Remove boilerplate
   let cleaned = content
     .replace(/cookie[^.]*/gi, "")
@@ -1065,12 +1096,20 @@ function cleanSummary(title: string, content: string): string {
       "^" + titleWords.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+"),
       "i"
     );
-    cleaned = cleaned.replace(titlePattern, "").trim();
+    // Only remove title if content is long enough to justify it
+    if (cleaned.length > 200) {
+      cleaned = cleaned.replace(titlePattern, "").trim();
+    }
   }
 
   // Extract first 1-3 meaningful sentences
   const sentences = cleaned.split(/[.!?]\s+/).filter((s) => s.length > 20);
-  const summary = sentences.slice(0, 3).join(". ");
+  let summary = sentences.slice(0, 3).join(". ");
+  
+  // If summary is too short or empty, use the cleaned content (up to limit)
+  if (summary.length < 50) {
+    summary = cleaned.substring(0, 500);
+  }
 
   return summary || cleaned.substring(0, 500);
 }
@@ -1997,9 +2036,18 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
           status = "archived";
           evidence.notes.push(`Pass with year in title and expired deadline → archived`);
         } else {
-          // "open" without dates - don't publish as active
-          status = "draft";
-          evidence.notes.push("Open status but no application window dates → draft (needs verification)");
+          // "open" without dates
+          // Check for explicit "Open" indicators in title (e.g. Ανοικτό, Ενεργό, Προδημοσίευση)
+          const isOpenProgram = /ανοικτό|ανοιχτό|ενεργό|προδημοσίευση|pre-publication|open/i.test(rawTitle);
+            
+          if (isOpenProgram) {
+            status = "published";
+            evidence.notes.push("Open status without dates but title indicates Open Program → published");
+          } else {
+            // Otherwise draft
+            status = "draft";
+            evidence.notes.push("Open status but no application window dates → draft (needs verification)");
+          }
         }
       }
     }

@@ -1,14 +1,24 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import { useAuthStore } from "../stores/auth.store";
 
-// Session ID stored in memory (not localStorage)
-// Generated once per page load, reused for all requests
+const SESSION_STORAGE_KEY = 'bp_session_id';
+
 let sessionId: string | null = null;
 
 function getOrCreateSessionId(): string {
-  if (!sessionId) {
-    sessionId = generateSessionId();
+  // 1. Check memory first
+  if (sessionId) return sessionId;
+
+  // 2. Check localStorage
+  const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+  if (stored) {
+    sessionId = stored;
+    return sessionId;
   }
+
+  // 3. Generate new and store
+  sessionId = generateSessionId();
+  localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
   return sessionId;
 }
 

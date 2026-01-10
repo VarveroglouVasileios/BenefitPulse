@@ -28,7 +28,8 @@ export default defineComponent({
         program: "Πρόγραμμα",
         public_call: "Προκήρυξη",
         asep_competition: "ΑΣΕΠ",
-        manual: "Χειροκίνητο",
+        manual: "Ανακοίνωση",
+        decision: "Απόφαση",
       };
       return props.type ? labels[props.type] : "";
     });
