@@ -583,15 +583,19 @@ export class OpportunitiesService {
                               $gte: [
                                 {
                                   $toInt: {
-                                    $arrayElemAt: [
-                                      {
-                                        $regexFind: {
-                                          input: "$title",
-                                          regex: /(20\d{2})/i,
+                                    $let: {
+                                      vars: {
+                                        regexResult: {
+                                          $regexFind: {
+                                            input: "$title",
+                                            regex: /(20\d{2})/i,
+                                          },
                                         },
                                       },
-                                      1,
-                                    ],
+                                      in: {
+                                        $arrayElemAt: ["$$regexResult.captures", 0],
+                                      },
+                                    },
                                   },
                                 },
                                 new Date().getFullYear(),

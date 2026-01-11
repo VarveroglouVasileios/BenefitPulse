@@ -8,12 +8,6 @@
       <option value="public_call">Προκήρυξη</option>
       <option value="asep_competition">ΑΣΕΠ</option>
     </select>
-    <input
-      v-model="localFilters.search"
-      type="text"
-      placeholder="Αναζήτηση..."
-      @input="updateFilters"
-    />
   </div>
 </template>
 

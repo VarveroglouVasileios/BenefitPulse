@@ -46,6 +46,16 @@
               <li>Πληροφορίες για τα προγράμματα και επιδόματα</li>
               <li>Οδηγίες χρήσης</li>
             </ul>
+            <div class="quick-replies">
+              <button 
+                v-for="(reply, idx) in quickReplies" 
+                :key="idx" 
+                @click="sendQuickReply(reply)"
+                class="quick-reply-chip"
+              >
+                {{ reply }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -241,6 +251,18 @@ async function sendMessage() {
   }
 }
 
+const quickReplies = [
+  "Ποια επιδόματα τρέχουν τώρα;",
+  "Πώς κάνω αίτηση για Voucher;",
+  "Είμαι άνεργος, τι δικαιούμαι;",
+  "Βοήθεια με την εγγραφή"
+];
+
+function sendQuickReply(text: string) {
+  inputMessage.value = text;
+  sendMessage();
+}
+
 // Watch for new messages when chat is closed
 watch(
   () => messages.value.length,
@@ -417,6 +439,33 @@ onMounted(() => {
 .welcome-content li {
   margin-bottom: 0.5rem;
 }
+
+.quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+}
+
+.quick-reply-chip {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-reply-chip:hover {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
 
 .message {
   display: flex;

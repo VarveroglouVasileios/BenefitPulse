@@ -44,6 +44,7 @@ import { validateObjectId } from "./middleware/validation.middleware";
 
 import { Opportunity } from "./models/opportunity.model";
 import { UserProfile } from "./models/profile.model";
+import { UserOpportunity } from "./models/userOpportunity.model";
 import { evaluateMatch } from "./rules/evaluate";
 import { CriteriaRules } from "../../shared/src/rulesTypes";
 
@@ -239,6 +240,10 @@ app.delete(
 
 // Events route
 app.post("/api/events", eventsController.trackEvent);
+
+// Notifications routes
+import { notificationsRoutes } from "./routes/notifications.routes";
+app.use("/api/notifications", notificationsRoutes);
 
 // Contact route
 import * as contactController from "./modules/contact/contact.controller";

@@ -16,10 +16,21 @@
     </div>
     
     <FiltersBar v-model:filters="filters" />
-    <div v-if="loading" class="loading">Φόρτωση...</div>
+    
+    <div v-if="loading" class="opportunities-grid">
+      <SkeletonOpportunityCard v-for="n in 6" :key="n" />
+    </div>
+    
     <div v-else>
+      <!-- Active Filters Summary -->
+      <div v-if="filters.search || filters.type || filters.source || filters.kind" class="active-filters">
+        <span v-if="filters.search">Αναζήτηση: "<strong>{{ filters.search }}</strong>"</span>
+        <button @click="clearFilters" class="clear-filters-btn">✕ Καθαρισμός Φίλτρων</button>
+      </div>
+
       <div v-if="opportunities.length === 0" class="empty">
-        <p>Δεν βρέθηκαν ευκαιρίες</p>
+        <p>Δεν βρέθηκαν ευκαιρίες{{ filters.search ? ` για "${filters.search}"` : '' }}</p>
+        <button v-if="filters.search" @click="clearFilters" class="btn-link">Επιστροφή σε όλες</button>
       </div>
       <div v-else class="opportunities-grid">
         <OpportunityCard
@@ -39,11 +50,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
+import type { Opportunity } from "../../../../shared/src/types";
 import OpportunityCard from "../../components/OpportunityCard.vue";
+import SkeletonOpportunityCard from "../../components/SkeletonOpportunityCard.vue";
 import FiltersBar from "../../components/FiltersBar.vue";
 
-const opportunities = ref([]);
+const route = useRoute();
+const router = useRouter();
+const opportunities = ref<Opportunity[]>([]);
 const loading = ref(true);
 const page = ref(1);
 const total = ref(0);
@@ -91,16 +107,42 @@ function prevPage() {
   }
 }
 
+function clearFilters() {
+  filters.value = { type: "", kind: "", source: "", search: "" };
+  opportunities.value = [];
+  loading.value = true;
+  router.push({ query: {} });
+}
+
 watch(
   [activeTab, filters],
   () => {
     page.value = 1;
+    // Debounce could be added here if needed, but for now direct fetch is fine
     fetchOpportunities();
   },
   { deep: true }
 );
 
-onMounted(fetchOpportunities);
+// Sync query params with filters
+watch(
+  () => route.query,
+  (newQuery) => {
+    // If search is present updates it, otherwise if undefined (cleared) resets it to empty string
+    filters.value.search = (newQuery.search as string) || "";
+  },
+  { immediate: true }
+);
+
+onMounted(() => {
+  // Initial sync from query is handled by the immediate watch above
+  // just need to trigger initial fetch if not triggered by watch (though watch likely triggers it)
+  // Actually, watch immediate triggers sync, then filters change triggers fetch. 
+  // But let's keep explicit fetch for clarity if no query.
+  if (!route.query.search) {
+    fetchOpportunities();
+  }
+});
 </script>
 
 <style scoped>
@@ -149,6 +191,45 @@ onMounted(fetchOpportunities);
   text-align: center;
   padding: 4rem 2rem;
   color: var(--text-secondary);
+}
+
+.active-filters {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--bg-tertiary);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+  flex-wrap: wrap;
+}
+
+.clear-filters-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.clear-filters-btn:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--primary-color);
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 1rem;
+  font-weight: 600;
 }
 
 .opportunities-grid {

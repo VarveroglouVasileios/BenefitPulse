@@ -5,6 +5,7 @@
       <Badge :type="opportunity.type" />
     </div>
     <div class="badges">
+      <span v-if="isNew" class="badge new-badge">NEW</span>
       <span v-if="isExpiringSoon" class="badge expiring">EXPIRING</span>
       <span v-if="isExpired" class="badge expired">EXPIRED</span>
     </div>
@@ -38,29 +39,76 @@
       </span>
       <span v-else class="unknown-deadline">Κατάσταση: άγνωστη — έλεγξε στο επίσημο link</span>
     </div>
-    <router-link 
-      :to="`/opportunities/${opportunity._id}`" 
-      class="link"
-      :aria-label="`Δείτε περισσότερα για ${opportunity.title}`"
-    >
-      Δείτε περισσότερα →
-    </router-link>
+    <div class="actions">
+      <router-link 
+        :to="`/opportunities/${opportunity._id}`" 
+        class="link"
+        :aria-label="`Δείτε περισσότερα για ${opportunity.title}`"
+      >
+        Δείτε περισσότερα →
+      </router-link>
+      
+      <button 
+        class="share-btn" 
+        @click.prevent="openShareModal"
+        aria-label="Κοινοποίηση"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"></circle>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+        </svg>
+      </button>
+    </div>
+
+    <Teleport to="body">
+      <ShareModal
+        :show="showShareModal"
+        :url="shareUrl"
+        :title="shareTitle"
+        :text="shareText"
+        @close="showShareModal = false"
+      />
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { Opportunity } from "../../../shared/src/types";
 // @ts-ignore - Vue SFC default export
 import Badge from "./Badge.vue";
+import ShareModal from "./ShareModal.vue";
 
 interface Props {
   opportunity: Opportunity;
 }
 
 const props = defineProps<Props>();
+const showShareModal = ref(false);
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+const shareUrl = computed(() => `${window.location.origin}/opportunities/${props.opportunity._id}`);
+const shareTitle = computed(() => `BenefitPulse: ${props.opportunity.title}`);
+const shareText = computed(() => `Δείτε αυτό: ${props.opportunity.title}`);
+
+function openShareModal() {
+  showShareModal.value = true;
+}
+
+const isNew = computed(() => {
+  const publishedDate = props.opportunity.publishedAt || props.opportunity.createdAt;
+  if (!publishedDate) return false;
+  
+  const published = new Date(publishedDate).getTime();
+  const now = Date.now();
+  const diffHours = (now - published) / (1000 * 60 * 60);
+  
+  return diffHours <= 48; // New if published within last 48 hours
+});
 
 const isExpired = computed(() => {
   if (!props.opportunity.deadlineAt) return false;
@@ -134,6 +182,8 @@ function formatDate(date: string | Date): string {
   border-radius: 0.5rem;
   padding: 1.5rem;
   transition: box-shadow 0.2s, border-color 0.2s;
+  display: flex;
+  flex-direction: column;
 }
 
 .opportunity-card:hover {
@@ -170,6 +220,12 @@ function formatDate(date: string | Date): string {
 .badge.expired {
   background-color: #f8d7da;
   color: #721c24;
+}
+
+.badge.new-badge {
+  background-color: #d1e7dd;
+  color: #0f5132;
+  border: 1px solid #badbcc;
 }
 
 .header h3 {
@@ -240,12 +296,19 @@ function formatDate(date: string | Date): string {
   gap: 1rem;
   font-size: 0.875rem;
   color: var(--text-tertiary);
-  margin-bottom: 1rem;
+  margin-bottom: auto; /* Push actions to bottom if card height is fixed, but here it helps spacing */
 }
 
 .unknown-deadline {
   font-style: italic;
   color: var(--text-tertiary);
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
 }
 
 .link {
@@ -257,5 +320,35 @@ function formatDate(date: string | Date): string {
 
 .link:hover {
   color: var(--accent-hover);
+}
+
+.share-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.share-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+}
+
+.copied-msg {
+  position: absolute;
+  top: -30px;
+  right: 0;
+  background: black;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 </style>

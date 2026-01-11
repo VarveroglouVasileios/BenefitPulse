@@ -40,19 +40,21 @@
           {{ isBookmarked ? "Αφαίρεση" : "Προσθήκη" }} σε Αγαπημένα
         </button>
       </div>
-      <WhyThis v-if="isAuthenticated" :opportunity-id="opportunity._id" />
+      <WhyThis v-if="isAuthenticated" :opportunity-id="opportunity._id ?? ''" />
     </div>
     <div v-else class="error">Δεν βρέθηκε ευκαιρία</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useHead } from '@unhead/vue';
 import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
 import { useBookmarksStore } from "../../stores/bookmarks.store";
 import { useTracking } from "../../composables/useTracking";
+import type { Opportunity } from "../../../../shared/src/types";
 import Badge from "../../components/Badge.vue";
 import WhyThis from "../../components/WhyThis.vue";
 
@@ -61,24 +63,25 @@ const authStore = useAuthStore();
 const bookmarksStore = useBookmarksStore();
 const { trackOfficialClick: trackClick } = useTracking();
 
-const opportunity = ref(null);
+const opportunity = ref<Opportunity | null>(null);
 const loading = ref(true);
 const isBookmarked = ref(false);
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
 
 function formatDate(date: string | Date): string {
+  if (!date) return '';
   return new Date(date).toLocaleDateString("el-GR");
 }
 
 function trackOfficialClick() {
-  if (opportunity.value) {
+  if (opportunity.value?._id) {
     trackClick(opportunity.value._id);
   }
 }
 
 async function toggleBookmark() {
-  if (!opportunity.value) return;
+  if (!opportunity.value?._id) return;
   try {
     if (isBookmarked.value) {
       await bookmarksStore.removeBookmark(opportunity.value._id);
@@ -93,13 +96,16 @@ async function toggleBookmark() {
 
 onMounted(async () => {
   try {
-    const response = await api.opportunities.get(route.params.id as string);
+    const id = route.params.id;
+    if (typeof id !== 'string') return;
+    
+    const response = await api.opportunities.get(id);
     opportunity.value = response.data;
 
-    if (isAuthenticated.value) {
+    if (isAuthenticated.value && opportunity.value?._id) {
       await bookmarksStore.fetchBookmarks();
       isBookmarked.value = bookmarksStore.bookmarks.some(
-        (b: any) => b.opportunityId._id === opportunity.value._id
+        (b: any) => b.opportunityId?._id === opportunity.value?._id
       );
     }
   } catch (error) {
@@ -108,6 +114,33 @@ onMounted(async () => {
     loading.value = false;
   }
 });
+
+// Dynamic Open Graph meta tags for social media sharing
+watch(() => opportunity.value, (opp) => {
+  if (!opp) return;
+  
+  const url = `${window.location.origin}/opportunities/${opp._id}`;
+  const title = `${opp.title} - BenefitPulse`;
+  const description = opp.summary || 'Δείτε αυτή την ευκαιρία στο BenefitPulse';
+  
+  useHead({
+    title: title,
+    meta: [
+      { name: 'description', content: description },
+      // Open Graph
+      { property: 'og:type', content: 'website' },
+      { property: 'og:url', content: url },
+      { property: 'og:title', content: title },
+      { property: 'og:description', content: description },
+      { property: 'og:site_name', content: 'BenefitPulse' },
+      // Twitter Card
+      { name: 'twitter:card', content: 'summary_large_image' },
+      { name: 'twitter:url', content: url },
+      { name: 'twitter:title', content: title },
+      { name: 'twitter:description', content: description },
+    ],
+  });
+}, { immediate: true });
 </script>
 
 <style scoped>

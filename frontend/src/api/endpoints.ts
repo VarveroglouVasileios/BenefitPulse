@@ -98,4 +98,10 @@ export const api = {
       reply: (id: string, message: string) => http.post(`/admin/contact/${id}/reply`, { message }),
     },
   },
+  // Notifications
+  notifications: {
+    subscribe: (subscription: any) => http.post('/notifications/subscribe', subscription),
+    unsubscribe: (subscription: any) => http.post('/notifications/unsubscribe', subscription),
+    test: () => http.post('/notifications/test', { message: 'Test notification from UI' }),
+  },
 };

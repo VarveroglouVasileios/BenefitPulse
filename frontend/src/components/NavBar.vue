@@ -48,6 +48,38 @@
       </nav>
 
       <div class="actions">
+        <!-- Global Search -->
+        <div class="search-container">
+          <input 
+            v-model="searchQuery" 
+            type="text" 
+            placeholder="Αναζήτηση..." 
+            class="search-input"
+            @keyup.enter="handleSearch"
+          />
+          <button class="search-btn" @click="handleSearch" aria-label="Αναζήτηση">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </button>
+        </div>
+
+        <button 
+          v-if="isSupported && permission !== 'denied'" 
+          @click="handleNotificationClick" 
+          class="btn"
+          :class="{ 'btn-success': isSubscribed }"
+          :aria-label="isSubscribed ? 'Οι ειδοποιήσεις είναι ενεργές' : 'Ενεργοποίηση Ειδοποιήσεων'"
+          :title="isSubscribed ? 'Οι ειδοποιήσεις είναι ενεργές' : 'Ενεργοποίηση Ειδοποιήσεων'"
+          :disabled="loading"
+        >
+          <span v-if="loading">⏳</span>
+          <span v-else-if="isSubscribed">✅</span>
+          <span v-else>🔔</span>
+        </button>
+
+        <!-- <button v-if="showInstallButton" @click="installPWA" class="btn btn-install">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Εγκατάσταση</span>
+        </button> -->
         <button
           class="theme-toggle"
           @click="toggleTheme"
@@ -73,20 +105,31 @@
           >
         </template>
       </div>
-    </div>
+      </div>
+    <Toast 
+      :show="toast.show" 
+      :message="toast.message" 
+      :type="toast.type" 
+      @close="toast.show = false" 
+    />
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { api } from "../api/endpoints";
 import { useAuthStore } from "../stores/auth.store";
 import { useThemeStore } from "../stores/theme.store";
+// import { usePWA } from "../composables/usePWA";
+import { useNotifications } from "../composables/useNotifications";
+import Toast from "./Toast.vue";
 
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const router = useRouter();
 const route = useRoute();
+// const { showInstallButton, installPWA } = usePWA();
 
 const user = computed(() => authStore.user);
 const isAuthenticated = computed(() => authStore.isAuthenticated);
@@ -112,10 +155,73 @@ watch(() => route.path, () => {
   closeMobileMenu();
 });
 
+async function sendTestNotification() {
+  try {
+    await api.notifications.test();
+    alert("Test notification sent!");
+  } catch (error) {
+    console.error("Failed to send test notification:", error);
+    alert("Failed to send test notification");
+  }
+}
+
 async function handleLogout() {
   await authStore.logout();
   closeMobileMenu();
   router.push("/");
+}
+
+const searchQuery = ref("");
+
+function handleSearch() {
+  if (!searchQuery.value.trim()) return;
+  router.push({
+    path: "/opportunities",
+    query: { search: searchQuery.value },
+  });
+  searchQuery.value = ""; // Clear after search
+  closeMobileMenu();
+}
+
+
+
+const { enableNotifications: _enableNotifications, disableNotifications, isSubscribed, isSupported, permission, loading } = useNotifications();
+
+const toast = ref({
+  show: false,
+  message: "",
+  type: "info" as "success" | "error" | "info"
+});
+
+function showToast(message: string, type: "success" | "error" | "info" = "info") {
+  toast.value = {
+    show: true,
+    message,
+    type
+  };
+}
+
+async function handleNotificationClick() {
+  if (isSubscribed.value) {
+    // Direct unsubscribe interaction
+    try {
+      await disableNotifications();
+      showToast("Οι ειδοποιήσεις απενεργοποιήθηκαν.", "info");
+    } catch (error) {
+       showToast("Σφάλμα απενεργοποίησης.", "error");
+    }
+  } else {
+    try {
+      await _enableNotifications();
+      // Only show success toast if actually subscribed (permission granted etc)
+      if (isSubscribed.value) {
+         showToast("Επιτυχής εγγραφή στις ειδοποιήσεις!", "success");
+      }
+    } catch (error) {
+      console.error("Failed to enable notifications:", error);
+      showToast("Σφάλμα: " + (error as Error).message, "error");
+    }
+  }
 }
 </script>
 
@@ -126,6 +232,9 @@ async function handleLogout() {
   padding: 0.75rem 0;
   box-shadow: var(--shadow-md);
   border-bottom: 1px solid var(--border-color);
+  position: sticky; /* Make navbar sticky */
+  top: 0;
+  z-index: 100;
 }
 
 .container {
@@ -285,6 +394,7 @@ async function handleLogout() {
 .mobile-nav.open {
   max-height: 500px;
   padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .mobile-nav a {
@@ -366,8 +476,29 @@ async function handleLogout() {
   border-color: var(--accent-hover);
 }
 
+.btn-success {
+  background: transparent; /* Or a subtle green bg */
+  color: var(--primary-color);
+  border-color: transparent;
+  cursor: default;
+}
+
+.btn-install {
+  color: var(--text-primary);
+  border: 1px solid var(--text-primary);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-install:hover {
+  background: var(--bg-tertiary);
+}
+
 @media (max-width: 768px) {
   .container {
+    padding: 0 1rem;
     position: relative;
     flex-wrap: nowrap;
   }
@@ -396,6 +527,14 @@ async function handleLogout() {
     font-size: 0.875rem;
     padding: 0.3rem 0.6rem;
   }
+
+  .btn-install span {
+    display: none;
+  }
+  
+  .btn-install svg {
+    display: block;
+  }
 }
 
 @media (max-width: 480px) {
@@ -411,6 +550,75 @@ async function handleLogout() {
   .theme-toggle {
     min-width: 2rem;
     padding: 0.25rem 0.5rem;
+  }
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.5rem;
+}
+
+.search-input {
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  outline: none;
+  width: 150px;
+  transition: width 0.2s;
+}
+
+.search-input:focus {
+  width: 200px;
+}
+
+.search-btn {
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-btn:hover {
+  color: var(--primary-color);
+}
+
+@media (max-width: 768px) {
+  .search-input {
+    width: 100px;
+  }
+  .search-input:focus {
+    width: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-container {
+    padding: 0.25rem;
+    margin-right: 0.25rem;
+  }
+  .search-input {
+    width: 0;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .search-container:focus-within .search-input {
+    width: 120px;
+    padding: 0.25rem 0.5rem;
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 </style>

@@ -865,6 +865,89 @@ export class IngestionService {
     }
   }
 
+  async fetchPageBody(url: string, headers: any = {}): Promise<string> {
+    try {
+      // Small delay to be polite
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const response = await axios.get(url, {
+        headers: { ...headers, "User-Agent": DEFAULT_HEADERS["User-Agent"] },
+        timeout: 10000,
+      });
+
+      const $ = cheerio.load(response.data);
+
+      // Remove unwanted elements - Extended list for Liferay/DYPA noise
+      $(
+        "script, style, nav, header, footer, iframe, noscript, " +
+        ".cookie-banner, .popup, .sidebar, .menu, .navigation, .ads, .social-share, " +
+        ".breadcrumb, .breadcrumbs, .map-container, .filters, .facets, " +
+        ".portlet-topper, .portlet-title, .lfr-meta-actions, " +
+        ".taglib-header, .search-form, .related-assets"
+      ).remove();
+
+      // Specific cleanup for DYPA regions/filters sidebar if it leaks into body
+      // Identifies the container with the regions list
+      $(".layout-column-2, .span4, .col-md-4, .col-lg-4").remove(); // Remove sidebars in grid layouts
+
+      // PRE-PROCESSING: Inject spaces to prevent word concatenation
+      // Replace <br> with space
+      $('br').replaceWith(' ');
+      // Append space after block elements so "</div><div>" becomes " " instead of ""
+      $('p, div, li, tr, h1, h2, h3, h4, h5, h6').after(' ');
+      
+      // Try to find main content container - Prioritize Liferay article
+      let content = "";
+      const selectors = [
+        ".journal-content-article", // Liferay specific (DYPA)
+        "article",
+        "[role='main']",
+        ".main-content",
+        ".post-content",
+        ".entry-content",
+        "#main",
+        "#content",
+        ".content",
+      ];
+
+      for (const selector of selectors) {
+        const el = $(selector);
+        if (el.length > 0) {
+          // If we found multiple, join them (sometimes content is split)
+          if (el.length > 1) {
+             content = el.map((i, e) => $(e).text()).get().join(" ");
+          } else {
+             content = el.text();
+          }
+          break;
+        }
+      }
+
+      // Fallback to body if no main container found
+      if (!content) {
+        content = $("body").text();
+      }
+
+      // Clean up whitespace and typical garbage text
+      let cleanContent = content.replace(/\s+/g, " ").trim();
+      
+      // Remove specific garbage patterns seen in DYPA
+      // Removing the "Regions" block if it was captured
+      const regionsGarbage = /Θράκη\s*Κεντρική Μακεδονία\s*Δυτική Μακεδονία/i;
+      if (regionsGarbage.test(cleanContent)) {
+         // This is likely a page where we captured the sidebar. 
+         // Try to strip it out or fail gracefully?
+         // For now, let's try to remove that specific block if it's distinct
+         cleanContent = cleanContent.replace(/Θράκη\s*Κεντρική Μακεδονία.*?Ολόκληρη η Χώρα/gi, "");
+      }
+
+      return cleanContent;
+    } catch (error: any) {
+      console.warn(`⚠️ Deep fetch failed for ${url}: ${error.message}`);
+      return "";
+    }
+  }
+
   async processSource(sourceId: string, reporter?: IngestionReporter): Promise<{ processedCount: number; skipReasons: Record<string, number> }> {
     const source = await Source.findById(sourceId);
     if (!source || !source.enabled) {
@@ -1346,8 +1429,26 @@ export class IngestionService {
       }
 
       // Min content filter: apply ONLY to body/summary, NOT title
-      const content = (item.content || "").trim();
+      // Min content filter: apply ONLY to body/summary, NOT title
+      let content = (item.content || "").trim();
       const title = (item.title || "").trim();
+
+      // Deep Fetch: If content is too short (likely just a summary from RSS), fetch the full page
+      // Skip for Diavgeia (metadata based) and if URL is missing
+      const isDiavgeiaCheck = source.url.includes("diavgeia.gov.gr");
+      if (!isDiavgeiaCheck && content.length < 500 && item.url && item.url.startsWith("http")) {
+         console.log(`   🤿 Deep Fetching: Content short (${content.length} chars) - fetching full page from ${item.url}...`);
+         try {
+            const fullBody = await this.fetchPageBody(item.url);
+            if (fullBody && fullBody.length > content.length) {
+              console.log(`   ✅ Deep Fetch Success: ${content.length} -> ${fullBody.length} chars`);
+              item.content = fullBody;
+              content = fullBody; // Update local variable for subsequent checks
+            }
+         } catch (err: any) {
+            console.warn(`   ⚠️ Deep Fetch Error: ${err.message}`);
+         }
+      }
       
       // Skip generic titles
       if (isGenericTitle(title)) {

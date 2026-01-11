@@ -72,4 +72,10 @@ export const config = {
     from: process.env.EMAIL_FROM || 'noreply@benefitpulse.gr',
     fromName: process.env.EMAIL_FROM_NAME || 'BenefitPulse',
   },
+
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    mailto: process.env.VAPID_MAILTO || 'mailto:admin@benefitpulse.gr',
+  },
 };

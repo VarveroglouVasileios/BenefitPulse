@@ -5,8 +5,40 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+import { VitePWA } from "vite-plugin-pwa";
+
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["logo.svg"],
+      manifest: {
+        name: "BenefitPulse",
+        short_name: "BenefitPulse",
+        description: "Ενημερώσου για όλα τα επιδόματα και προγράμματα",
+        theme_color: "#2563eb",
+        background_color: "#ffffff",
+        display: "standalone",
+        start_url: "/",
+        icons: [
+          {
+            src: "logo.svg",
+            sizes: "any",
+            type: "image/svg+xml"
+          }
+        ]
+      },
+      workbox: {
+        importScripts: ["/push-sw.js"],
+        cleanupOutdatedCaches: true
+      },
+      devOptions: {
+        enabled: true,
+        type: 'module',
+      },
+    }),
+  ],
   resolve: {
     alias: {
       "@shared": path.resolve(__dirname, "../shared/src"),

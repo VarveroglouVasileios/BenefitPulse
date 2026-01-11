@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-01-10T16:05:07.207Z",
-  "totalSources": 39,
-  "sourcesWithSkips": 16,
+  "timestamp": "2026-01-11T15:19:07.881Z",
+  "totalSources": 29,
+  "sourcesWithSkips": 14,
   "skipReasons": {
     "AADE - myΘέρμανση (EL)": {
       "source": "AADE - myΘέρμανση (EL)",
@@ -87,20 +87,6 @@
         "error": 0
       }
     },
-    "ΔΥΠΑ - Active Employment Policies": {
-      "source": "ΔΥΠΑ - Active Employment Policies",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 1,
-        "contentTooShort": 0,
-        "genericTitle": 1,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
     "ΔΥΠΑ - Ανοικτά Προγράμματα": {
       "source": "ΔΥΠΑ - Ανοικτά Προγράμματα",
       "reasons": {
@@ -115,28 +101,14 @@
         "error": 0
       }
     },
-    "ΔΥΠΑ - Νέα/Ανακοινώσεις": {
-      "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις",
-      "reasons": {
-        "duplicate": 0,
-        "duplicateTitle": 12,
-        "contentTooShort": 0,
-        "genericTitle": 0,
-        "blockedByHeuristics": 0,
-        "rejected": 0,
-        "draft": 0,
-        "archived": 0,
-        "error": 0
-      }
-    },
     "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)": {
       "source": "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)",
       "reasons": {
         "duplicate": 0,
-        "duplicateTitle": 66,
-        "contentTooShort": 8,
+        "duplicateTitle": 75,
+        "contentTooShort": 0,
         "genericTitle": 0,
-        "blockedByHeuristics": 2,
+        "blockedByHeuristics": 1,
         "rejected": 0,
         "draft": 0,
         "archived": 0,

@@ -149,6 +149,11 @@ const router = createRouter({
       component: () => import("../views/admin/AdminContact.vue"),
       beforeEnter: [authGuard, adminGuard],
     },
+    {
+      path: "/:pathMatch(.*)*",
+      name: "NotFound",
+      component: () => import("../views/public/NotFound.vue"),
+    },
   ],
 });
 

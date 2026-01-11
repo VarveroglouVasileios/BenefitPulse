@@ -188,10 +188,12 @@ const OpportunitySchema = new Schema<IOpportunity>(
   }
 );
 
+
 // Compound indexes
 OpportunitySchema.index({ status: 1, publishedAt: -1 });
 OpportunitySchema.index({ deadlineAt: 1 });
-OpportunitySchema.index({ title: "text", summary: "text", tags: "text" });
+// Text index includes title, summary, tags AND source
+OpportunitySchema.index({ title: "text", summary: "text", tags: "text", source: "text" });
 
 export const Opportunity = mongoose.model<IOpportunity>(
   "Opportunity",
