@@ -33,7 +33,7 @@ if (!(global as any).DOMException) {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("web-streams-polyfill/polyfill");
 
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
@@ -41,6 +41,7 @@ import { config } from "./config/env";
 import { securityMiddleware, rateLimiter } from "./config/security";
 import { authMiddleware, adminMiddleware } from "./middleware/auth.middleware";
 import { validateObjectId } from "./middleware/validation.middleware";
+import * as Sentry from "@sentry/node";
 
 import { Opportunity } from "./models/opportunity.model";
 import { UserProfile } from "./models/profile.model";
@@ -74,6 +75,21 @@ import * as adminController from "./modules/admin/admin.controller";
 import { scheduleIngestionJobs } from "./jobs/schedules";
 
 const app = express();
+
+// Sentry (enable only when DSN is provided)
+if (config.sentry.enabled) {
+  Sentry.init({
+    dsn: config.sentry.dsn,
+    environment: config.nodeEnv,
+    tracesSampleRate: config.sentry.tracesSampleRate,
+    profilesSampleRate: config.sentry.profilesSampleRate,
+    integrations: [
+      Sentry.httpIntegration(),
+      Sentry.expressIntegration(),
+      Sentry.mongoIntegration(),
+    ],
+  });
+}
 
 // Middleware
 app.use(express.json());
@@ -394,6 +410,18 @@ app.post(
   adminMiddleware,
   adminController.replyToContact
 );
+
+// Sentry error handler must be before any other error middleware
+if (config.sentry.enabled) {
+  Sentry.setupExpressErrorHandler(app);
+}
+
+// Fallback error handler to avoid leaking stack traces
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("Unhandled error:", err);
+  res.status(500).json({ error: "Internal Server Error" });
+});
 
 async function start() {
   try {

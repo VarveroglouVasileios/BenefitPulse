@@ -127,7 +127,7 @@ cd frontend
 npm run dev
 ```
 
-Το backend θα τρέχει στο `http://localhost:3000` και το frontend στο `http://localhost:5173`.
+Το backend θα τρέχει στο `http://localhost:3001` και το frontend στο `http://localhost:5174`.
 
 ### Production Build
 
@@ -186,7 +186,7 @@ npm run cli help              # Show help
 
 ```bash
 # Trigger ingestion (απαιτείται admin authentication)
-curl -X POST http://localhost:3000/api/admin/actions/ingest \
+curl -X POST http://localhost:3001/api/admin/actions/ingest \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
 ```
 

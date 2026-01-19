@@ -50,7 +50,7 @@ export default defineConfig({
     exclude: [],
   },
   server: {
-    port: 5173,
+    port: 5174,
     host: "0.0.0.0", // Allow external connections (needed for Cloudflare tunnels)
     strictPort: false,
     // Allow Cloudflare tunnel domains
@@ -60,7 +60,7 @@ export default defineConfig({
     ],
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: "http://localhost:3001",
         changeOrigin: true,
       },
     },

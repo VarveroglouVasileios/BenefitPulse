@@ -4,8 +4,8 @@ dotenv.config();
 
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT || '3000', 10),
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  port: parseInt(process.env.PORT || '3001', 10),
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5174',
   
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/benefitpulse',
@@ -59,6 +59,13 @@ export const config = {
     retentionDays: parseInt(process.env.ANALYTICS_RETENTION_DAYS || '90', 10),
   },
   
+  sentry: {
+    enabled: !!process.env.SENTRY_DSN,
+    dsn: process.env.SENTRY_DSN || '',
+    tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0'),
+    profilesSampleRate: parseFloat(process.env.SENTRY_PROFILES_SAMPLE_RATE || '0'),
+  },
+
   email: {
     smtp: {
       host: process.env.SMTP_HOST || 'smtp.gmail.com',

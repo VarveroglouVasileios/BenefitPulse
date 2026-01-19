@@ -4,6 +4,7 @@ import { createHead } from '@unhead/vue/client';
 import App from './App.vue';
 import router from './router';
 import { registerSW } from 'virtual:pwa-register';
+import * as Sentry from '@sentry/vue';
 
 // Apply theme immediately before app initialization to prevent flash
 (function applyThemeBeforeMount() {
@@ -18,6 +19,22 @@ import { registerSW } from 'virtual:pwa-register';
 const app = createApp(App);
 const pinia = createPinia();
 const head = createHead();
+
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    app,
+    dsn: sentryDsn,
+    environment: import.meta.env.MODE ?? 'development',
+    integrations: [
+      Sentry.browserTracingIntegration({
+        router,
+        tracePropagationTargets: ["localhost", /^https?:\/\/benefitpulse/i],
+      }),
+    ],
+    tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? 0),
+  });
+}
 
 app.use(pinia);
 app.use(router);

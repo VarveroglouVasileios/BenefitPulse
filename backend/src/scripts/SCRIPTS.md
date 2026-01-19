@@ -86,13 +86,13 @@ npm run cli migrate:recompute-status --dry-run
 
 ```bash
 # Ingestion
-curl -X POST http://localhost:3000/api/admin/actions/ingest
+curl -X POST http://localhost:3001/api/admin/actions/ingest
 
 # Archive expired
-curl -X POST http://localhost:3000/api/admin/actions/archive-expired
+curl -X POST http://localhost:3001/api/admin/actions/archive-expired
 
 # Reset bad data
-curl -X POST http://localhost:3000/api/admin/actions/reset-bad-data
+curl -X POST http://localhost:3001/api/admin/actions/reset-bad-data
 ```
 
 ## 📊 Script Status

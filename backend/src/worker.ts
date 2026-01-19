@@ -44,6 +44,20 @@ import {
 } from "./jobs/matching.jobs";
 import { archiveExpiredOpportunitiesJob } from "./jobs/archive.jobs";
 import { verifyAllPublishedJob, verifyOpportunityJob } from "./jobs/verification.jobs";
+import * as Sentry from "@sentry/node";
+
+if (config.sentry.enabled) {
+  Sentry.init({
+    dsn: config.sentry.dsn,
+    environment: config.nodeEnv,
+    tracesSampleRate: config.sentry.tracesSampleRate,
+    profilesSampleRate: config.sentry.profilesSampleRate,
+    integrations: [
+      Sentry.httpIntegration(),
+      Sentry.mongoIntegration(),
+    ],
+  });
+}
 
 // Redis connection shared by all workers
 const connection = new Redis({
@@ -121,6 +135,19 @@ function onComplete(workerName: string) {
 function onFailed(workerName: string) {
   return (job: any, err: any) => {
     console.error(`❌ [${workerName}] Job ${job?.id} failed:`, err);
+    if (config.sentry.enabled) {
+      Sentry.captureException(err, {
+        tags: {
+          queue: workerName,
+          jobName: job?.name,
+        },
+        extra: {
+          jobId: job?.id,
+          attemptsMade: job?.attemptsMade,
+          data: job?.data,
+        },
+      });
+    }
   };
 }
 
