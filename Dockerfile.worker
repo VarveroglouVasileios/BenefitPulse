@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Αντιγράφουμε τα αρχεία (Backend + Shared)
 COPY backend ./backend
-COPY shared ./backend/shared
+COPY shared ./shared
 
 # Μπαίνουμε στο backend
 WORKDIR /app/backend
@@ -19,4 +19,4 @@ RUN npm run build
 RUN echo "=== 📂 CONTENTS OF DIST FOLDER 📂 ===" && ls -R dist && echo "========================================="
 
 # 🚀 ΕΚΚΙΝΗΣΗ WORKER: Ψάχνει το worker.js και το τρέχει
-CMD ["sh", "-c", "if [ -f dist/src/worker.js ]; then node dist/src/worker.js; else node dist/worker.js; fi"]
+CMD ["node", "dist/backend/src/worker.js"]
