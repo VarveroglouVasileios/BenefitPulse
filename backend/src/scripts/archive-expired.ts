@@ -44,7 +44,7 @@ require("web-streams-polyfill/polyfill");
 import { connectMongo } from "../db/mongo";
 import { Opportunity } from "../models/opportunity.model";
 import { RawItem } from "../models/rawItem.model";
-import { cleanAndValidate, RawItem as CleanerRawItem } from "../modules/ingestion/cleaner";
+import { cleanAndValidate, CleanerInput } from "../modules/ingestion/cleaner";
 import axios from "axios";
 import * as cheerio from "cheerio";
 
@@ -244,19 +244,25 @@ async function archiveExpired() {
             archiveReason = "RawItem content contains expired keywords";
             summaryExpiredCount++;
           } else {
-            const cleanerInput: CleanerRawItem = {
-              title: opp.title,
-              contentText: contentToCheck,
-              url: opp.officialUrl,
-              sourceName: opp.source,
+            // Get source URL from opportunity or use a default
+            const sourceUrl = opp.source || "";
+            
+            const cleanerInput: CleanerInput = {
+              nowIso: new Date().toISOString(),
+              source: opp.source || "unknown",
+              sourceUrl: sourceUrl,
+              itemUrl: opp.officialUrl,
+              rawTitle: opp.title,
+              rawContent: contentToCheck,
+              rawFetchedAtIso: rawItem?.fetchedAt?.toISOString() || new Date().toISOString(),
             };
 
-            const cleaned = cleanAndValidate(cleanerInput, today);
+            const cleaned = cleanAndValidate(cleanerInput);
 
             // Debug: log first few opportunities to see what Cleaner returns
             if (checkedCount <= 3) {
               console.log(
-                `   🔍 Cleaner result: isExpired=${cleaned.isExpired}, status=${cleaned.status}, expiryReason=${cleaned.expiryReason || "none"}`
+                `   🔍 Cleaner result: applicationStatus=${cleaned.applicationStatus}, status=${cleaned.status}`
               );
               console.log(
                 `      applicationEndAt: ${cleaned.applicationEndAt || "null"}`
@@ -265,15 +271,17 @@ async function archiveExpired() {
 
             // If Cleaner says it's expired or should be archived, archive it
             if (
-              cleaned.isExpired ||
+              cleaned.applicationStatus === "expired" ||
               cleaned.status === "archived" ||
-              cleaned.reject
+              cleaned.status === "rejected"
             ) {
               shouldArchive = true;
               archiveReason =
-                cleaned.expiryReason ||
-                cleaned.rejectReason ||
-                "Cleaner detected expiry";
+                cleaned.applicationStatus === "expired" 
+                  ? "Cleaner detected expiry"
+                  : cleaned.status === "archived"
+                  ? "Cleaner marked as archived"
+                  : "Cleaner marked as rejected";
               cleanerExpiredCount++;
             }
           }

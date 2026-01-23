@@ -217,5 +217,5 @@ if (require.main === module) {
     });
 }
 
-export { recomputeStatus };
+// Export is already declared above at line 52
 

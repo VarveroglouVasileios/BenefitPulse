@@ -225,7 +225,8 @@ function extractStatusSignals(html: string, url: string): {
       if (match[1]) {
         const startResult = parseDate(match[1]);
         if (startResult.date) {
-          dates.startAt = normalizeDate(startResult.date);
+          const normalized = normalizeDate(startResult.date);
+          dates.startAt = normalized || undefined;
         }
       }
       
@@ -233,7 +234,8 @@ function extractStatusSignals(html: string, url: string): {
         const endStr = match[2] || match[1];
         const endResult = parseDate(endStr);
         if (endResult.date) {
-          dates.endAt = normalizeDate(endResult.date);
+          const normalized = normalizeDate(endResult.date);
+          dates.endAt = normalized || undefined;
         }
       }
       
@@ -282,7 +284,8 @@ function extractStatusSignals(html: string, url: string): {
       if (match[1]) {
         const startResult = parseDate(match[1]);
         if (startResult.date) {
-          dates.startAt = normalizeDate(startResult.date);
+          const normalized = normalizeDate(startResult.date);
+          dates.startAt = normalized || undefined;
         }
       }
       

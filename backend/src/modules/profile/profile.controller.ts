@@ -50,7 +50,7 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
     const parseResult = userProfileSchema.safeParse(req.body);
 
     if (!parseResult.success) {
-      const errors = parseResult.error.errors.map((e) => ({
+      const errors = parseResult.error.errors.map((e: { path: (string | number)[]; message: string }) => ({
         field: e.path.join("."),
         message: e.message,
       }));

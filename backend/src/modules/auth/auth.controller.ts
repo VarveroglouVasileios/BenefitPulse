@@ -26,7 +26,7 @@ export async function register(req: Request, res: Response): Promise<void> {
     });
 
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map((e) => ({
+      const errors = validationResult.error.errors.map((e: { path: (string | number)[]; message: string }) => ({
         field: e.path.join("."),
         message: e.message,
       }));
@@ -75,7 +75,7 @@ export async function login(req: Request, res: Response): Promise<void> {
     const validationResult = loginSchema.safeParse({ email, password });
 
     if (!validationResult.success) {
-      const errors = validationResult.error.errors.map((e) => ({
+      const errors = validationResult.error.errors.map((e: { path: (string | number)[]; message: string }) => ({
         field: e.path.join("."),
         message: e.message,
       }));
