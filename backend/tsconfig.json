@@ -10,11 +10,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "strictNullChecks": false,
     "moduleResolution": "node",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "experimentalDecorators": true,
+    "strictBindCallApply": false,
     "emitDecoratorMetadata": true,
     "baseUrl": "..",
     "paths": {
