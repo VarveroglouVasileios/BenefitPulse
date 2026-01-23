@@ -1,0 +1,22 @@
+# Χρησιμοποιούμε Node.js 20
+FROM node:20-alpine
+
+# Ρυθμίζουμε τον φάκελο εργασίας
+WORKDIR /app
+
+# Αντιγράφουμε τα αρχεία (Backend + Shared)
+COPY backend ./backend
+COPY shared ./backend/shared
+
+# Μπαίνουμε στο backend
+WORKDIR /app/backend
+
+# Εγκατάσταση και Build
+RUN npm install
+RUN npm run build
+
+# Τυπώνουμε τα περιεχόμενα για debugging (αν χρειαστεί)
+RUN echo "=== 📂 CONTENTS OF DIST FOLDER 📂 ===" && ls -R dist && echo "========================================="
+
+# 🚀 ΕΚΚΙΝΗΣΗ WORKER: Ψάχνει το worker.js και το τρέχει
+CMD ["sh", "-c", "if [ -f dist/src/worker.js ]; then node dist/src/worker.js; else node dist/worker.js; fi"]
