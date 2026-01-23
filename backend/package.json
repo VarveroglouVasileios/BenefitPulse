@@ -4,6 +4,7 @@
   "description": "BenefitPulse Backend API",
   "main": "dist/main.js",
   "scripts": {
+    "prebuild": "if [ -d ../shared ]; then cd ../shared && npm install && npm run build; fi",
     "build": "tsc",
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",

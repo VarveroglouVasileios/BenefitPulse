@@ -254,7 +254,7 @@ async function archiveExpired() {
               itemUrl: opp.officialUrl,
               rawTitle: opp.title,
               rawContent: contentToCheck,
-              rawFetchedAtIso: rawItem?.fetchedAt?.toISOString() || new Date().toISOString(),
+              rawFetchedAtIso: rawItem?.createdAt?.toISOString() || new Date().toISOString(),
             };
 
             const cleaned = cleanAndValidate(cleanerInput);
