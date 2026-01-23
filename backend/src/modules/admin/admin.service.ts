@@ -130,13 +130,15 @@ export class AdminService {
     // 3. Re-create the opportunity
     const opportunityData = deletionLog.before;
     
-    // Ensure we don't carry over internal fields that shouldn't be set directly if needed
-    // But usually we want exact restore. Mongoose might complain about _id if we use creation.
-    // simpler to use insertMany or just create with _id
-    
-    const restored = new Opportunity(opportunityData);
-    restored.isNew = true; // Force insert even if _id is set (Mongoose specific)
-    await restored.save();
+    // Use findByIdAndUpdate with upsert to safely restore the document
+    // This will insert if the document doesn't exist, or update if it does
+    // Setting isNew = false ensures Mongoose treats it as an existing document
+    // and performs an UPDATE operation, which is correct for restoration
+    const restored = await Opportunity.findByIdAndUpdate(
+      id,
+      { $set: opportunityData },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
     // 4. Log the restore action
     await AdminAudit.create({

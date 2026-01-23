@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { notificationService } from '../services/notification.service';
+import { AuthRequest } from '../middleware/auth.middleware';
 
 export class NotificationsController {
   
@@ -7,7 +8,9 @@ export class NotificationsController {
   async subscribe(req: Request, res: Response) {
     try {
       const subscription = req.body;
-      const userId = (req as any).user?._id; // Assuming auth middleware populates user
+      // Use AuthRequest type and get userId from optional auth middleware
+      // If optionalAuthMiddleware is applied, userId will be set if token is present
+      const userId = (req as AuthRequest).userId;
 
       console.log('Received subscription request:', { 
         endpoint: subscription?.endpoint, 

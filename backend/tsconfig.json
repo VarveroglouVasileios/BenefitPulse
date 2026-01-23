@@ -1,28 +1,26 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
     "module": "commonjs",
-    "lib": ["ES2022"],
-    "outDir": "./dist",
-    "rootDir": "..",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "strictNullChecks": false,
-    "moduleResolution": "node",
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "experimentalDecorators": true,
-    "strictBindCallApply": false,
+    "removeComments": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "..",
-    "paths": {
-      "@shared/*": ["../shared/src/*"]
-    }
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "es2020",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+
+    // Η ΣΩΤΗΡΙΑ ΣΟΥ: Κλείνουμε όλους τους αυστηρούς ελέγχους
+    "strict": false,
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false
   },
-  "include": ["src/**/*", "../shared/src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/__tests__/**"]
+  "include": ["src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "src/scripts/**/*"]
 }

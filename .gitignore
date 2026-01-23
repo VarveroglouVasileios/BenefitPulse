@@ -41,5 +41,9 @@ coverage/
 # Temporary
 tmp/
 temp/
+
+# Runtime output files (generated during ingestion)
+skip-reasons.json
+**/skip-reasons.json
 reports/
 **/reports/
