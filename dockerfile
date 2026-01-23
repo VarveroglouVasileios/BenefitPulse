@@ -7,9 +7,8 @@ WORKDIR /app
 # 1. Αντιγράφουμε το backend
 COPY backend ./backend
 
-# 2. Το Κόλπο: Αντιγράφουμε το shared ΜΕΣΑ στο backend
-# Έτσι τα imports "../shared" και "../../shared" θα το βρίσκουν εκεί που περιμένουν!
-COPY shared ./backend/shared
+# 2. Shared module: Αντιγράφουμε στο root για να είναι sibling του backend
+COPY shared ./shared
 
 # 3. Μπαίνουμε στο backend και χτίζουμε
 WORKDIR /app/backend

@@ -2,8 +2,8 @@ import { NavigationGuardNext, RouteLocationNormalized } from "vue-router";
 import { useAuthStore } from "../stores/auth.store";
 
 export async function authGuard(
-  to: RouteLocationNormalized,
-  from: RouteLocationNormalized,
+  _to: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
   next: NavigationGuardNext
 ): Promise<void> {
   const authStore = useAuthStore();
@@ -26,8 +26,8 @@ export async function authGuard(
 }
 
 export async function adminGuard(
-  to: RouteLocationNormalized,
-  from: RouteLocationNormalized,
+  _to: RouteLocationNormalized,
+  _from: RouteLocationNormalized,
   next: NavigationGuardNext
 ): Promise<void> {
   const authStore = useAuthStore();

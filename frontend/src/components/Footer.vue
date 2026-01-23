@@ -54,12 +54,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { useAuthStore } from "../stores/auth.store";
+import { ref } from "vue";
+// import { useAuthStore } from "../stores/auth.store";
 import ContactModal from "./ContactModal.vue";
 
-const authStore = useAuthStore();
-const isAuthenticated = computed(() => authStore.isAuthenticated);
+// const authStore = useAuthStore();
+// const isAuthenticated = computed(() => authStore.isAuthenticated);
 
 const contactModalOpen = ref(false);
 const contactModalType = ref<"error" | "source" | "general">("general");

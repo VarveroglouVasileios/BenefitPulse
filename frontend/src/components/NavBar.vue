@@ -118,7 +118,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { api } from "../api/endpoints";
+// import { api } from "../api/endpoints";
 import { useAuthStore } from "../stores/auth.store";
 import { useThemeStore } from "../stores/theme.store";
 // import { usePWA } from "../composables/usePWA";
@@ -155,15 +155,15 @@ watch(() => route.path, () => {
   closeMobileMenu();
 });
 
-async function sendTestNotification() {
-  try {
-    await api.notifications.test();
-    alert("Test notification sent!");
-  } catch (error) {
-    console.error("Failed to send test notification:", error);
-    alert("Failed to send test notification");
-  }
-}
+// async function sendTestNotification() {
+//   try {
+//     await api.notifications.test();
+//     alert("Test notification sent!");
+//   } catch (error) {
+//     console.error("Failed to send test notification:", error);
+//     alert("Failed to send test notification");
+//   }
+// }
 
 async function handleLogout() {
   await authStore.logout();

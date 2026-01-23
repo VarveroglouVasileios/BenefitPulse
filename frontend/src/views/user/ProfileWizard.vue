@@ -105,11 +105,11 @@ async function handleSubmit() {
   loading.value = true;
   try {
     await profileStore.updateProfile({
-      ageRange: profile.value.ageRange || undefined,
-      incomeRange: profile.value.incomeRange || undefined,
-      employmentStatus: profile.value.employmentStatus || undefined,
+      ageRange: (profile.value.ageRange || undefined) as any,
+      incomeRange: (profile.value.incomeRange || undefined) as any,
+      employmentStatus: (profile.value.employmentStatus || undefined) as any,
       isStudent: profile.value.isStudent,
-      region: profile.value.region || undefined,
+      region: (profile.value.region || undefined) as any,
     });
     router.push("/for-you");
   } catch (error) {

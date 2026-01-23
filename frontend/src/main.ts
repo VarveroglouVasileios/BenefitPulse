@@ -29,9 +29,9 @@ if (sentryDsn) {
     integrations: [
       Sentry.browserTracingIntegration({
         router,
-        tracePropagationTargets: ["localhost", /^https?:\/\/benefitpulse/i],
       }),
     ],
+    tracePropagationTargets: ["localhost", /^https?:\/\/benefitpulse/i],
     tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? 0),
   });
 }

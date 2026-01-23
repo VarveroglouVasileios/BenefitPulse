@@ -17,7 +17,7 @@ import { ref, onMounted } from "vue";
 import { api } from "../../api/endpoints";
 import OpportunityCard from "../../components/OpportunityCard.vue";
 
-const opportunities = ref([]);
+const opportunities = ref<any[]>([]);
 const loading = ref(true);
 
 onMounted(async () => {

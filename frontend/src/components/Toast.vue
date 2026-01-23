@@ -13,7 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, onMounted } from 'vue';
+import { computed, watch } from 'vue';
 
 const props = defineProps<{
   show: boolean;
