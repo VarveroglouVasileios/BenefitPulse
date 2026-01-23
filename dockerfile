@@ -17,4 +17,4 @@ RUN npm run build
 
 # 4. Εκκίνηση
 EXPOSE 3001
-CMD ["node", "dist/src/main.js"]
+CMD ["node", "dist/backend/src/main.js"]
