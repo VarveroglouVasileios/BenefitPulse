@@ -105,4 +105,5 @@ export interface EventData {
   opportunityId?: string;
   userId?: string;
   sessionId?: string;
+  data?: any; // Additional metadata
 }

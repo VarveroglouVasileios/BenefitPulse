@@ -10,7 +10,7 @@ const connection = new Redis({
   maxRetriesPerRequest: null,
 });
 
-export const ingestionQueue = new Queue("ingestion", { connection });
-export const aggregationQueue = new Queue("aggregation", { connection });
-export const verificationQueue = new Queue("verification", { connection });
-export const matchingQueue = new Queue("matching", { connection });
+export const ingestionQueue = new Queue("ingestion", { connection: connection as any });
+export const aggregationQueue = new Queue("aggregation", { connection: connection as any });
+export const verificationQueue = new Queue("verification", { connection: connection as any });
+export const matchingQueue = new Queue("matching", { connection: connection as any });

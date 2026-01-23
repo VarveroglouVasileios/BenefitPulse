@@ -81,7 +81,7 @@ const ingestionWorker = new Worker(
       await processSourceJob(job);
     }
   },
-  { connection }
+  { connection: connection as any }
 );
 
 // Matching worker
@@ -95,7 +95,7 @@ const matchingWorker = new Worker(
       await recomputeOpportunityMatchesJob(job as any);
     }
   },
-  { connection }
+  { connection: connection as any }
 );
 
 // Aggregation / housekeeping worker
@@ -109,7 +109,7 @@ const aggregationWorker = new Worker(
       await archiveExpiredOpportunitiesJob(job);
     }
   },
-  { connection }
+  { connection: connection as any }
 );
 
 // Verification worker
@@ -123,7 +123,7 @@ const verificationWorker = new Worker(
       await verifyOpportunityJob(job);
     }
   },
-  { connection }
+  { connection: connection as any }
 );
 
 function onComplete(workerName: string) {

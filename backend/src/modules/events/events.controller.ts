@@ -16,7 +16,7 @@ export async function trackEvent(
     const userId = authReq.userId;
     const sessionId = (req.headers["x-session-id"] as string) || data.sessionId;
 
-    await eventsService.trackEvent(data, sessionId, userId);
+    await eventsService.trackEvent(data as any, sessionId, userId);
     res.status(201).json({ message: "Event tracked" });
   } catch (error: any) {
     const errorMessage = config.nodeEnv === 'production' 

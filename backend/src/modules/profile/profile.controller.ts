@@ -61,7 +61,7 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const updates = parseResult.data;
+    const updates = parseResult.data as any;
     const profile = await profileService.updateProfile(userId, updates);
 
     // Enqueue background job to recompute matches for this user

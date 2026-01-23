@@ -128,6 +128,7 @@ export const eventDataSchema = z.object({
   opportunityId: z.string().optional(),
   userId: z.string().optional(),
   sessionId: z.string().optional(),
+  data: z.any().optional(),
 });
 
 export const registerSchema = z
