@@ -62,7 +62,6 @@ if (config.sentry.enabled) {
 const connection = new Redis({
   host: config.redis.host,
   port: config.redis.port,
-  username: "default", 
   password: config.redis.password,
   maxRetriesPerRequest: null,
 });

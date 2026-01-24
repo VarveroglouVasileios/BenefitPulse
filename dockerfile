@@ -10,6 +10,10 @@ COPY backend ./backend
 # 2. Shared module: Αντιγράφουμε στο root για να είναι sibling του backend
 COPY shared ./shared
 
+# 2b. Install shared dependencies
+WORKDIR /app/shared
+RUN npm install
+
 # 3. Μπαίνουμε στο backend και χτίζουμε
 WORKDIR /app/backend
 RUN npm install

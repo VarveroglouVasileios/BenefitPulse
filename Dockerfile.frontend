@@ -7,19 +7,18 @@ WORKDIR /app
 COPY shared ./shared
 COPY frontend ./frontend
 
+# Install shared dependencies
+WORKDIR /app/shared
+RUN npm install
+
 # Μπαίνουμε στο frontend
 WORKDIR /app/frontend
 
 # Εγκατάσταση εξαρτήσεων
 RUN npm install
 
-# 🔧 FIX 1: Εγκαθιστούμε χειροκίνητα το Zod που λείπει
-RUN npm install zod
-
-# 🔧 FIX 2: Χτίζουμε με 'vite build' απευθείας
-# (Το 'npm run build' τρέχει 'vue-tsc' που ελέγχει αυστηρά τους τύπους και αποτυγχάνει.
-# Το 'vite build' απλά χτίζει το site αγνοώντας τα TypeScript errors.)
-RUN npx vite build
+# Build
+RUN npm run build
 
 # Φάση 2: Serve με Nginx
 FROM nginx:alpine
