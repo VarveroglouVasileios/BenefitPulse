@@ -59,12 +59,15 @@ if (config.sentry.enabled) {
   });
 }
 
-const connection = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-  maxRetriesPerRequest: null,
-});
+// Use REDIS_URL if available, otherwise fallback to individual params
+const connection = config.redis.url 
+  ? new Redis(config.redis.url, { maxRetriesPerRequest: null })
+  : new Redis({
+      host: config.redis.host,
+      port: config.redis.port,
+      password: config.redis.password,
+      maxRetriesPerRequest: null,
+    });
 
 console.log("🚀 Starting worker entrypoint...");
 console.log("📋 Queues: ingestion, matching, aggregation, verification");
