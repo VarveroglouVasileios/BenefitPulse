@@ -59,10 +59,10 @@ if (config.sentry.enabled) {
   });
 }
 
-// Redis connection shared by all workers
 const connection = new Redis({
   host: config.redis.host,
   port: config.redis.port,
+  username: "default", 
   password: config.redis.password,
   maxRetriesPerRequest: null,
 });
