@@ -189,7 +189,7 @@ function validateField(field: string) {
 
   if (!validationResult.success) {
     const fieldError = validationResult.error.errors.find(
-      (e) => e.path[0] === field
+      (e: any) => e.path[0] === field
     );
     if (fieldError) {
       (errors as any)[field] = fieldError.message;
@@ -212,7 +212,7 @@ function validateForm(): boolean {
   });
 
   if (!validationResult.success) {
-    validationResult.error.errors.forEach((error) => {
+    validationResult.error.errors.forEach((error: any) => {
       const field = error.path[0] as string;
       (errors as any)[field] = error.message;
     });

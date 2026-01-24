@@ -168,11 +168,11 @@ export const registerSchema = z
         /^[Α-Ωα-ωA-Za-z\s]+$/,
         "Το επώνυμο μπορεί να περιέχει μόνο γράμματα"
       ),
-    acceptTerms: z.boolean().refine((val) => val === true, {
+    acceptTerms: z.boolean().refine((val: boolean) => val === true, {
       message: "Πρέπει να αποδεχτείτε τους όρους χρήσης",
     }),
   })
-  .refine((data) => data.password === data.passwordConfirm, {
+  .refine((data: any) => data.password === data.passwordConfirm, {
     message: "Οι κωδικοί δεν ταιριάζουν",
     path: ["passwordConfirm"],
   });
