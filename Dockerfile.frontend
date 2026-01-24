@@ -1,0 +1,27 @@
+# Φάση 1: Build (Χτίσιμο της εφαρμογής)
+FROM node:20-alpine as builder
+
+WORKDIR /app
+
+# Αντιγράφουμε και τους δύο φακέλους για να βλέπει το shared
+COPY shared ./shared
+COPY frontend ./frontend
+
+# Μπαίνουμε στο frontend
+WORKDIR /app/frontend
+
+# Εγκατάσταση και Build
+RUN npm install
+RUN npm run build
+
+# Φάση 2: Serve (Σερβίρισμα με Nginx)
+FROM nginx:alpine
+
+# Αντιγράφουμε τα έτοιμα αρχεία από τη φάση 1
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
+
+# Ρύθμιση για να δουλεύουν τα refresh (να μην βγάζει 404)
+RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
