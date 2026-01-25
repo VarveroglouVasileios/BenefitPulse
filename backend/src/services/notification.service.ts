@@ -78,6 +78,26 @@ export class NotificationService {
     if (!endpoint) return;
     await PushSubscription.deleteOne({ endpoint });
   }
+
+  async sendToAdmins(payload: any): Promise<void> {
+    try {
+      const { User } = require('../models/user.model');
+      // Find all admins
+      const admins = await User.find({ role: 'admin' }).select('_id');
+      const adminIds = admins.map((u: any) => u._id.toString());
+      
+      if (adminIds.length === 0) return;
+
+      // Find subscriptions for admins
+      const subscriptions = await PushSubscription.find({ userId: { $in: adminIds } });
+      console.log(`Sending notification to ${subscriptions.length} admin subscriptions`);
+      
+      const promises = subscriptions.map((sub: any) => this.sendNotification(sub, payload));
+      await Promise.allSettled(promises);
+    } catch (error) {
+      console.error('Failed to send notifications to admins:', error);
+    }
+  }
 }
 
 export const notificationService = new NotificationService();

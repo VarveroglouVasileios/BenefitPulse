@@ -97,6 +97,11 @@ export const api = {
       list: (params?: any) => http.get('/admin/contact', { params }),
       reply: (id: string, message: string) => http.post(`/admin/contact/${id}/reply`, { message }),
     },
+    actions: {
+      ingest: () => http.post('/admin/actions/ingest'),
+      archiveExpired: () => http.post('/admin/actions/archive-expired'),
+      resetBadData: () => http.post('/admin/actions/reset-bad-data'),
+    },
   },
   // Notifications
   notifications: {

@@ -465,5 +465,11 @@ export class IngestionReporter {
   getRunId(): string {
     return this.runId;
   }
+  /**
+   * Get start time
+   */
+  getStartTime(): number {
+    return this.startedAt.getTime();
+  }
 }
 

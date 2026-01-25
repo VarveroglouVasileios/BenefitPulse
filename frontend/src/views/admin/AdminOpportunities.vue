@@ -39,6 +39,11 @@
           <option value="program">Πρόγραμμα</option>
           <option value="public_call">Προκήρυξη</option>
         </select>
+
+        <label class="checkbox-filter" title="Εμφάνιση ειδήσεων, διαγωνισμών και υπηρεσιακών σελίδων">
+          <input type="checkbox" v-model="filters.showTendersNews" />
+          <span class="checkbox-label">Όλα (News/Service)</span>
+        </label>
       </div>
     </div>
 
@@ -151,7 +156,8 @@
     <!-- Pagination Footer -->
     <div v-if="opportunities.length > 0" class="pagination-footer">
       <div class="pagination-info">
-        Εμφάνιση {{ startItem }}-{{ endItem }} από {{ total }} αποτελέσματα
+        Εμφάνιση {{ startItem }}-{{ endItem }} από {{ total || 0 }} αποτελέσματα
+        <span v-if="loading" class="loading-indicator">(Ανανέωση...)</span>
       </div>
       <div class="pagination-controls">
         <button 
@@ -197,7 +203,11 @@ import ConfirmModal from "../../components/ConfirmModal.vue";
 
 const adminStore = useAdminStore();
 const { opportunities, loading, total, page, limit } = storeToRefs(adminStore);
-const filters = ref({ status: "", type: "" });
+// 220: filters definition update
+const filters = ref({ status: "", type: "", showTendersNews: false });
+
+
+
 
 const totalPages = computed(() => Math.ceil(total.value / limit.value));
 const startItem = computed(() => (page.value - 1) * limit.value + 1);
@@ -380,21 +390,34 @@ const fetchData = async () => {
   }
 };
 
-const debouncedSearch = debounce(() => {
-  fetchData();
-}, 500);
 
-watch(searchQuery, () => {
-  debouncedSearch();
-});
 
 watch(
   filters,
   () => {
-    fetchData();
+    adminStore.setPage(1); // Reset to page 1 to avoid empty results
+    // The store action handles the fetch, so we don't need to call fetchData() manually if setPage does it
+    // But currently fetchData uses local state search query, so let's call fetchData directly after resetting page state
+    // Actually setPage triggers fetch, but with its own params. Let's act strictly:
+    // adminStore.page = 1; (reactive) -> setPage updates state and fetches.
   },
   { deep: true }
 );
+
+// Better watcher implementation:
+watch(
+  [filters, searchQuery],
+  () => {
+    // Reset page to 1 on any filter/search change
+    adminStore.page = 1; 
+    debouncedFetch();
+  },
+  { deep: true }
+);
+
+const debouncedFetch = debounce(() => {
+  fetchData();
+}, 300);
 
 onMounted(() => {
   // Initial fetch
@@ -792,8 +815,26 @@ tr:hover {
   }
   
   .filter-group {
-    flex-direction: column;
-    width: 100%;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  
+  .checkbox-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+  }
+  
+  .checkbox-filter:hover {
+    border-color: var(--accent-primary);
   }
   
   .filter-select {
@@ -811,4 +852,32 @@ tr:hover {
     text-align: center;
   }
 }
+  .filter-group {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  
+  .checkbox-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+  }
+  
+  .checkbox-filter:hover {
+    border-color: var(--accent-primary);
+  }
+  
+  .checkbox-filter input[type="checkbox"] {
+    accent-color: var(--accent-primary);
+    width: 1rem;
+    height: 1rem;
+  }
 </style>

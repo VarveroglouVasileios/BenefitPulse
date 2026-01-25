@@ -188,10 +188,9 @@ export class AdminService {
     // Kind filter: exclude tenders/news unless admin filter enabled
     if (!query.showTendersNews) {
       filter.kind = { $nin: ["service_info", "tender", "news"] };
-    } else {
-      // Admin: allow tenders/news but exclude service_info
-      filter.kind = { $ne: "service_info" };
-    }
+    } 
+    // If showTendersNews is true, we show EVERYTHING (no kind filter)
+    // This allows the admin to see "service_info" which might be misclassified opportunities
 
     // Search filter (Title or Summary)
     if (query.search) {
@@ -403,19 +402,19 @@ export class AdminService {
   }
 
   // Admin Actions - Manual Triggers
-  async triggerIngestion(adminId: string): Promise<{ count: number }> {
+  async triggerIngestion(adminId: string): Promise<{ count: number; durationMs: number }> {
     const service = new IngestionService();
-    const count = await service.processAllEnabledSources();
+    const result = await service.processAllEnabledSources();
 
     await AdminAudit.create({
       adminId,
       action: "trigger_ingestion",
       resourceType: "system",
       // resourceId omitted for system-level actions
-      after: { count },
+      after: { count: result.count, durationMs: result.durationMs },
     });
 
-    return { count };
+    return { count: result.count, durationMs: result.durationMs };
   }
 
   async archiveExpiredOpportunities(adminId: string): Promise<{
@@ -459,15 +458,60 @@ export class AdminService {
         "η πλατφορμα εκλεισε",
         "ολοκλήρωση αιτήσεων",
         "ολοκληρωση αιτησεων",
-        // New keywords based on user feedback (results/objections phase = application closed)
-        "υποβολή ενστάσεων",
-        "υποβολη ενστασεων",
-        "προσωρινά αποτελέσματα",
-        "προσωρινα αποτελεσματα",
-        "οριστικά αποτελέσματα",
-        "οριστικα αποτελεσματα",
       ];
       return expiredKeywords.some((kw) => lowerText.includes(kw));
+    }
+
+    // Attempt to extract expiration date from text (e.g. "λήγει στις 16/12/2025")
+    function findExpirationDateInText(text: string): Date | null {
+       const lower = text.toLowerCase();
+       // Patterns: 
+       // λήγει στις DD/MM/YYYY
+       // λήγει την DD/MM/YYYY
+       // έως DD/MM/YYYY
+       // εως DD/MM/YYYY
+       // μέχρι DD/MM/YYYY
+       // μεχρι DD/MM/YYYY
+       // deadline: DD/MM/YYYY
+       const regex = /(?:λήγει|εως|έως|μέχρι|μεχρι|deadline)[\s\S]{1,15}?(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/i;
+       const match = lower.match(regex);
+       if (match) {
+         try {
+           const day = parseInt(match[1]);
+           const month = parseInt(match[2]) - 1; // 0-based
+           const year = parseInt(match[3]);
+           const date = new Date(year, month, day);
+           // Validate date logic
+           if (date.getFullYear() === year && date.getMonth() === month) {
+             return date;
+           }
+         } catch { return null; }
+       }
+       
+       // Handle text months: "16 Δεκεμβρίου 2025"
+       const textMonthRegex = /(?:λήγει|εως|έως|μέχρι|μεχρι|deadline)[\s\S]{1,15}?(\d{1,2})\s+(ιανουαρίου|φεβρουαρίου|μαρτίου|απριλίου|μαΐου|μαιου|ιουνίου|ιουλίου|αυγούστου|σεπτεμβρίου|οκτωβρίου|νοεμβρίου|δεκεμβρίου)\s+(\d{4})/i;
+       const matchText = lower.match(textMonthRegex);
+       if (matchText) {
+         try {
+           const day = parseInt(matchText[1]);
+           const monthStr = matchText[2];
+           const year = parseInt(matchText[3]);
+           
+           const months = [
+             'ιανουαρίου', 'φεβρουαρίου', 'μαρτίου', 'απριλίου', 'μαΐου', 'ιουνίου', 
+             'ιουλίου', 'αυγούστου', 'σεπτεμβρίου', 'οκτωβρίου', 'νοεμβρίου', 'δεκεμβρίου'
+           ];
+           // Handle alternate "μαΐου" / "μαιου"
+           let monthIndex = months.indexOf(monthStr);
+           if (monthIndex === -1 && monthStr === 'μαιου') monthIndex = 4;
+           
+           if (monthIndex > -1) {
+              return new Date(year, monthIndex, day);
+           }
+         } catch { return null; }
+       }
+       
+       return null;
     }
 
     function hasPastYearInTitle(title: string): boolean {
@@ -531,21 +575,23 @@ export class AdminService {
         deadlineExpiredCount++;
       }
 
-      // Check 2: Summary/title contains expired keywords OR title has past year
-      // CRITICAL: Only run heuristic checks if we DON'T have a valid future deadline
-      // If we have an explicit future deadline, trust it!
+      // Check 2: Summary/title contains expired keywords OR title has past year OR explicit text expiration date
       const hasFutureDeadline = opp.deadlineAt && opp.deadlineAt > now;
       
       if (!shouldArchive && !hasFutureDeadline) {
-        if (hasPastYearInTitle(opp.title)) {
+        const combinedText = `${opp.title} ${opp.summary || ''}`;
+        
+        // Check for explicit expiration date in text first (Specific > General)
+        const textExpiration = findExpirationDateInText(combinedText);
+        if (textExpiration && textExpiration < now) {
+           shouldArchive = true;
+           deadlineExpiredCount++; // Count as deadline expired since we found a date
+        } else if (hasPastYearInTitle(opp.title)) {
              shouldArchive = true;
              summaryExpiredCount++; 
-        } else {
-             const combinedText = `${opp.title} ${opp.summary}`;
-             if (hasExpiredKeywords(combinedText)) {
-               shouldArchive = true;
-               summaryExpiredCount++;
-             }
+        } else if (hasExpiredKeywords(combinedText)) {
+             shouldArchive = true;
+             summaryExpiredCount++;
         }
       }
 
@@ -587,7 +633,19 @@ export class AdminService {
               }
             }
 
-            if (hasExpiredKeywords(contentToCheck)) {
+            if (rawItem.content.length < 500 && opp.officialUrl) {
+              const fullContent = await fetchFullPageContent(opp.officialUrl);
+              if (fullContent && fullContent.length > rawItem.content.length) {
+                contentToCheck = fullContent;
+              }
+            }
+            
+            // Check text expiration in full content too
+            const contentExpiration = findExpirationDateInText(contentToCheck);
+            if (contentExpiration && contentExpiration < now) {
+               shouldArchive = true;
+               deadlineExpiredCount++;
+            } else if (hasExpiredKeywords(contentToCheck)) {
               shouldArchive = true;
               summaryExpiredCount++;
             } else {

@@ -27,7 +27,7 @@ function generateSessionId(): string {
 }
 
 const http: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: "/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -82,6 +82,12 @@ http.interceptors.response.use(
       url.includes("/auth/login") || url.includes("/auth/register");
     const isAuthMe = url.includes("/auth/me");
     const isProfile = url.includes("/profile");
+
+    // Suppress console errors for 404 on /profile
+    if (status === 404 && isProfile) {
+      // Mark as silent to prevent console logging
+      error.silent = true;
+    }
 
     if (status === 401) {
       // Clear user state when we get 401 (cookie expired or invalid)

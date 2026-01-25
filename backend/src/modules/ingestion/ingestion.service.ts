@@ -867,13 +867,47 @@ export class IngestionService {
 
   async fetchPageBody(url: string, headers: any = {}): Promise<string> {
     try {
+      // 1. Skip Binary Files based on Extension (Fastest Check)
+      const binaryExtensions = [
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', 
+        '.zip', '.rar', '.7z', '.tar', '.gz', 
+        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.mp4', '.mp3'
+      ];
+      
+      const lowerUrl = url.toLowerCase();
+      // Check if URL ends with extension or contains extension before query params
+      const hasBinaryExt = binaryExtensions.some(ext => {
+         return lowerUrl.endsWith(ext) || lowerUrl.includes(ext + '?') || lowerUrl.includes(ext + '#');
+      });
+
+      if (hasBinaryExt) {
+        console.log(`   ⏭️  Skipping deep fetch for binary file type: ${url}`);
+        return "";
+      }
+
       // Small delay to be polite
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const response = await axios.get(url, {
         headers: { ...headers, "User-Agent": DEFAULT_HEADERS["User-Agent"] },
-        timeout: 10000,
+        timeout: 15000, // Increased to 15s (was 10s)
+        maxContentLength: 5 * 1024 * 1024, // Max 5MB
       });
+
+      // 2. Skip based on Content-Type header (Reliable Check)
+      const contentType = response.headers['content-type'] || '';
+      if (
+        contentType.includes('application/pdf') ||
+        contentType.includes('application/msword') ||
+        contentType.includes('application/vnd') ||
+        contentType.includes('application/zip') ||
+        contentType.includes('image/') ||
+        contentType.includes('audio/') ||
+        contentType.includes('video/')
+      ) {
+         console.log(`   ⏭️  Skipping deep fetch for non-HTML content-type: ${contentType}`);
+         return "";
+      }
 
       const $ = cheerio.load(response.data);
 
@@ -1414,29 +1448,25 @@ export class IngestionService {
       console.log(`\n📥 EXTRACTED: "${item.title?.substring(0, 60)}..." | URL: ${item.url?.substring(0, 80)}...`);
 
       // Check if already exists - upsert instead of skip
+      // Check if already exists by hash
       const existingRawItem = await RawItem.findOne({ hash });
-      if (existingRawItem) {
-        // Update existing raw item (upsert)
-        existingRawItem.title = item.title;
-        existingRawItem.content = item.content;
-        existingRawItem.url = item.url;
-        existingRawItem.publishedAt = item.publishedAt;
-        existingRawItem.metadata = item.metadata || {};
-        existingRawItem.updatedAt = new Date();
-        await existingRawItem.save();
-        console.log(`   🔄 UPDATED existing raw item (will reprocess)`);
-        // Continue processing (don't skip) - will update opportunity too
-      }
 
-      // Min content filter: apply ONLY to body/summary, NOT title
       // Min content filter: apply ONLY to body/summary, NOT title
       let content = (item.content || "").trim();
       const title = (item.title || "").trim();
 
-      // Deep Fetch: If content is too short (likely just a summary from RSS), fetch the full page
+      // Deep Fetch: If content is too short AND we don't have a better version in DB
       // Skip for Diavgeia (metadata based) and if URL is missing
       const isDiavgeiaCheck = source.url.includes("diavgeia.gov.gr");
-      if (!isDiavgeiaCheck && content.length < 500 && item.url && item.url.startsWith("http")) {
+      
+      // Only deep fetch if we don't have an existing item OR the existing item also has short content
+      const shouldDeepFetch = !isDiavgeiaCheck && 
+                              content.length < 500 && 
+                              item.url && 
+                              item.url.startsWith("http") &&
+                              (!existingRawItem || (existingRawItem.content && existingRawItem.content.length < 500));
+
+      if (shouldDeepFetch) {
          console.log(`   🤿 Deep Fetching: Content short (${content.length} chars) - fetching full page from ${item.url}...`);
          try {
             const fullBody = await this.fetchPageBody(item.url);
@@ -1448,6 +1478,11 @@ export class IngestionService {
          } catch (err: any) {
             console.warn(`   ⚠️ Deep Fetch Error: ${err.message}`);
          }
+      } else if (existingRawItem && existingRawItem.content && existingRawItem.content.length > content.length) {
+         // Keep existing longer content if we are just updating metadata
+         item.content = existingRawItem.content;
+         content = existingRawItem.content;
+         console.log(`   ℹ️  Preserving existing content (${content.length} chars)`);
       }
       
       // Skip generic titles
@@ -1502,7 +1537,13 @@ export class IngestionService {
       }
 
       // Prevent duplicates from RSS/Discovery: Check for duplicate title before creating RawItem
-      const existingByTitle = await RawItem.findOne({ title: item.title });
+      // Exclude current item (by hash) if it exists
+      const duplicateQuery = { 
+        title: item.title, 
+        ...(existingRawItem ? { _id: { $ne: existingRawItem._id } } : {}) 
+      };
+      const existingByTitle = await RawItem.findOne(duplicateQuery);
+      
       if (existingByTitle) {
         skipReasons.duplicateTitle = (skipReasons.duplicateTitle || 0) + 1;
         console.log(`   ⏭️  SKIP: Skipping duplicate title - "${item.title.substring(0, 50)}"`);
@@ -1513,7 +1554,7 @@ export class IngestionService {
       }
 
       // Save raw item (upsert if exists)
-      let rawItem = await RawItem.findOne({ hash });
+      let rawItem = existingRawItem;
       const isDuplicate = !!rawItem;
       if (rawItem) {
         // Update existing
@@ -1525,7 +1566,7 @@ export class IngestionService {
         rawItem.processed = false; // Reprocess
         rawItem.updatedAt = new Date();
         await rawItem.save();
-        // Don't skip duplicates - reprocess them to update opportunities
+        console.log(`   🔄 UPDATED existing raw item`);
       } else {
         // Create new
         rawItem = await RawItem.create({
@@ -1857,7 +1898,7 @@ export class IngestionService {
     return { processedCount, skipReasons };
   }
 
-  async processAllEnabledSources(): Promise<number> {
+  async processAllEnabledSources(): Promise<{ count: number; durationMs: number; failedCount: number }> {
     // Initialize reporter
     const debugMode = config.ingestion?.debug || false;
     const reporter = new IngestionReporter(debugMode);
@@ -1943,33 +1984,16 @@ export class IngestionService {
     console.log(`\n📦 Total items processed: ${totalProcessed}`);
     console.log("=".repeat(60) + "\n");
 
-    // Generate and save comprehensive report
-    try {
-      const reportPath = await reporter.generateReport();
-      console.log(`\n📊 Ingestion report saved to: ${reportPath}`);
-    } catch (error) {
-      console.error(`⚠️  Failed to generate ingestion report:`, error);
-    }
+    // Generate report
+    const reportPath = await reporter.generateReport();
+    console.log(`📊 Report saved to: ${reportPath}`);
 
-    // Save skip reasons to JSON file (legacy, for backwards compatibility)
-    if (Object.keys(allSkipReasons).length > 0) {
-      try {
-        const fs = await import("fs/promises");
-        const path = await import("path");
-        const skipReasonsFile = path.join(process.cwd(), "skip-reasons.json");
-        const skipReasonsData = {
-          timestamp: new Date().toISOString(),
-          totalSources: sources.length,
-          sourcesWithSkips: Object.keys(allSkipReasons).length,
-          skipReasons: allSkipReasons,
-        };
-        await fs.writeFile(skipReasonsFile, JSON.stringify(skipReasonsData, null, 2), "utf-8");
-        console.log(`\n💾 Skip reasons saved to: ${skipReasonsFile}`);
-      } catch (error) {
-        console.error(`⚠️  Failed to save skip reasons to JSON:`, error);
-      }
-    }
+    const totalDurationMs = Date.now() - reporter.getStartTime();
 
-    return totalProcessed;
+    return { 
+      count: totalProcessed, 
+      durationMs: totalDurationMs,
+      failedCount: failedSources.length 
+    };
   }
 }

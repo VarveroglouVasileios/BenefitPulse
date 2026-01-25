@@ -4,9 +4,9 @@ import { verificationQueue } from './queues';
 
 const ingestionService = new IngestionService();
 
-export async function processAllSourcesJob(job: Job): Promise<void> {
+export async function processAllSourcesJob(job: Job): Promise<any> {
   console.log(`\n🔄 [Ingestion] Processing all sources (job ${job.id})...`);
-  const count = await ingestionService.processAllEnabledSources();
+  const result = await ingestionService.processAllEnabledSources();
   // Summary is already logged by processAllEnabledSources()
   
   // Schedule verification job after ingestion completes
@@ -15,6 +15,8 @@ export async function processAllSourcesJob(job: Job): Promise<void> {
     delay: 5000, // Wait 5 seconds after ingestion
   });
   console.log(`✅ Verification job scheduled`);
+  
+  return result;
 }
 
 export async function processSourceJob(job: Job): Promise<void> {
