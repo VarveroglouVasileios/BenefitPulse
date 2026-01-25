@@ -83,7 +83,11 @@ const ingestionWorker = new Worker(
       await processSourceJob(job);
     }
   },
-  { connection: connection as any }
+  { 
+    connection: connection as any,
+    lockDuration: 600000, // 10 minutes (to allow for deep fetching/large pages)
+    concurrency: 1 
+  }
 );
 
 // Matching worker
@@ -97,7 +101,10 @@ const matchingWorker = new Worker(
       await recomputeOpportunityMatchesJob(job as any);
     }
   },
-  { connection: connection as any }
+  { 
+    connection: connection as any,
+    lockDuration: 300000, // 5 minutes 
+  }
 );
 
 // Aggregation / housekeeping worker
@@ -128,15 +135,46 @@ const verificationWorker = new Worker(
   { connection: connection as any }
 );
 
+import { notificationService } from "./services/notification.service";
+
 function onComplete(workerName: string) {
-  return (job: any) => {
+  return async (job: any, returnValue: any) => {
     console.log(`✅ [${workerName}] Job ${job.id} completed (${job.name})`);
+    
+    // Ingestion completion notification
+    if (workerName === "ingestion" && job.name === "process-all-sources" && returnValue) {
+      if (typeof returnValue === "object" && returnValue.count !== undefined) {
+          const { count, durationMs } = returnValue;
+          const seconds = (durationMs || 0) / 1000;
+          
+          try {
+             await notificationService.sendToAdmins({
+                title: 'Ολοκλήρωση Ingestion',
+                body: `✅ Βρέθηκαν ${count} νέες εγγραφές σε ${seconds.toFixed(1)}s`,
+                url: '/admin',
+                icon: '/pwa-192x192.png'
+             });
+          } catch (err) {
+             console.error("Failed to send ingestion notification:", err);
+          }
+      }
+    }
   };
 }
 
 function onFailed(workerName: string) {
   return (job: any, err: any) => {
     console.error(`❌ [${workerName}] Job ${job?.id} failed:`, err);
+    if (workerName === "ingestion" && job?.name === "process-all-sources") {
+       // Notify on failure too
+       notificationService.sendToAdmins({
+          title: 'Σφάλμα Ingestion',
+          body: `❌ Η διαδικασία απέτυχε: ${err.message || 'Unknown error'}`,
+          url: '/admin',
+          icon: '/pwa-192x192.png'
+       }).catch(() => {});
+    }
+
     if (config.sentry.enabled) {
       Sentry.captureException(err, {
         tags: {
