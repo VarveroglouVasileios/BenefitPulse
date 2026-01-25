@@ -3,7 +3,6 @@ import { createPinia } from 'pinia';
 import { createHead } from '@unhead/vue/client';
 import App from './App.vue';
 import router from './router';
-import { registerSW } from 'virtual:pwa-register';
 import * as Sentry from '@sentry/vue';
 
 // Apply theme immediately before app initialization to prevent flash
@@ -40,11 +39,5 @@ app.use(pinia);
 app.use(router);
 app.use(head);
 
-
-// Register Service Worker
-registerSW({
-  onNeedRefresh() {},
-  onOfflineReady() {},
-});
 
 app.mount('#app');

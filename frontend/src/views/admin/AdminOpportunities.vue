@@ -147,6 +147,33 @@
         </tbody>
       </table>
     </div>
+    
+    <!-- Pagination Footer -->
+    <div v-if="opportunities.length > 0" class="pagination-footer">
+      <div class="pagination-info">
+        Εμφάνιση {{ startItem }}-{{ endItem }} από {{ total }} αποτελέσματα
+      </div>
+      <div class="pagination-controls">
+        <button 
+          @click="prevPage" 
+          :disabled="page === 1"
+          class="btn-page"
+        >
+          &laquo; Προηγούμενο
+        </button> <!-- &laquo; is left angle quote -->
+        
+        <span class="page-current">Σελίδα {{ page }} από {{ totalPages }}</span>
+        
+        <button 
+          @click="nextPage" 
+          :disabled="page >= totalPages"
+          class="btn-page"
+        >
+          Επόμενο &raquo;
+        </button> <!-- &raquo; is right angle quote -->
+      </div>
+    </div>
+
   </div>
     <ConfirmModal
       :show="modal.show"
@@ -169,8 +196,26 @@ import { debounce } from "lodash";
 import ConfirmModal from "../../components/ConfirmModal.vue";
 
 const adminStore = useAdminStore();
-const { opportunities, loading } = storeToRefs(adminStore);
+const { opportunities, loading, total, page, limit } = storeToRefs(adminStore);
 const filters = ref({ status: "", type: "" });
+
+const totalPages = computed(() => Math.ceil(total.value / limit.value));
+const startItem = computed(() => (page.value - 1) * limit.value + 1);
+const endItem = computed(() => Math.min(page.value * limit.value, total.value));
+
+function nextPage() {
+  if (page.value < totalPages.value) {
+    adminStore.setPage(page.value + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+function prevPage() {
+  if (page.value > 1) {
+    adminStore.setPage(page.value - 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
 const searchQuery = ref("");
 const initialized = ref(false);
 
@@ -396,6 +441,7 @@ h1 {
   font-size: 2rem;
   font-weight: 700;
   background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin: 0;
@@ -686,6 +732,54 @@ tr:hover {
   margin-bottom: 1.5rem;
 }
 
+/* Pagination */
+.pagination-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 1rem;
+}
+
+.pagination-info {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-page {
+  padding: 0.5rem 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.btn-page:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-page:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-current {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .page-header {
@@ -708,6 +802,13 @@ tr:hover {
   
   .data-table-container {
     overflow-x: auto;
+  }
+
+  .pagination-footer {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    text-align: center;
   }
 }
 </style>

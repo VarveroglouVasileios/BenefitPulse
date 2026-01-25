@@ -1,11 +1,11 @@
 <template>
   <div id="app">
-    <NavBar v-if="authStore.hydrated" />
+    <NavBar />
     <main class="content">
-      <router-view v-if="authStore.hydrated" />
+      <router-view />
     </main>
-    <Footer v-if="authStore.hydrated" />
-    <Chatbot v-if="authStore.hydrated" />
+    <Footer />
+    <Chatbot />
     <CookieBanner />
   </div>
 </template>
@@ -47,14 +47,15 @@ onMounted(async () => {
     scrollToTop();
   }, 50);
   
-  await authStore.fetchMe();
-  // Load theme from user profile if authenticated (only after fetchMe completes and hydrated is true)
-  // Double-check user exists to prevent race conditions
-  if (authStore.isAuthenticated && authStore.hydrated && authStore.user) {
-    // Small delay to ensure all state is settled
-    await nextTick();
-    themeStore.loadTheme();
-  }
+  // Non-blocking fetch
+  authStore.fetchMe().then(async () => {
+      // Load theme only after we know who the user is
+      if (authStore.isAuthenticated && authStore.user) {
+        await nextTick();
+        themeStore.loadTheme();
+      }
+  });
+
   trackPageview(window.location.pathname);
   
   // Final scroll to top after everything is loaded
@@ -73,8 +74,7 @@ watch(() => router.currentRoute.value.path, () => {
 
 // Watch for auth changes (e.g., after login/logout)
 watch(() => authStore.isAuthenticated, (isAuthenticated) => {
-  if (isAuthenticated && authStore.hydrated && authStore.user) {
-    // Only load theme if already hydrated and user exists (after initial fetchMe)
+  if (isAuthenticated && authStore.user) {
     themeStore.loadTheme();
   } else if (!isAuthenticated) {
     // Reset to system theme when logged out

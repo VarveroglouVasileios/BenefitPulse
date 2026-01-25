@@ -2,9 +2,9 @@ import { ref, onMounted } from 'vue';
 import { api } from '../api/endpoints';
 
 // Singleton state
-const isSupported = 'serviceWorker' in navigator && 'PushManager' in window;
+const isSupported = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isSubscribed = ref(false);
-const permission = ref(Notification.permission);
+const permission = ref(isSupported ? Notification.permission : 'denied');
 const loading = ref(false);
 
 export function useNotifications() {
@@ -32,7 +32,9 @@ export function useNotifications() {
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
     isSubscribed.value = !!subscription;
-    permission.value = Notification.permission;
+    if (isSupported) {
+      permission.value = Notification.permission;
+    }
   }
 
   async function enableNotifications() {

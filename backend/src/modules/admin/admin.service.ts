@@ -459,8 +459,33 @@ export class AdminService {
         "η πλατφορμα εκλεισε",
         "ολοκλήρωση αιτήσεων",
         "ολοκληρωση αιτησεων",
+        // New keywords based on user feedback (results/objections phase = application closed)
+        "υποβολή ενστάσεων",
+        "υποβολη ενστασεων",
+        "προσωρινά αποτελέσματα",
+        "προσωρινα αποτελεσματα",
+        "οριστικά αποτελέσματα",
+        "οριστικα αποτελεσματα",
       ];
       return expiredKeywords.some((kw) => lowerText.includes(kw));
+    }
+
+    function hasPastYearInTitle(title: string): boolean {
+      const currentYear = new Date().getFullYear();
+      const match = title.match(/\b(20\d{2})\b/);
+      if (match) {
+        const year = parseInt(match[1], 10);
+        // If year is older than previous year (e.g. 2024 when now is 2026) -> Definitely Expired
+        if (year < currentYear - 1) {
+          return true;
+        }
+        // If year is previous year (2025 in 2026), ONLY expire if we are past March (Q1 grace period)
+        if (year === currentYear - 1) {
+           const month = new Date().getMonth(); // 0-based
+           return month > 2; // April onwards
+        }
+      }
+      return false;
     }
 
     function canonicalizeUrl(url: string): string {
@@ -506,12 +531,21 @@ export class AdminService {
         deadlineExpiredCount++;
       }
 
-      // Check 2: Summary/title contains expired keywords
-      if (!shouldArchive) {
-        const combinedText = `${opp.title} ${opp.summary}`;
-        if (hasExpiredKeywords(combinedText)) {
-          shouldArchive = true;
-          summaryExpiredCount++;
+      // Check 2: Summary/title contains expired keywords OR title has past year
+      // CRITICAL: Only run heuristic checks if we DON'T have a valid future deadline
+      // If we have an explicit future deadline, trust it!
+      const hasFutureDeadline = opp.deadlineAt && opp.deadlineAt > now;
+      
+      if (!shouldArchive && !hasFutureDeadline) {
+        if (hasPastYearInTitle(opp.title)) {
+             shouldArchive = true;
+             summaryExpiredCount++; 
+        } else {
+             const combinedText = `${opp.title} ${opp.summary}`;
+             if (hasExpiredKeywords(combinedText)) {
+               shouldArchive = true;
+               summaryExpiredCount++;
+             }
         }
       }
 

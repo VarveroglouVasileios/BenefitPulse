@@ -83,12 +83,6 @@ http.interceptors.response.use(
     const isAuthMe = url.includes("/auth/me");
     const isProfile = url.includes("/profile");
 
-    // Suppress console errors for 404 on /profile
-    if (status === 404 && isProfile) {
-      // Mark as silent to prevent console logging
-      error.silent = true;
-    }
-
     if (status === 401) {
       // Clear user state when we get 401 (cookie expired or invalid)
       const authStore = useAuthStore();
