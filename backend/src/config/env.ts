@@ -41,6 +41,12 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY || '',
   },
   
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || '',
+    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    model: 'llama-3.1-8b-instant',
+  },
+  
   chatbot: {
     apiKey: process.env.GROQ_API_KEY || process.env.CHATBOT_API_KEY || process.env.AI_EXTRACTOR_API_KEY || '',
     apiUrl: process.env.CHATBOT_API_URL || 'https://api.groq.com/openai/v1/chat/completions',

@@ -18,6 +18,140 @@ export interface ExtractedOpportunity {
 }
 
 /**
+ * AI-extracted application status
+ */
+export interface AIStatusResult {
+  status: "open" | "closed" | "upcoming" | "expired" | "unknown";
+  confidence: number;
+  deadlineAt?: string; // ISO date string
+  startAt?: string; // ISO date string
+  reasoning: string;
+}
+
+/**
+ * Extract application status using Gemini AI
+ * 
+ * Call this when keyword-based rules return "unknown" to get AI-assisted determination.
+ * Uses a focused prompt specifically for status detection.
+ */
+export async function extractApplicationStatus(
+  title: string,
+  content: string,
+  sourceUrl?: string
+): Promise<AIStatusResult> {
+  const apiKey = config.groq.apiKey;
+  
+  // If no API key, return unknown immediately
+  if (!apiKey) {
+    return {
+      status: "unknown",
+      confidence: 0,
+      reasoning: "No Groq API key available",
+    };
+  }
+
+  try {
+    const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    
+    const today = new Date().toISOString().split('T')[0];
+
+    const prompt = `Είσαι ειδικός αναλυτής για ελληνικές ευκαιρίες επιδομάτων/προγραμμάτων. Σήμερα είναι: ${today}
+
+Ανάλυσε αυτό το κείμενο και προσδιόρισε την ΚΑΤΑΣΤΑΣΗ ΑΙΤΗΣΕΩΝ.
+ΨΑΞΕ ΠΡΟΣΕΚΤΙΚΑ ΓΙΑ ΗΜΕΡΟΜΗΝΙΕΣ ΛΗΞΗΣ (keywords: "Προθεσμία", "Υποβολή έως", "Λήξη", "μέχρι").
+
+ΣΗΜΑΝΤΙΚΟ: Τώρα έχουμε 2026.
+- ΟΠΟΙΑΔΗΠΟΤΕ ημερομηνία του 2025 (π.χ. Δεκέμβριος 2025) είναι ΣΤΟ ΠΑΡΕΛΘΟΝ -> EXPIRED.
+- Ημερομηνίες 2024 είναι ΠΑΛΙΕΣ -> EXPIRED.
+
+ΤΙΤΛΟΣ: ${title}
+URL: ${sourceUrl || 'N/A'}
+
+ΚΕΙΜΕΝΟ:
+${content.substring(0, 2000)}
+
+---
+
+Απάντησε ΜΟΝΟ με JSON:
+{
+  "status": "open" | "closed" | "upcoming" | "expired",
+  "confidence": 0.0-1.0,
+  "deadlineAt": "YYYY-MM-DD" ή null,
+  "startAt": "YYYY-MM-DD" ή null,
+  "reasoning": "Μια πρόταση εξήγηση"
+}
+
+ΚΑΝΟΝΕΣ:
+1. Αν βρεις ημερομηνία λήξης πριν από ${today}, το status ΕΙΝΑΙ "expired" (ή "closed").
+2. "open": Οι αιτήσεις ΓΙΝΟΝΤΑΙ ΔΕΚΤΕΣ τώρα kai δεν έχουν λήξει.
+3. "upcoming": Οι αιτήσεις ΘΑ ΑΝΟΙΞΟΥΝ στο μέλλον.
+4. "closed": Οι αιτήσεις έχουν κλείσει.
+
+Αν δεν είσαι σίγουρος, βάλε χαμηλό confidence.`;
+
+    const response = await axios.post(
+      apiUrl,
+      {
+        model: config.groq.model || 'llama-3.1-8b-instant',
+        messages: [
+          { role: "user", content: prompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1
+      },
+      {
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json' 
+        },
+        timeout: 10000 
+      }
+    );
+
+    if (response.data?.choices?.[0]?.message?.content) {
+      const rawText = response.data.choices[0].message.content;
+      const parsed = JSON.parse(rawText);
+      
+      // Validate and map status to schema enums
+      // Schema accepts: "upcoming", "open", "closed", "unknown"
+      let status: AIStatusResult["status"] = "unknown";
+      const rawStatus = (parsed.status || "").toLowerCase();
+
+      if (["open", "active"].includes(rawStatus)) {
+        status = "open";
+      } else if (["closed", "expired", "completed", "results", "ended"].includes(rawStatus)) {
+        status = "expired";
+        if (rawStatus === "closed") status = "closed";
+      } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
+        status = "upcoming";
+      }
+      
+      console.log(`   🤖 AI Status (Groq): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%) - ${parsed.reasoning?.substring(0, 60) || 'No reasoning'}`);
+      
+      return {
+        status,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+        deadlineAt: parsed.deadlineAt,
+        startAt: parsed.startAt,
+        reasoning: parsed.reasoning || "AI determined status"
+      };
+    }
+    
+    throw new Error("Empty response from Groq");
+
+  } catch (error: any) {
+    // Don't log full error to reduce noise - just note the failure
+    console.log(`   ⚠️ AI Status extraction failed: ${error.message?.substring(0, 50) || 'Unknown error'}`);
+    
+    return {
+      status: "unknown",
+      confidence: 0,
+      reasoning: `AI extraction failed: ${error.message}`,
+    };
+  }
+}
+
+/**
  * AI Extractor Stub
  *
  * This is a placeholder that returns mock data.
@@ -44,23 +178,23 @@ export async function extractOpportunity(
   // In production, replace this with actual LLM API call
 
   // CHECK: If no API key, use fallback stub
-  const apiKey = config.gemini.apiKey;
+  const apiKey = config.groq.apiKey;
   if (!apiKey) {
-    console.warn("⚠️  No GEMINI_API_KEY found, using fallback keyword extractor.");
+    console.warn("⚠️  No GROQ_API_KEY found, using fallback keyword extractor.");
     return fallbackStubExtractor(content);
   }
 
-  // Real Gemini Implementation
+  // Real Groq Implementation
   try {
-    const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+    const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     
     const systemPrompt = `You are an expert data extractor for BenefitPulse. Your job is to analyze Greek announcements (subsidies, jobs, vouchers) and extract structured data.
     
     Output JSON ONLY. Structure:
     {
       "type": "subsidy" | "voucher" | "program" | "public_call" | "asep_competition",
-      "title": "Clean concise title",
-      "summary": "Short summary of the benefit (max 200 chars)",
+      "title": "Clean concise title in Greek",
+      "summary": "Clear, engaging summary in Greek describing the benefit and eligibility (max 300 chars)",
       "deadlineAt": "ISO Date string (YYYY-MM-DD) or null",
       "tags": ["tag1", "tag2"],
       "region": "attiki" | "thessaloniki" | "crete" | "peloponnese" | "macedonia" | "thrace" | "epirus" | "thessaly" | "central_greece" | "western_greece" | "aegean_islands" | "ionian_islands" | "other" (or null if nationwide),
@@ -79,25 +213,27 @@ export async function extractOpportunity(
     `;
 
     const response = await axios.post(
-      `${apiUrl}?key=${apiKey}`,
+      apiUrl,
       {
-        contents: [{
-          role: "user",
-          parts: [{ text: systemPrompt + "\n\nText to analyze:\n" + content.substring(0, 8000) }]
-        }],
-        generationConfig: {
-          response_mime_type: "application/json",
-          temperature: 0.2
-        }
+        model: config.groq.model || 'llama-3.1-8b-instant',
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: "Text to analyze:\n" + content.substring(0, 2500) }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1
       },
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json' 
+        },
         timeout: 30000 
       }
     );
 
-    if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-      const rawText = response.data.candidates[0].content.parts[0].text;
+    if (response.data?.choices?.[0]?.message?.content) {
+      const rawText = response.data.choices[0].message.content;
       const parsed = JSON.parse(rawText);
       
       // Map JSON to ExtractedOpportunity interface
@@ -115,10 +251,10 @@ export async function extractOpportunity(
       };
     }
     
-    throw new Error("Empty response from Gemini");
+    throw new Error("Empty response from Groq");
 
   } catch (error: any) {
-    console.error("❌ Gemini Extractor failed:", error.message);
+    console.error("❌ Groq Extractor failed:", error.message);
     // Fallback to stub on error
     return fallbackStubExtractor(content);
   }

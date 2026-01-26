@@ -548,8 +548,10 @@ export function extractDates(
 
   // Pattern: "Προθεσμία υποβολής έως [date]" or "Αιτήσεις έως [date]" (enhanced for ΔΥΠΑ)
   const deadlinePatterns = [
-    // "Υποβολή αιτήσεων από ... έως ..."
-    /(?:υποβολή\s+αιτήσεων|αιτήσεις)\s+(?:από|απο)[\s:]+([^έως\n]{0,80})\s+(?:έως|μέχρι|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
+    // "Υποβολή αιτήσεων/ενστάσεων από ... έως ..."
+    /(?:υποβολή|υποβάλλονται|υποβαλλονται)\s+(?:αιτήσεων|αιτησεων|ενστάσεων|ενστασεων|αιτήσεις|αιτησεις|ενστάσεις|ενστασεις)\s+(?:από|απο|στο|στην|στον)?[\s\S]{0,100}?(?:από|απο)[\s:]+([^έως\n]{0,80})\s+(?:έως|μέχρι|μέχρι\s+και|εως)[\s:]+([^\.\n]{0,80})/gi,
+    // "Ενστάσεις ... έως ..."
+    /(?:ενστάσεις|ενστασεις)\s+(?:υποβάλλονται|γίνονται δεκτές)?[\s\S]{0,100}?(?:έως|μέχρι|μέχρι\s+και|εως)[\s:]+([^\.\n]{0,80})/gi,
     // "Προθεσμία υποβολής έως ..."
     /(?:προθεσμία|αιτήσεις|λήξη|καταληκτική\s+ημερομηνία|υποβολή\s+αιτήσεων)\s+(?:έως|μέχρι|μέχρι\s+και|έως\s+και|έκλεισε|έληξε)[\s:]+([^\.\n]{0,80})/gi,
     // "Παράταση έως ..."
@@ -855,7 +857,43 @@ export function determineApplicationStatus(
     return { status: "news", statusSignals, applicationStartAt: null, applicationEndAt: null };
   }
 
-  // Rule 10: Default to unknown (no evidence)
+  // Rule 10: If content has application invitation keywords without closed indicators, assume open
+  const hasApplicationKeywords = 
+    lowerContent.includes("υποβολή αιτήσεων") ||
+    lowerContent.includes("υποβολη αιτησεων") ||
+    lowerContent.includes("κάνε αίτηση") ||
+    lowerContent.includes("κανε αιτηση") ||
+    lowerContent.includes("αιτηθείτε") ||
+    lowerContent.includes("αιτηθειτε") ||
+    lowerContent.includes("υποβάλετε αίτηση") ||
+    lowerContent.includes("υποβαλετε αιτηση") ||
+    lowerContent.includes("κάντε αίτηση") ||
+    lowerContent.includes("καντε αιτηση");
+
+  const hasClosedIndicators = CLOSED_KEYWORDS.some(kw => lowerContent.includes(kw));
+
+  if (hasApplicationKeywords && !hasClosedIndicators && (!deadlineAt || deadlineAt >= now)) {
+    statusSignals.push("Contains application invitation without closed indicators → assume open");
+    return { status: "open", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
+  }
+
+  // Rule 11: ΔΥΠΑ programs with ongoing service keywords are typically open
+  const isDypaOngoingService = 
+    lowerContent.includes("εγγεγραμμένοι άνεργοι") ||
+    lowerContent.includes("εγγεγραμμενοι ανεργοι") ||
+    lowerContent.includes("κάρτα ανεργίας") ||
+    lowerContent.includes("καρτα ανεργιας") ||
+    lowerContent.includes("δελτίο ανεργίας") ||
+    lowerContent.includes("δελτιο ανεργιας") ||
+    lowerContent.includes("επίδομα ανεργίας") ||
+    lowerContent.includes("επιδομα ανεργιας");
+
+  if (isDypaOngoingService && !hasClosedIndicators && !startAt && !deadlineAt) {
+    statusSignals.push("ΔΥΠΑ ongoing service (no dates, no closed indicators) → assume open");
+    return { status: "open", statusSignals, applicationStartAt: null, applicationEndAt: null };
+  }
+
+  // Rule 12: Default to unknown (no evidence) - LAST RESORT
   return { status: "unknown", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
 }
 
@@ -1736,32 +1774,78 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     "φυλαξη",
   ];
   
-  // Administrative noise keywords (questionnaires, evaluations, minutes, high-level jobs)
+  // Check for administrative noise keywords first
+  // STRICT: Block meetings, reports, ceremonial events to save AI credits
   const administrativeKeywords = [
-    "ερωτηματολόγιο",
-    "ερωτηματολογιο",
-    "ωφελουμένων", // Beneficiaries questionnaire context
-    "ωφελουμενων",
-    "αξιολόγηση",
-    "αξιολογηση",
-    "πρακτικό",
-    "πρακτικο",
-    // High-level public sector jobs (not relevant for our users)
-    "γενικής διεύθυνσης",
-    "γενικης διευθυνσης",
-    "θέσης ευθύνης",
-    "θεσης ευθυνης",
-    "προέδρου",
-    "προεδρου",
-    "διευθύνοντος συμβούλου",
-    "διευθυνοντος συμβουλου",
-    "οριζόντιων θέσεων",
-    "οριζοντιων θεσεων",
+    "ερωτηματολόγιο", "ερωτηματολογιο",
+    "αξιολόγηση", "αξιολογηση",
+    "πρακτικό", "πρακτικο",
+    "ετήσια έκθεση", "ετησια εκθεση", "εκθεσης", 
+    "πεπραγμένα", "πεπραγμενα",
+    "παράδοση", "παραδοση", // e.g. "παράδοση έκθεσης"
+    "συνάντηση", "συναντηση",
+    "επίσκεψη", "επισκεψη",
+    "ορκωμοσία", "ορκωμοσια",
+    "ημερίδα", "ημεριδα",
+    "γενικής διεύθυνσης", "γενικης διευθυνσης",
+    "θέσης ευθύνης", "θεσης ευθυνης",
+    "προέδρου", "προεδρου",
+    
+    // NAVIGATION & PORTAL JUNK (Added based on user feedback)
+    "δείτε περισσότερα", "δειτε περισσοτερα",
+    "σημαντικές-ανακοινώσεις", "σημαντικες-ανακοινωσεις",
+    "σαεκ δυπα", // General landing page
+    "μονάδας εξυπηρέτησης", "μοναδας εξυπηρετησης", // General service info
+    "υπηρεσίες σύζευξης", "υπηρεσιες συζευξης",
+    "παροχές ασφάλισης", "παροχες ασφαλισης",
+    "αναστολή λειτουργίας", "αναστολη λειτουργιας",
   ];
   
   const lowerTitle = rawTitle.toLowerCase();
   const lowerSource = source.toLowerCase();
   const isAsepSource = lowerSource.includes("asep") || lowerSource.includes("ασεπ");
+  
+  // ASEP 3-WEEK EXPIRY CHECK: Auto-archive ASEP results/objections older than 3 weeks
+  // This prevents stale announcements from cluttering the feed even when AI fails
+  if (isAsepSource) {
+    const resultsKeywords = ["αποτελέσματα", "αποτελεσματα", "πίνακες", "πινακες", 
+                            "ενστάσεις", "ενστασεις", "τοποθετήσεων", "τοποθετησεων",
+                            "επιλαχόντων", "επιλαχοντων"];
+    const hasResultsKeyword = resultsKeywords.some(kw => lowerTitle.includes(kw));
+    
+    if (hasResultsKeyword) {
+      const fetchedAt = input.rawFetchedAtIso ? new Date(input.rawFetchedAtIso) : now;
+      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+      
+      if (fetchedAt < threeWeeksAgo) {
+        return {
+          title: cleanTitle(rawTitle),
+          summary: cleanSummary(rawTitle, rawContent),
+          officialUrl: canonicalizeUrl(itemUrl),
+          source,
+          kind: "news",
+          type: "asep_competition",
+          applicationStatus: "results",
+          startAt: null,
+          deadlineAt: null,
+          announcedAt: null,
+          applicationStartAt: null,
+          applicationEndAt: null,
+          status: "archived",
+          tags: ["ΑΣΕΠ", "αποτελέσματα"],
+          criteriaUnknown: true,
+          confidence: 0.5,
+          requirementsNormalized: undefined,
+          requirementsSummaryBullets: [],
+          evidence: {
+            statusSignals: [],
+            dateSignals: [],
+            notes: [`ASEP results/objections older than 3 weeks → auto-archived`],
+          },
+        };
+      }
+    }
+  }
   
   // Check for administrative noise keywords first
   const matchedAdminKeyword = administrativeKeywords.find(keyword => lowerTitle.includes(keyword.toLowerCase()));

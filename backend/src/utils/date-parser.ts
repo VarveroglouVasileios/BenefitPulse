@@ -96,10 +96,11 @@ function parseGreekFormat(text: string): Date | null {
 }
 
 /**
- * Parse Greek date with month name (e.g., "29 Οκτωβρίου 2025")
+ * Parse Greek date with month name (e.g., "29 Οκτωβρίου 2025" or "5η Δεκεμβρίου 2025")
  */
 function parseGreekMonthName(text: string): Date | null {
-  const greekDatePattern = /(\d{1,2})\s+([α-ωάέήίόύώ]+)\s+(\d{4})/i;
+  // Pattern handles: "29 Οκτωβρίου 2025", "5η Δεκεμβρίου 2025", "15ης Ιανουαρίου 2026"
+  const greekDatePattern = /(\d{1,2})(?:η|ης|ου|ος)?\s+([α-ωάέήίόύώ]+)\s+(\d{4})/i;
   const match = text.match(greekDatePattern);
   if (match) {
     const day = parseInt(match[1], 10);

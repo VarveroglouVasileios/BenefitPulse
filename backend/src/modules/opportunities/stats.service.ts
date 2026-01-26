@@ -14,25 +14,31 @@ export class StatsService {
     // Count enabled sources
     const sourcesCount = await Source.countDocuments({ enabled: true });
 
-    // Count total published opportunities (all published, not just "open")
-    // This should match what users see in "Όλα" tab
-    // Include all kinds EXCEPT service_info (which is not an opportunity)
+    // Count ONLY "real" opportunities: programs, subsidies, vouchers
+    // EXCLUDE: news, service_info, decision, tender
+    // This is what users expect when they see "X Ευκαιρίες"
+    const realKinds = ["benefit", "voucher_pass", "program"];
+    const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+    
     const opportunitiesFilter: any = {
       status: "published",
       deletedAt: null,
-      kind: { $nin: ["service_info"] }, // Exclude only service_info, include everything else
+      kind: { $in: realKinds },
+      // Exclude ASEP results older than 3 weeks
+      $or: [
+        { applicationStatus: { $ne: "results" } },
+        { publishedAt: { $gte: threeWeeksAgo } },
+      ],
     };
     
     const opportunitiesCount = await Opportunity.countDocuments(opportunitiesFilter);
 
-    // Count open opportunities (applicationStatus=open/upcoming OR verificationResult=open/upcoming OR legacy items with valid dates)
-    // Exclude service_info, tender, news (these are not active opportunities)
-    // This should match what users see in "Τρέχοντα" tab
+    // Count OPEN opportunities (applicationStatus=open/upcoming)
+    // Only real kinds, not expired, not broken links
     const openFilter: any = {
       status: "published",
       deletedAt: null,
-      kind: { $nin: ["service_info", "tender", "news"] }, // Exclude service_info, tender, news
-      // Exclude broken links (applies to all) - use $and to combine with other conditions
+      kind: { $in: realKinds },
       $and: [
         // Exclude broken links
         {
@@ -61,15 +67,20 @@ export class StatsService {
             { applicationEndAt: { $gte: now } },
           ],
         },
-        // Must have open/upcoming status OR be legacy item
+        // Must have open/upcoming status
         {
           $or: [
-            // Has applicationStatus=open or upcoming
             { applicationStatus: { $in: ["open", "upcoming"] } },
-            // Has verificationResult=open or upcoming
             { verificationResult: { $in: ["open", "upcoming"] } },
-            // Legacy: no applicationStatus (will be filtered by date checks above)
+            // Legacy: no applicationStatus but valid dates
             { applicationStatus: { $exists: false } },
+          ],
+        },
+        // Exclude ASEP results older than 3 weeks
+        {
+          $or: [
+            { applicationStatus: { $ne: "results" } },
+            { publishedAt: { $gte: threeWeeksAgo } },
           ],
         },
       ],

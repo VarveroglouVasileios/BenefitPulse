@@ -7,7 +7,7 @@ import { RawItem } from "../../models/rawItem.model";
 import { Opportunity } from "../../models/opportunity.model";
 import { generateHash } from "../../utils/normalize";
 import { config } from "../../config/env";
-import { extractOpportunity } from "./extractor";
+import { extractOpportunity, extractApplicationStatus } from "./extractor";
 import { cleanAndValidate, CleanerInput } from "./cleaner";
 import { checkSourceHealth, fixEndpointUrl } from "./source-health-check";
 import { IngestionReporter } from "./ingestion-reporter";
@@ -1439,7 +1439,20 @@ export class IngestionService {
       return "benefit";
     };
 
+    // DEDUPLICATION: Filter items by unique URL to avoid double processing
+    const uniqueItemsMap = new Map();
     for (const item of items) {
+      if (item.url) {
+        uniqueItemsMap.set(item.url, item);
+      }
+    }
+    const uniqueItems = Array.from(uniqueItemsMap.values());
+    
+    if (items.length > uniqueItems.length) {
+      console.log(`   ℹ️  Deduplicated: ${items.length} -> ${uniqueItems.length} items (removed duplicates within same run)`);
+    }
+
+    for (const item of uniqueItems) {
       const canonical =
         item.metadata?.canonical || canonicalizeUrl(item.url || source.url);
       const hash = generateHash(canonical);
@@ -1603,16 +1616,70 @@ export class IngestionService {
 
         const cleaned = cleanAndValidate(cleanerInput);
 
-        // Extract eligibility rules using AI extractor (for criteria and confidence check)
-        // THRROTTLING: Wait 20s to respect Gemini Free Tier limits (avoid 429 errors)
-        if (process.env.GEMINI_API_KEY) {
-          console.log("   ⏳ Throttling AI request (20s)...");
+        // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status, try AI
+        // OPTIMIZATION: Skip AI if status is rejected (e.g. service_info) to save tokens/time
+        // Check for Groq API key
+        const hasAiKey = !!config.groq.apiKey;
+        
+        if (cleaned.applicationStatus === "unknown" && cleaned.status !== "rejected" && hasAiKey) {
+          console.log("   🤖 AI Status Check: Cleaner returned 'unknown', calling AI (Groq)...");
+          
+          // Throttle to avoid rate limits
+          // Groq Free limit: Strict TPM caps
+          // We use 20s delay to be absolutely safe (~3 req/min)
           await new Promise(resolve => setTimeout(resolve, 20000));
+          
+          try {
+            const aiStatus = await extractApplicationStatus(
+              item.title || "",
+              item.content || "",
+              item.url
+            );
+            
+            // If AI is confident enough, use its determination
+            if (aiStatus.status !== "unknown" && aiStatus.confidence >= 0.7) {
+              console.log(`   ✅ AI Override: ${cleaned.applicationStatus} → ${aiStatus.status} (${Math.round(aiStatus.confidence * 100)}%)`);
+              cleaned.applicationStatus = aiStatus.status;
+              
+              // Also extract dates if AI found them
+              if (aiStatus.deadlineAt && !cleaned.deadlineAt) {
+                cleaned.deadlineAt = aiStatus.deadlineAt;
+                console.log(`   📅 AI Date: deadline=${aiStatus.deadlineAt}`);
+              }
+              if (aiStatus.startAt && !cleaned.applicationStartAt) {
+                cleaned.applicationStartAt = aiStatus.startAt;
+                console.log(`   📅 AI Date: start=${aiStatus.startAt}`);
+              }
+              
+              // Update status if it was draft due to unknown applicationStatus
+              if (cleaned.status === "draft" && ["open", "upcoming"].includes(aiStatus.status)) {
+                cleaned.status = "published";
+                console.log("   🔓 AI upgraded status: draft → published (AI confirmed open/upcoming)");
+              }
+            } else {
+              console.log(`   ℹ️ AI returned: ${aiStatus.status} (${Math.round(aiStatus.confidence * 100)}%) - keeping unknown`);
+            }
+          } catch (aiError: any) {
+            console.log(`   ⚠️ AI Status failed: ${aiError.message?.substring(0, 50) || 'Unknown error'}`);
+          }
         }
 
-        const extracted = await extractOpportunity(
-          item.title + "\n\n" + item.content
-        );
+        // Extract eligibility rules using AI extractor (for criteria and confidence check)
+        // THRROTTLING: Wait 5s to respect limits
+        // OPTIMIZATION: Skip eligibility extraction if item is rejected
+        let extracted: any = { confidence: 0, criteriaRulesJson: {}, criteriaJson: {} }; // Initialize extracted with safe defaults
+        if (config.groq.apiKey && cleaned.status !== "rejected") {
+          console.log("   ⏳ Throttling AI request (Groq 20s)...");
+          await new Promise(resolve => setTimeout(resolve, 20000)); // Using 20s for safe TPM
+          
+          try {
+            extracted = await extractOpportunity(
+              item.title + "\n\n" + item.content
+            );
+          } catch (aiError: any) {
+            console.log(`   ⚠️ AI Eligibility failed: ${aiError.message?.substring(0, 50) || 'Unknown error'}`);
+          }
+        }
 
         // AUTO-PUBLISH TRUSTED SOURCES: Check if source is trusted and confidence is sufficient
         const sourceName = source.name || "";
@@ -1765,6 +1832,12 @@ export class IngestionService {
             finalKind = "news";
             console.log(`   📰 ASEP NEWS: Overriding kind to 'news' for ASEP results/announcements`);
           }
+        }
+        
+        // Validation Fix: Map 'results' status (from cleaner/AI fallback) to valid enum 'closed'
+        // This prevents Mongoose ValidationError: `results` is not a valid enum value
+        if ((cleaned.applicationStatus as string) === 'results') {
+           cleaned.applicationStatus = 'closed'; 
         }
 
         if (existingOpp) {

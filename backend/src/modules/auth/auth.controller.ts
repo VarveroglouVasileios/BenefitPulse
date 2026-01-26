@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { registerSchema, loginSchema } from "../../../../shared/src/zodSchemas";
+import { emailService } from "../../services/email.service";
 
 const authService = new AuthService();
 
@@ -49,6 +50,11 @@ export async function register(req: Request, res: Response): Promise<void> {
       password,
       firstName,
       lastName,
+    });
+    
+    // Send welcome email (fire and forget - don't block response)
+    emailService.sendWelcomeEmail(email, firstName).catch(err => {
+      console.error(`❌ Failed to send welcome email to ${email}:`, err);
     });
     
     // Set token in HTTP-only cookie (secure, not accessible via JavaScript)

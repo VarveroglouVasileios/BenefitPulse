@@ -103,8 +103,23 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       shouldArchive = true;
       deadlineExpiredCount++;
     }
+    
+    // Check 2: ASEP results older than 3 weeks should auto-archive
+    if (!shouldArchive) {
+      const isAsepSource = opp.source?.toLowerCase().includes("ασεπ") || 
+                           opp.source?.toLowerCase().includes("asep");
+      const isResults = (opp as any).applicationStatus === "results";
+      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+      const publishedDate = opp.publishedAt ? new Date(opp.publishedAt) : null;
+      
+      if (isAsepSource && isResults && publishedDate && publishedDate < threeWeeksAgo) {
+        shouldArchive = true;
+        summaryExpiredCount++; // Reusing counter for simplicity
+        console.log(`   📦 ASEP Results expired (>3 weeks): ${opp.title.substring(0, 50)}...`);
+      }
+    }
 
-    // Check 2: Summary/title contains expired keywords
+    // Check 3: Summary/title contains expired keywords
     if (!shouldArchive) {
       const combinedText = `${opp.title} ${opp.summary}`;
       if (hasExpiredKeywords(combinedText)) {

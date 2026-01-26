@@ -9,6 +9,7 @@
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "worker": "ts-node-dev --respawn --transpile-only src/worker.ts",
+    "trigger": "ts-node ./scripts/trigger-ingestion.ts",
     "cli": "ts-node src/cli.ts",
     "seed": "npm run cli seed",
     "migrate:user-profiles": "npm run cli migrate:profiles"

@@ -177,9 +177,12 @@ export class OpportunitiesService {
       filter.status = "published";
     }
 
-    // Default: exclude service_info and tenders from Opportunities tabs (unless admin filter enabled)
-    if (!showTendersNews) {
+    // Default: exclude service_info and tenders from Opportunities tabs (unless admin filter enabled OR tab is 'all')
+    if (!showTendersNews && tab !== 'all') {
       filter.kind = { $nin: ["service_info", "tender"] };
+    } else if (tab === 'all') {
+        // For 'all' tab, we show everything, so no kind filter is applied here.
+        // Unless specific query.kind is passed later.
     } else {
       // Admin: allow tenders/news but still exclude service_info
       filter.kind = { $ne: "service_info" };
@@ -193,58 +196,53 @@ export class OpportunitiesService {
 
     // Tab-based filtering (non-overlapping criteria)
     if (tab === "news") {
-      // Νέα: STRICT filter - must be kind='news' OR kind='program' AND title MUST contain announcement keywords
-      const announcementKeywords = [
-        "παράταση",
-        "παραταση",
-        "αποτελέσματα",
-        "αποτελεσματα",
-        "πίνακες",
-        "πινακες",
-        "έναρξη",
-        "εναρξη",
-        "αιτήσεις",
-        "αιτησεις",
-        "προκήρυξη",
-        "προκηρυξη",
+      // Νέα: STRICT filter - ONLY show results and objections
+      // Removed general announcement keywords to focus only on actionable outcomes
+      const resultsAndObjectionsKeywords = [
+        // Αποτελέσματα
+        "αποτελέσματα", "αποτελεσματα",
+        "οριστικοί πίνακες", "οριστικοι πινακες",
+        "προσωρινός πίνακας", "προσωρινος πινακας",
+        "προσωρινοί πίνακες", "προσωρινοι πινακες",
+        "οριστικός πίνακας", "οριστικος πινακας",
+        "πίνακας τοποθετήσεων", "πινακας τοποθετησεων",
+        "πίνακας επιλαχόντων", "πινακας επιλαχοντων",
+        "πίνακας διοριστέων", "πινακας διοριστεων",
+        "πίνακες κατάταξης", "πινακες καταταξης",
+        // Ενστάσεις
+        "ένσταση", "ενσταση",
+        "ενστάσεις", "ενστασεις",
+        "προθεσμία ενστάσεων", "προθεσμια ενστασεων",
+        "δικαίωμα ένστασης", "δικαιωμα ενστασης",
+        "υποβολή ενστάσεων", "υποβολη ενστασεων",
+        // ASEP specific stages
+        "1γ", "2γ", "3γ",
+        "αριθμός προκήρυξης", "αριθμος προκηρυξης",
       ];
 
-      // Must be kind='news' OR kind='program', AND title must contain announcement keywords, AND exclude service_info
-      // OR source is ASEP AND title contains news keywords
+      // STRICT: Only items with results/objections keywords in title
       filter.$and = filter.$and || [];
       filter.$and.push({
         $or: [
-          // Standard news/program with keywords
-          // Standard news/program with keywords
-          {
-            $or: [
-              { kind: "news" }, // Explicit news kind - include ALWAYS
-              {
-                $and: [
-                  { kind: "program" },
-                  {
-                    title: {
-                      $regex: new RegExp(announcementKeywords.join("|"), "i"),
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-          // ASEP source with news-like title
+          // Kind is explicitly "news" AND has results/objections keywords in title
           {
             $and: [
-              {
-                $or: [
-                  { source: { $regex: /asep/i } },
-                  { source: { $regex: /ασεπ/i } },
-                ],
-              },
-              {
-                title: {
-                  $regex: new RegExp(announcementKeywords.join("|"), "i"),
-                },
-              },
+              { kind: "news" },
+              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
+            ],
+          },
+          // ASEP source with results keywords
+          {
+            $and: [
+              { $or: [{ source: { $regex: /asep/i } }, { source: { $regex: /ασεπ/i } }] },
+              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
+            ],
+          },
+          // Program kind with results keywords (e.g., program results announcements)
+          {
+            $and: [
+              { kind: "program" },
+              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
             ],
           },
         ],
@@ -256,9 +254,10 @@ export class OpportunitiesService {
       // Sort strictly by updatedAt desc (news is about recency)
       sort = { updatedAt: -1 };
     } else if (tab === "upcoming") {
-      // Upcoming: kind="program" AND applicationStatus="upcoming"
-      // FIXED: Don't require verificationResult - allow items with applicationStatus="upcoming" even if not verified yet
-      filter.kind = "program";
+      // Upcoming: ALL real kinds (benefit, voucher_pass, program) with applicationStatus="upcoming"
+      // FIXED: Include all real opportunity kinds, not just programs
+      const realKinds = ["benefit", "voucher_pass", "program"];
+      filter.kind = { $in: realKinds };
       filter.$or = [
         { applicationStatus: "upcoming" },
         { "criteriaJson.applicationStatus": "upcoming" },
@@ -372,46 +371,19 @@ export class OpportunitiesService {
       exclusionReasons.expiredEndAt = excludedExpiredEndAt;
       exclusionReasons.expiredDeadline = excludedExpiredDeadline;
     } else {
-      // Όλα: union of program + news + decisions (no specific filter)
-      // Just exclude service_info and tender (already done above, unless admin filter enabled)
-      if (!showTendersNews) {
-        filter.kind = {
-          $in: ["program", "benefit", "voucher_pass", "decision", "news"],
-        };
-      } else {
-        // Admin: include tenders too
-        filter.kind = {
-          $in: [
-            "program",
-            "benefit",
-            "voucher_pass",
-            "decision",
-            "news",
-            "tender",
-          ],
-        };
-      }
-
-      // Calculate exclusion stats for All tab
+      // Όλα: Show EVERYTHING that is published (no kind filtering)
+      // User wants to see all active & published items here
+      
+      // We do NOT filter by kind here anymore.
+      // If it's published, show it.
+      
+      // (Optional) We still calculate stats but don't filter
       const baseFilterForStats: any = {
         status: showRejected
           ? { $in: ["published", "draft", "archived", "rejected"] }
           : "published",
         deletedAt: null,
       };
-      const totalAll = await Opportunity.countDocuments(baseFilterForStats);
-      const excludedServiceInfo = await Opportunity.countDocuments({
-        ...baseFilterForStats,
-        kind: "service_info",
-      });
-      const excludedTender = await Opportunity.countDocuments({
-        ...baseFilterForStats,
-        kind: "tender",
-      });
-      if (!showTendersNews) {
-        exclusionReasons.excludedFromOpportunities = excludedTender;
-        exclusionReasons.serviceInfo = excludedServiceInfo;
-      }
     }
 
     // Calculate exclusion stats for News tab
@@ -475,10 +447,12 @@ export class OpportunitiesService {
       badge: {
         sourceName: opp.source || "Unknown",
         kind: opp.kind || "benefit",
-        applicationStatus:
-          opp.applicationStatus ||
-          opp.criteriaJson?.applicationStatus ||
-          "unknown",
+        applicationStatus: (() => {
+          const status = opp.applicationStatus || opp.criteriaJson?.applicationStatus;
+          // Map "unknown" to user-friendly "processing" status
+          if (!status || status === "unknown") return "processing";
+          return status;
+        })(),
       },
     }));
 
