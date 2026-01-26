@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { AuthRequest } from "../../middleware/auth.middleware";
 import { EventsService } from "./events.service";
-import { eventDataSchema } from "../../../../shared/src/zodSchemas";
+import { eventDataSchema } from "../../shared/zodSchemas";
 import { config } from "../../config/env";
 
 const eventsService = new EventsService();

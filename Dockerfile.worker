@@ -6,11 +6,7 @@ WORKDIR /app
 
 # Αντιγράφουμε τα αρχεία (Backend + Shared)
 COPY backend ./backend
-COPY shared ./shared
 
-# Install shared dependencies
-WORKDIR /app/shared
-RUN npm install
 
 # Μπαίνουμε στο backend
 WORKDIR /app/backend

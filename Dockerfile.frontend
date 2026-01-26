@@ -4,12 +4,8 @@ FROM node:20-alpine as builder
 WORKDIR /app
 
 # Αντιγράφουμε τα αρχεία
-COPY shared ./shared
 COPY frontend ./frontend
 
-# Install shared dependencies
-WORKDIR /app/shared
-RUN npm install
 
 # Μπαίνουμε στο frontend
 WORKDIR /app/frontend

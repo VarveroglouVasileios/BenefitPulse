@@ -3,7 +3,7 @@ import { UserOpportunity } from "../../models/userOpportunity.model";
 import { UserProfile } from "../../models/profile.model";
 import { Event } from "../../models/event.model";
 import { evaluateMatch } from "../../rules/evaluate";
-import { CriteriaRules } from "../../../../shared/src/rulesTypes";
+import { CriteriaRules } from "../../shared/rulesTypes";
 import { sanitizeSearchQuery } from "../../utils/validation";
 
 export class OpportunitiesService {

@@ -12,7 +12,7 @@
 
 <script lang="ts">
 import { defineComponent, computed } from "vue";
-import type { OpportunityType } from "../../../shared/src/types";
+import type { OpportunityType } from "@shared/types";
 
 export default defineComponent({
   name: "Badge",

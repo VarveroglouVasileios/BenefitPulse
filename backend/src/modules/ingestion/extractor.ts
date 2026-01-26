@@ -1,7 +1,7 @@
 import axios from "axios";
 import { config } from "../../config/env";
-import { OpportunityType, Region } from "../../../../shared/src/types";
-import { CriteriaRules } from "../../../../shared/src/rulesTypes";
+import { OpportunityType, Region } from "../../shared/types";
+import { CriteriaRules } from "../../shared/rulesTypes";
 
 export interface ExtractedOpportunity {
   type: OpportunityType;

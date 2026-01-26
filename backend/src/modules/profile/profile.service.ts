@@ -1,5 +1,5 @@
 import { UserProfile, IUserProfile } from "../../models/profile.model";
-import { UserProfile as ProfileType } from "../../../../shared/src/types";
+import { UserProfile as ProfileType } from "../../shared/types";
 
 export class ProfileService {
   async getProfile(userId: string): Promise<IUserProfile | null> {

@@ -52,7 +52,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
-import type { Opportunity } from "../../../../shared/src/types";
+import type { Opportunity } from "@shared/types";
 import OpportunityCard from "../../components/OpportunityCard.vue";
 import SkeletonOpportunityCard from "../../components/SkeletonOpportunityCard.vue";
 import FiltersBar from "../../components/FiltersBar.vue";

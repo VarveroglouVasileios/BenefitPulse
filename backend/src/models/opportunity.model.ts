@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { OpportunityType, OpportunityKind, Region } from "../../../shared/src/types";
+import { OpportunityType, OpportunityKind, Region } from "../shared/types";
 
 export interface IOpportunity extends Document {
   type: OpportunityType;

@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from "mongoose";
-import { AgeRange, IncomeRange, Region } from "../../../shared/src/types";
+import { AgeRange, IncomeRange, Region } from "../shared/types";
 
 // Education & Qualifications (for ASEP matching)
 export interface UserDegree {

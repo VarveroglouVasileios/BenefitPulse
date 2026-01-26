@@ -1,6 +1,6 @@
 import { evaluateMatch } from "./evaluate";
-import { UserProfile } from "../../../shared/src/types";
-import { CriteriaRules } from "../../../shared/src/rulesTypes";
+import { UserProfile } from "../shared/types";
+import { CriteriaRules } from "../shared/rulesTypes";
 
 describe("Rules Engine", () => {
   const studentProfile: UserProfile = {

@@ -4,7 +4,7 @@ import { User } from "../../models/user.model";
 import { Event } from "../../models/event.model";
 import { AdminAudit } from "../../models/adminAudit.model";
 import { Session } from "../../models/session.model";
-import { OpportunityType } from "../../../../shared/src/types";
+import { OpportunityType } from "../../shared/types";
 import { IngestionService } from "../ingestion/ingestion.service";
 import { cleanAndValidate, CleanerInput } from "../ingestion/cleaner";
 import axios from "axios";

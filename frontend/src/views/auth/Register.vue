@@ -128,7 +128,7 @@
 import { ref, computed, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../../stores/auth.store";
-import { registerSchema } from "../../../../shared/src/index";
+import { registerSchema } from "@shared/index";
 
 const router = useRouter();
 const authStore = useAuthStore();

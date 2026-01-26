@@ -54,7 +54,7 @@ import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
 import { useBookmarksStore } from "../../stores/bookmarks.store";
 import { useTracking } from "../../composables/useTracking";
-import type { Opportunity } from "../../../../shared/src/types";
+import type { Opportunity } from "@shared/types";
 import Badge from "../../components/Badge.vue";
 import WhyThis from "../../components/WhyThis.vue";
 

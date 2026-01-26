@@ -1,5 +1,5 @@
-import { CriteriaRules } from "../../../shared/src/rulesTypes";
-import { UserProfile, MatchResult } from "../../../shared/src/types";
+import { CriteriaRules } from "../shared/rulesTypes";
+import { UserProfile, MatchResult } from "../shared/types";
 import { IUserProfile } from "../models/profile.model";
 import { IOpportunity } from "../models/opportunity.model";
 

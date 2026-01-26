@@ -77,7 +77,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Opportunity } from "../../../shared/src/types";
+import { Opportunity } from "@shared/types";
 // @ts-ignore - Vue SFC default export
 import Badge from "./Badge.vue";
 import ShareModal from "./ShareModal.vue";

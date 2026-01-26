@@ -1,7 +1,7 @@
 import { Event, IEvent } from "../../models/event.model";
 import { Session } from "../../models/session.model";
 import { UserProfile } from "../../models/profile.model";
-import { EventData } from "../../../../shared/src/types";
+import { EventData } from "../../shared/types";
 
 export class EventsService {
   async trackEvent(

@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { ProfileService } from './profile.service';
 import { matchingQueue } from '../../jobs/queues';
-import { userProfileSchema } from '../../../../shared/src/zodSchemas';
+import { userProfileSchema } from '../../shared/zodSchemas';
 import { config } from '../../config/env';
 
 const profileService = new ProfileService();

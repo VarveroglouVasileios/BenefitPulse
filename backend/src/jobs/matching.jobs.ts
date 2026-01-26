@@ -3,7 +3,7 @@ import { UserProfile } from "../models/profile.model";
 import { Opportunity } from "../models/opportunity.model";
 import { UserOpportunity } from "../models/userOpportunity.model";
 import { evaluateMatch } from "../rules/evaluate";
-import { CriteriaRules } from "../../../shared/src/rulesTypes";
+import { CriteriaRules } from "../shared/rulesTypes";
 
 interface RecomputeUserMatchesData {
   userId: string;

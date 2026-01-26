@@ -47,7 +47,7 @@ import { Opportunity } from "./models/opportunity.model";
 import { UserProfile } from "./models/profile.model";
 import { UserOpportunity } from "./models/userOpportunity.model";
 import { evaluateMatch } from "./rules/evaluate";
-import { CriteriaRules } from "../../shared/src/rulesTypes";
+import { CriteriaRules } from "./shared/rulesTypes";
 
 // Import models to ensure they're registered
 import "./models";
