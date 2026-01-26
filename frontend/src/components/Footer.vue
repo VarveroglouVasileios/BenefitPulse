@@ -37,9 +37,9 @@
     <div class="footer-bottom">
       <div class="footer-status">
         <span class="status-badge">🟢 System status: Operational</span>
-        <span class="status-text">Last scan: κάθε 30'</span>
+        <span class="status-text">Last scan: κάθε 2 ώρες</span>
       </div>
-      <p>&copy; 2025 BenefitPulse</p>
+      <p>&copy; {{ currentYear }} BenefitPulse</p>
       <p class="disclaimer-text">
         Δεν είμαστε επίσημος φορέας. Το BenefitPulse είναι aggregator που συλλέγει πληροφορίες από επίσημες πηγές.
       </p>
@@ -63,6 +63,7 @@ import ContactModal from "./ContactModal.vue";
 
 const contactModalOpen = ref(false);
 const contactModalType = ref<"error" | "source" | "general">("general");
+const currentYear = new Date().getFullYear();
 
 function openContactModal(type: "error" | "source" | "general") {
   contactModalType.value = type;

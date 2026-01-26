@@ -47,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useRoute } from "vue-router";
 import { useHead } from '@unhead/vue';
 import { api } from "../../api/endpoints";
@@ -116,31 +116,34 @@ onMounted(async () => {
 });
 
 // Dynamic Open Graph meta tags for social media sharing
-watch(() => opportunity.value, (opp) => {
-  if (!opp) return;
-  
-  const url = `${window.location.origin}/opportunities/${opp._id}`;
-  const title = `${opp.title} - BenefitPulse`;
-  const description = opp.summary || 'Δείτε αυτή την ευκαιρία στο BenefitPulse';
-  
-  useHead({
-    title: title,
-    meta: [
-      { name: 'description', content: description },
-      // Open Graph
-      { property: 'og:type', content: 'website' },
-      { property: 'og:url', content: url },
-      { property: 'og:title', content: title },
-      { property: 'og:description', content: description },
-      { property: 'og:site_name', content: 'BenefitPulse' },
-      // Twitter Card
-      { name: 'twitter:card', content: 'summary_large_image' },
-      { name: 'twitter:url', content: url },
-      { name: 'twitter:title', content: title },
-      { name: 'twitter:description', content: description },
-    ],
-  });
-}, { immediate: true });
+// Dynamic Open Graph meta tags for social media sharing
+const pageTitle = computed(() => 
+  opportunity.value ? `${opportunity.value.title} - BenefitPulse` : 'BenefitPulse'
+);
+const pageDescription = computed(() => 
+  opportunity.value?.summary?.substring(0, 160) || 'Δείτε αυτή την ευκαιρία στο BenefitPulse'
+);
+const pageUrl = computed(() => 
+  typeof window !== 'undefined' ? `${window.location.origin}/opportunities/${route.params.id}` : ''
+);
+
+useHead({
+  title: pageTitle,
+  meta: [
+    { name: 'description', content: pageDescription },
+    // Open Graph
+    { property: 'og:type', content: 'website' },
+    { property: 'og:url', content: pageUrl },
+    { property: 'og:title', content: pageTitle },
+    { property: 'og:description', content: pageDescription },
+    { property: 'og:site_name', content: 'BenefitPulse' },
+    // Twitter Card
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:url', content: pageUrl },
+    { name: 'twitter:title', content: pageTitle },
+    { name: 'twitter:description', content: pageDescription },
+  ],
+});
 </script>
 
 <style scoped>

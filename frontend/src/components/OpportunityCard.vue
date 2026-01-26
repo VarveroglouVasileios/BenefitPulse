@@ -126,17 +126,57 @@ const isExpiringSoon = computed(() => {
 });
 
 const statusLabel = computed(() => {
+  // First check computed expiry states
   if (isExpired.value) return "Έληξε";
   if (isExpiringSoon.value) return "Λήγει σύντομα";
+  
+  // Check backend badge if available
+  const badge = (props.opportunity as any).badge;
+  const appStatus = badge?.applicationStatus || (props.opportunity as any).applicationStatus;
+  
+  if (appStatus) {
+    const statusMap: Record<string, string> = {
+      "open": "Ανοικτό",
+      "upcoming": "Προσεχώς",
+      "closed": "Έκλεισε",
+      "expired": "Έληξε",
+      "results": "Αποτελέσματα",
+      "news": "Νέα",
+      "processing": "Σε επεξεργασία",
+      "unknown": "Σε επεξεργασία", // Map unknown to friendly label
+    };
+    return statusMap[appStatus] || appStatus;
+  }
+  
+  // Fallback for items without badge
   if (props.opportunity.deadlineAt) return "Ανοικτό";
-  return "Άγνωστο";
+  return "Σε επεξεργασία";
 });
 
 const statusClass = computed(() => {
   if (isExpired.value) return "status-expired";
   if (isExpiringSoon.value) return "status-expiring";
+  
+  // Check backend badge
+  const badge = (props.opportunity as any).badge;
+  const appStatus = badge?.applicationStatus || (props.opportunity as any).applicationStatus;
+  
+  if (appStatus) {
+    const classMap: Record<string, string> = {
+      "open": "status-open",
+      "upcoming": "status-upcoming",
+      "closed": "status-expired",
+      "expired": "status-expired",
+      "results": "status-results",
+      "news": "status-news",
+      "processing": "status-processing",
+      "unknown": "status-processing", // Use same style as processing
+    };
+    return classMap[appStatus] || "status-unknown";
+  }
+  
   if (props.opportunity.deadlineAt) return "status-open";
-  return "status-unknown";
+  return "status-processing";
 });
 
 function getSourceLabel(source: string): string {
@@ -289,6 +329,26 @@ function formatDate(date: string | Date): string {
 .status-unknown {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
+}
+
+.status-processing {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-upcoming {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-results {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.status-news {
+  background: #ccfbf1;
+  color: #0f766e;
 }
 
 .meta {

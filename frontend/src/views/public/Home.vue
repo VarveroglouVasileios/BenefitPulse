@@ -46,10 +46,10 @@
         </div>
         <div class="stat-item">
           <div class="stat-value" v-if="stats.opportunities > 0">
-            {{ animatedStats.opportunities || stats.opportunities }}<span v-if="stats.openCount > 0 && stats.openCount < stats.opportunities && (animatedStats.opportunities > 0 || stats.opportunities > 0)" class="open-count"> • Ανοικτά: {{ stats.openCount }}</span>
+            {{ animatedStats.opportunities || stats.opportunities }}
           </div>
           <div class="stat-value" v-else>—</div>
-          <div class="stat-label">Ευκαιρίες</div>
+          <div class="stat-label">Ανοικτές Ευκαιρίες</div>
         </div>
         <div class="stat-item">
           <div class="live-badge" v-if="lastScanLabel">🟢 {{ lastScanLabel }}</div>
