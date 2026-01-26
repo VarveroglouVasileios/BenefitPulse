@@ -15,6 +15,7 @@ export interface ExtractedOpportunity {
   criteriaRulesJson: CriteriaRules;
   criteriaUnknown?: boolean;
   confidence: number;
+  status?: "open" | "closed" | "expected" | "unknown";
 }
 
 /**
@@ -187,30 +188,54 @@ export async function extractOpportunity(
   // Real Groq Implementation
   try {
     const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    const today = new Date().toISOString().split('T')[0];
     
-    const systemPrompt = `You are an expert data extractor for BenefitPulse. Your job is to analyze Greek announcements (subsidies, jobs, vouchers) and extract structured data.
-    
-    Output JSON ONLY. Structure:
-    {
-      "type": "subsidy" | "voucher" | "program" | "public_call" | "asep_competition",
-      "title": "Clean concise title in Greek",
-      "summary": "Clear, engaging summary in Greek describing the benefit and eligibility (max 300 chars)",
-      "deadlineAt": "ISO Date string (YYYY-MM-DD) or null",
-      "tags": ["tag1", "tag2"],
-      "region": "attiki" | "thessaloniki" | "crete" | "peloponnese" | "macedonia" | "thrace" | "epirus" | "thessaly" | "central_greece" | "western_greece" | "aegean_islands" | "ionian_islands" | "other" (or null if nationwide),
-      "criteriaRulesJson": {
-        "ageRange": "min-max" (e.g. "18-29") or null,
-        "incomeRange": "range" (e.g. "<10k", "10-20k") or null,
-        "statusFlags": { "required": ["unemployed", "student", "parent", "disabled", "pensioner"] } (only if strictly required)
-      },
-      "confidence": number (0.0 to 1.0 - how likely is this a real benefit/opportunity?)
-    }
-    
-    Rules:
-    - If it's a press release about a future payment, confidence is 0.6.
-    - If it's an active call for applications, confidence is 0.9+.
-    - Convert relative dates (e.g. "next Friday") to absolute if possible, otherwise null.
-    `;
+    const systemPrompt = `You are "BenefitPulse AI", an expert data extraction engine for Greek government notices, subsidies, and job openings.
+
+YOUR GOAL: Analyze the input text and extract structured JSON data accurately.
+
+CONTEXT:
+- Current Date: ${today} (YYYY-MM-DD).
+- Input is usually raw HTML text or scraped content from Greek sites (Diavgeia, DYPA, gov.gr).
+
+INSTRUCTIONS FOR FIELDS:
+
+1. **type**: Classify strictly into one of:
+   - "subsidy" (Επιδόματα, Vouchers, Market Pass, οικονομική ενίσχυση).
+   - "job" (Θέσεις εργασίας, ΣΟΧ, ΣΜΕ, Μόνιμοι).
+   - "program" (Κατάρτιση, Προγράμματα DYPA, Κοινωφελής εργασία).
+   - "contest" (Διαγωνισμοί ΑΣΕΠ, Προσλήψεις).
+   - "news" (Ανακοινώσεις αποτελεσμάτων, παρατάσεις, γενικά νέα).
+
+2. **title**: Clean up the title. Remove jargon like "ΑΔΑ:", "Ψ67...", "ΑΝΑΡΤΗΣΗ". Keep it concise.
+
+3. **summary**: Write a summary in GREEK (max 280 chars).
+   - Structure: "Benefit description. Who is eligible."
+   - Tone: Professional, direct, encouraging.
+   - NO "Click here", NO "Read more".
+
+4. **dates**:
+   - "deadlineAt": Exact expiration date (ISO 8601). If text says "within 10 days from 01/01", calculate it. If expired/past, still return the date.
+   - "status": 
+     - "open" (Deadline is in the future).
+     - "closed" (Deadline is in the past).
+     - "expected" (Application starts in future).
+     - "unknown" (No dates found).
+
+5. **tags**: Extract strict tags: "unemployed", "student", "parent", "disabled", "business", "tourism", "farmers", "pensioners".
+
+6. **region**: Detect region if specific (e.g., "Crete", "Attica"). Return null if nationwide.
+
+OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
+{
+  "type": "subsidy" | "job" | "program" | "contest" | "news",
+  "title": "string",
+  "summary": "string",
+  "deadlineAt": "YYYY-MM-DD" | null,
+  "status": "open" | "closed" | "expected" | "unknown",
+  "tags": ["tag1", "tag2"],
+  "confidence": number (0.0 to 1.0)
+}`;
 
     const response = await axios.post(
       apiUrl,
@@ -218,7 +243,7 @@ export async function extractOpportunity(
         model: config.groq.model || 'llama-3.1-8b-instant',
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: "Text to analyze:\n" + content.substring(0, 2500) }
+          { role: "user", content: "Text to analyze:\n" + content.substring(0, 3000) }
         ],
         response_format: { type: "json_object" },
         temperature: 0.1
@@ -236,18 +261,46 @@ export async function extractOpportunity(
       const rawText = response.data.choices[0].message.content;
       const parsed = JSON.parse(rawText);
       
+      // Map AI types to system types
+      let type: OpportunityType = "manual";
+      const aiType = parsed.type || "news";
+      
+      switch (aiType) {
+        case "subsidy": type = "subsidy"; break;
+        case "job": type = "public_call"; break;
+        case "program": type = "program"; break;
+        case "contest": type = "asep_competition"; break;
+        case "news": type = "manual"; break;
+        default: type = "manual";
+      }
+
+      // Reconstruct criteriaRules from tags (backward compatibility)
+      const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
+      const mappedStatusFlags: any[] = [];
+      if (tags.includes("student")) mappedStatusFlags.push("student");
+      if (tags.includes("unemployed")) mappedStatusFlags.push("unemployed");
+      if (tags.includes("parent")) mappedStatusFlags.push("parent");
+      if (tags.includes("pensioners")) mappedStatusFlags.push("retired");
+      // "disabled", "business", "tourism", "farmers" are kept as tags but not valid StatusFlag
+      
+      const criteriaRulesJson: CriteriaRules = {
+        statusFlags: mappedStatusFlags.length > 0 ? { required: mappedStatusFlags } : undefined,
+        region: parsed.region ? { includes: [parsed.region] } : undefined,
+      };
+
       // Map JSON to ExtractedOpportunity interface
       return {
-        type: parsed.type || "manual",
+        type,
         title: parsed.title || "Untitled",
         summary: parsed.summary || "",
         deadlineAt: parsed.deadlineAt ? new Date(parsed.deadlineAt) : undefined,
-        tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        tags,
         region: parsed.region || undefined,
-        criteriaJson: {},
-        criteriaRulesJson: parsed.criteriaRulesJson || {},
-        criteriaUnknown: !parsed.criteriaRulesJson,
+        criteriaJson: {}, 
+        criteriaRulesJson,
+        criteriaUnknown: !criteriaRulesJson.statusFlags && !criteriaRulesJson.region,
         confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+        status: parsed.status
       };
     }
     
