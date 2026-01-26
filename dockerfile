@@ -1,20 +1,21 @@
-# Χρησιμοποιούμε Node.js 20
+# Χρησιμοποιούμε Node.js 20 Alpine
 FROM node:20-alpine
 
-# Ρυθμίζουμε τον φάκελο εργασίας
 WORKDIR /app
 
-# 1. Αντιγράφουμε το backend
-COPY backend ./backend
+# 1. Caching: Αντιγράφουμε ΜΟΝΟ το package.json πρώτα
+COPY backend/package*.json ./backend/
 
-# 2. Shared module: Αντιγράφουμε στο root για να είναι sibling του backend
-
-
-# 3. Μπαίνουμε στο backend και χτίζουμε
 WORKDIR /app/backend
 RUN npm install
+
+# 2. Αντιγράφουμε τον κώδικα (To shared είναι ήδη μέσα στο backend/src)
+COPY backend/ .
+
+# 3. Build
 RUN npm run build
 
 # 4. Εκκίνηση
 EXPOSE 3001
-CMD ["node", "dist/backend/src/main.js"]
+# ΠΡΟΣΟΧΗ: Το σωστό path είναι dist/main.js
+CMD ["node", "dist/main.js"]

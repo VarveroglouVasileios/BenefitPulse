@@ -1,22 +1,28 @@
-# Χρησιμοποιούμε Node.js 20
+# Χρησιμοποιούμε Node.js 20 Alpine (ελαφρύ)
 FROM node:20-alpine
 
 # Ρυθμίζουμε τον φάκελο εργασίας
 WORKDIR /app
 
-# Αντιγράφουμε τα αρχεία (Backend + Shared)
-COPY backend ./backend
+# --- Βήμα 1: Εγκατάσταση Dependencies (για Caching) ---
+# Αντιγράφουμε ΜΟΝΟ το package.json πρώτα. 
+# Έτσι, αν αλλάξεις κώδικα αλλά όχι βιβλιοθήκες, το Docker θα προσπεράσει το npm install!
+COPY backend/package*.json ./backend/
 
-
-# Μπαίνουμε στο backend
 WORKDIR /app/backend
-
-# Εγκατάσταση και Build
 RUN npm install
+
+# --- Βήμα 2: Αντιγραφή Κώδικα & Build ---
+# Τώρα αντιγράφουμε τον υπόλοιπο κώδικα (συμπεριλαμβανομένου του src/shared)
+COPY backend/ .
+
+# Χτίζουμε την εφαρμογή (TypeScript -> JavaScript)
 RUN npm run build
 
-# Τυπώνουμε τα περιεχόμενα για debugging (αν χρειαστεί)
-RUN echo "=== 📂 CONTENTS OF DIST FOLDER 📂 ===" && ls -R dist && echo "========================================="
+# --- Βήμα 3: Debugging (Προαιρετικό) ---
+# Βλέπουμε τη δομή για να είμαστε σίγουροι πού πήγε το worker.js
+RUN echo "=== 📂 DIST CONTENTS ===" && ls -R dist && echo "======================"
 
-# 🚀 ΕΚΚΙΝΗΣΗ WORKER: Ψάχνει το worker.js και το τρέχει
-CMD ["node", "dist/backend/src/worker.js"]
+# --- Βήμα 4: Εκκίνηση ---
+# ΠΡΟΣΟΧΗ: Το path είναι πλέον απλό, γιατί το rootDir ήταν το src
+CMD ["node", "dist/worker.js"]
