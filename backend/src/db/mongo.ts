@@ -3,6 +3,9 @@ import { config } from '../config/env';
 
 export async function connectMongo(): Promise<void> {
   try {
+    if (mongoose.connection.readyState === 1) {
+      return;
+    }
     await mongoose.connect(config.mongodb.uri);
     console.log('✅ MongoDB connected');
   } catch (error) {

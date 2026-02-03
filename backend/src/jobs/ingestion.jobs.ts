@@ -11,11 +11,13 @@ const ingestionService = new IngestionService();
 
 export async function processAllSourcesJob(job: Job): Promise<any> {
   const start = Date.now();
-  console.log(`\n🔄 [Ingestion] Dispatching sources (job ${job.id})...`);
+  console.log(`\n================================================================================`);
+  console.log(`🚀 [Ingestion] STARTING DISPATCHER (Job ${job.id})`);
+  console.log(`================================================================================`);
 
   // 1. Fetch enabled sources with just _id
   const sources = await Source.find({ enabled: true }).select("_id name");
-  console.log(`   Found ${sources.length} enabled sources.`);
+  console.log(`   📂 Found ${sources.length} enabled sources.`);
 
   // 2. Create bulk jobs
   const jobs = sources.map((source) => ({
@@ -41,8 +43,6 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
   }
 
   // Schedule verification job after ingestion completes (estimated delay)
-  // Since we don't know exactly when all jobs finish, we give a safe buffer or rely on a separate flow.
-  // For now, we keep the delay but increase it slightly to allow some jobs to start.
   console.log(
     `\n🔍 [Verification] Scheduling verification job (check link health)...`
   );
@@ -50,7 +50,7 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
     "verify-all-published",
     {},
     {
-      delay: 30000, // Wait 30 seconds (dispatcher doesn't wait for workers, so this is just a guess)
+      delay: 30000, 
     }
   );
   console.log(`   ↳ Verification job scheduled (starts in 30s)`);
@@ -63,7 +63,7 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
     "archive-expired-opportunities",
     {},
     {
-      delay: 60000, // Wait 60 seconds
+      delay: 60000, 
     }
   );
   console.log(`   ↳ Archive job scheduled (starts in 60s)`);
@@ -71,8 +71,10 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
   const end = Date.now();
   const durationSec = (end - start) / 1000;
 
-  console.log(`\n🏁 DISPATCH COMPLETED - Sub-jobs queued!`);
-  console.log(`⏱️ Dispatch Duration: ${durationSec.toFixed(2)}s\n`);
+  console.log(`\n================================================================================`);
+  console.log(`🏁 [Ingestion] DISPATCH COMPLETED - Sub-jobs queued!`);
+  console.log(`⏱️  Duration: ${durationSec.toFixed(2)}s`);
+  console.log(`================================================================================\n`);
 
   return { dispatched: jobs.length };
 }

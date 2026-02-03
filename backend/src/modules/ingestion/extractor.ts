@@ -16,6 +16,7 @@ export interface ExtractedOpportunity {
   criteriaUnknown?: boolean;
   confidence: number;
   status?: "open" | "closed" | "expected" | "unknown";
+  isIrrelevant?: boolean; // Flag to explicitly reject content
 }
 
 /**
@@ -27,6 +28,54 @@ export interface AIStatusResult {
   deadlineAt?: string; // ISO date string
   startAt?: string; // ISO date string
   reasoning: string;
+}
+
+// Helper to extract the first valid JSON object by balancing braces
+function extractJsonBlock(text: string): string {
+  const start = text.indexOf('{');
+  if (start === -1) return text;
+
+  let balance = 0;
+  let end = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+    
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        balance++;
+      } else if (char === '}') {
+        balance--;
+        if (balance === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (end !== -1) {
+    return text.substring(start, end + 1);
+  }
+  
+  return text.substring(start); // Fallback to rest of string matches logic
 }
 
 /**
@@ -62,8 +111,9 @@ export async function extractApplicationStatus(
 ΨΑΞΕ ΠΡΟΣΕΚΤΙΚΑ ΓΙΑ ΗΜΕΡΟΜΗΝΙΕΣ ΛΗΞΗΣ (keywords: "Προθεσμία", "Υποβολή έως", "Λήξη", "μέχρι").
 
 ΣΗΜΑΝΤΙΚΟ: Τώρα έχουμε 2026.
-- ΟΠΟΙΑΔΗΠΟΤΕ ημερομηνία του 2025 (π.χ. Δεκέμβριος 2025) είναι ΣΤΟ ΠΑΡΕΛΘΟΝ -> EXPIRED.
-- Ημερομηνίες 2024 είναι ΠΑΛΙΕΣ -> EXPIRED.
+- Προσοχή: Ημερομηνίες ΕΝΑΡΞΗΣ (Start Date) μπορεί να είναι στο παρελθόν (π.χ. 2024, 2025). Αυτό ΔΕΝ σημαίνει ότι έληξε.
+- ΜΟΝΟ αν η Ημερομηνία ΛΗΞΗΣ (Deadline) είναι στο παρελθόν, τότε είναι EXPIRED.
+- Αν βλέπεις "μέχρι εξαντλήσεως προϋπολογισμού" ή "ανοικτό", είναι OPEN.
 
 ΤΙΤΛΟΣ: ${title}
 URL: ${sourceUrl || 'N/A'}
@@ -90,10 +140,13 @@ ${content.substring(0, 2000)}
 
 Αν δεν είσαι σίγουρος, βάλε χαμηλό confidence.`;
 
+    const model = config.groq.model || 'llama-3.1-8b-instant';
+    // No response_format for safety
+    
     const response = await axios.post(
       apiUrl,
       {
-        model: config.groq.model || 'llama-3.1-8b-instant',
+        model,
         messages: [
           { role: "user", content: prompt }
         ],
@@ -110,8 +163,12 @@ ${content.substring(0, 2000)}
     );
 
     if (response.data?.choices?.[0]?.message?.content) {
-      const rawText = response.data.choices[0].message.content;
-      const parsed = JSON.parse(rawText);
+      let rawText = response.data.choices[0].message.content;
+      
+      // Use helper to extract ONLY the JSON block
+      const jsonText = extractJsonBlock(rawText);
+      
+      const parsed = JSON.parse(jsonText);
       
       // Validate and map status to schema enums
       // Schema accepts: "upcoming", "open", "closed", "unknown"
@@ -121,8 +178,7 @@ ${content.substring(0, 2000)}
       if (["open", "active"].includes(rawStatus)) {
         status = "open";
       } else if (["closed", "expired", "completed", "results", "ended"].includes(rawStatus)) {
-        status = "expired";
-        if (rawStatus === "closed") status = "closed";
+        status = "closed"; // Schema only supports 'closed', not 'expired'
       } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
         status = "upcoming";
       }
@@ -189,46 +245,54 @@ export async function extractOpportunity(
   try {
     const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     const today = new Date().toISOString().split('T')[0];
-    
-    const systemPrompt = `You are "BenefitPulse AI", an expert data extraction engine for Greek government notices, subsidies, and job openings.
 
-YOUR GOAL: Analyze the input text and extract structured JSON data accurately.
+    const systemPrompt = `Είσαι το "BenefitPulse AI", μια εξειδικευμένη μηχανή εξαγωγής δεδομένων για ελληνικές κρατικές προκηρύξεις, επιδόματα και θέσεις εργασίας.
 
-CONTEXT:
-- Current Date: ${today} (YYYY-MM-DD).
-- Input is usually raw HTML text or scraped content from Greek sites (Diavgeia, DYPA, gov.gr).
+ΣΤΟΧΟΣ ΣΟΥ: Ανάλυσε το κείμενο εισόδου και εξήγαγε δομημένα δεδομένα JSON με ακρίβεια.
 
-INSTRUCTIONS FOR FIELDS:
+ΠΛΑΙΣΙΟ:
+- Τρέχουσα Ημερομηνία: ${today} (ΕΕΕΕ-ΜΜ-ΗΗ).
+- Η είσοδος είναι συνήθως ακατέργαστο HTML ή κείμενο από ελληνικά sites (Διαύγεια, ΔΥΠΑ, gov.gr).
 
-1. **type**: Classify strictly into one of:
-   - "subsidy" (Επιδόματα, Vouchers, Market Pass, οικονομική ενίσχυση).
-   - "job" (Θέσεις εργασίας, ΣΟΧ, ΣΜΕ, Μόνιμοι).
-   - "program" (Κατάρτιση, Προγράμματα DYPA, Κοινωφελής εργασία).
-   - "contest" (Διαγωνισμοί ΑΣΕΠ, Προσλήψεις).
-   - "news" (Ανακοινώσεις αποτελεσμάτων, παρατάσεις, γενικά νέα).
+ΟΔΗΓΙΕΣ ΓΙΑ ΤΑ ΠΕΔΙΑ:
 
-2. **title**: Clean up the title. Remove jargon like "ΑΔΑ:", "Ψ67...", "ΑΝΑΡΤΗΣΗ". Keep it concise.
+1. **type**: Ταξινόμησε αυστηρά σε ένα από τα εξής:
+   - "subsidy": Επιδόματα, Vouchers, Market Pass, οικονομική ενίσχυση.
+   - "job": Θέσεις εργασίας, ΣΟΧ, ΣΜΕ, Μόνιμοι.
+   - "program": Κατάρτιση, Προγράμματα ΔΥΠΑ, Κοινωφελής εργασία.
+   - "contest": Διαγωνισμοί ΑΣΕΠ, Προσλήψεις.
+   - "news": ΜΟΝΟ για "Αποτελέσματα Προκηρύξεων" (Αποτελέσματα, Πίνακες, Διοριστέοι, Επιλαχόντες, Ενστάσεις) που σχετίζονται με συγκεκριμένη προκήρυξη.
+   - "irrelevant": ΟΛΑ ΤΑ ΑΛΛΑ που βρίσκονται σε νέα/ανακοινώσεις και ΔΕΝ είναι αποτέλεσμα/πίνακας/ένσταση.
+     Παραδείγματα IRRELEVANT:
+     - "Κυκλοφόρησε App", "Νέα ψηφιακή υπηρεσία", "Αναβάθμιση ιστοσελίδας".
+     - "Ο Υπουργός επισκέφθηκε...", "Δελτίο Τύπου" (Γενικά), "Συνέντευξη".
+     - "Στατιστικά", "Αναφορές", "Γενικές πληροφορίες χωρίς ενέργεια".
+     - "Οδηγίες", "Εγχειρίδια".
 
-3. **summary**: Write a summary in GREEK (max 280 chars).
-   - Structure: "Benefit description. Who is eligible."
-   - Tone: Professional, direct, encouraging.
-   - NO "Click here", NO "Read more".
+2. **title**: Καθάρισε τον τίτλο. Αφαίρεσε ορολογίες όπως "ΑΔΑ:", "Ψ67...", "ΑΝΑΡΤΗΣΗ". Κράτα τον περιεκτικό.
+
+3. **summary**: Γράψε σύνοψη στα ΕΛΛΗΝΙΚΑ (max 280 χαρακτήρες).
+   - Δομή: "Περιγραφή παροχής. Ποιοι είναι δικαιούχοι."
+   - Ύφος: Επαγγελματικό, άμεσο, ενθαρρυντικό.
+   - ΟΧΙ "Κλικ εδώ", ΟΧΙ "Διαβάστε περισσότερα".
 
 4. **dates**:
-   - "deadlineAt": Exact expiration date (ISO 8601). If text says "within 10 days from 01/01", calculate it. If expired/past, still return the date.
-   - "status": 
-     - "open" (Deadline is in the future).
-     - "closed" (Deadline is in the past).
-     - "expected" (Application starts in future).
-     - "unknown" (No dates found).
+   - "deadlineAt": Ακριβής ημερομηνία λήξης (ISO 8601). Αν λέει "εντός 10 ημερών από 01/01", υπολόγισέ το.
+   - "status": "open" | "closed" | "expected" | "unknown".
+   
+   ΚΑΝΟΝΕΣ ΗΜΕΡΟΜΗΝΙΩΝ (ΣΗΜΑΝΤΙΚΟ):
+   - ΤΩΡΑ ΕΙΝΑΙ 2026.
+   - Hμερομηνίες έναρξης (Start Dates) του 2024/2025 είναι αποδεκτές αν το πρόγραμμα τρέχει ακόμα.
+   - ΜΟΝΟ αν η ημερομηνία ΛΗΞΗΣ (Deadline) είναι πριν από ${today}, τότε status="closed".
+   - Αν είναι "ανοικτό" ή "μέχρι εξαντλήσεως", status="open".
 
-5. **tags**: Extract strict tags: "unemployed", "student", "parent", "disabled", "business", "tourism", "farmers", "pensioners".
+5. **tags**: Εξήγαγε αυστηρά tags: "unemployed", "student", "parent", "disabled", "business", "tourism", "farmers", "pensioners".
 
-6. **region**: Detect region if specific (e.g., "Crete", "Attica"). Return null if nationwide.
+6. **region**: Εντόπισε περιοχή αν είναι συγκεκριμένη.
 
-OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
+OUTPUT JSON SCHEMA ONLY:
 {
-  "type": "subsidy" | "job" | "program" | "contest" | "news",
+  "type": "subsidy" | "job" | "program" | "contest" | "news" | "irrelevant",
   "title": "string",
   "summary": "string",
   "deadlineAt": "YYYY-MM-DD" | null,
@@ -237,17 +301,21 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
   "confidence": number (0.0 to 1.0)
 }`;
 
+    const model = config.groq.model || 'llama-3.1-8b-instant';
+    // We rely on the system prompt for JSON format to avoid API 400 errors
+    // with incompatible response_format parameters across different models
+    const requestBody: any = {
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: "Text to analyze:\n" + content.substring(0, 3000) }
+      ],
+      temperature: 0.1
+    };
+
     const response = await axios.post(
       apiUrl,
-      {
-        model: config.groq.model || 'llama-3.1-8b-instant',
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Text to analyze:\n" + content.substring(0, 3000) }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1
-      },
+      requestBody,
       {
         headers: { 
           'Authorization': `Bearer ${apiKey}`,
@@ -258,11 +326,16 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
     );
 
     if (response.data?.choices?.[0]?.message?.content) {
-      const rawText = response.data.choices[0].message.content;
-      const parsed = JSON.parse(rawText);
+      let rawText = response.data.choices[0].message.content;
+      
+      // Use helper to extract ONLY the JSON block
+      const jsonText = extractJsonBlock(rawText);
+      
+      const parsed = JSON.parse(jsonText);
       
       // Map AI types to system types
-      let type: OpportunityType = "manual";
+      let type: OpportunityType = "manual"; // Default maps to news/manual
+      let isIrrelevant = false;
       const aiType = parsed.type || "news";
       
       switch (aiType) {
@@ -270,7 +343,11 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
         case "job": type = "public_call"; break;
         case "program": type = "program"; break;
         case "contest": type = "asep_competition"; break;
-        case "news": type = "manual"; break;
+        case "news": type = "manual"; break; // Only valid Results/Notices stay as manual(news)
+        case "irrelevant": 
+          type = "manual"; 
+          isIrrelevant = true; 
+          break;
         default: type = "manual";
       }
 
@@ -285,8 +362,53 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
       
       const criteriaRulesJson: CriteriaRules = {
         statusFlags: mappedStatusFlags.length > 0 ? { required: mappedStatusFlags } : undefined,
-        region: parsed.region ? { includes: [parsed.region] } : undefined,
+        // Region will be set after normalization below
       };
+
+      // Normalize Region
+      let region: Region | undefined = parsed.region as Region;
+      if (region) {
+          // Normalize common Greek/English inputs to enum
+          const lowerRegion = String(region).toLowerCase();
+          
+          // Helper map for strict normalization
+          const regionMap: Record<string, Region> = {
+             "αττική": "attiki", "attica": "attiki", "athens": "attiki", "αθήνα": "attiki", "ελευσίνα": "attiki", "elefsina": "attiki",
+             "thessaloniki": "thessaloniki", "θεσσαλονίκη": "thessaloniki",
+             "crete": "crete", "κρήτη": "crete",
+             "peloponnese": "peloponnese", "πελοπόννησος": "peloponnese",
+             "macedonia": "macedonia", "μακεδονία": "macedonia",
+             "thrace": "thrace", "θράκη": "thrace",
+             "epirus": "epirus", "ήπειρος": "epirus",
+             "thessaly": "thessaly", "θεσσαλία": "thessaly",
+             "central_greece": "central_greece", "στερεά ελλάδα": "central_greece",
+             "western_greece": "western_greece", "δυτική ελλάδα": "western_greece",
+             "aegean_islands": "aegean_islands", "αιγαίο": "aegean_islands",
+             "ionian_islands": "ionian_islands", "ιόνιο": "ionian_islands",
+             "nationwide": "nationwide", "πανελλαδικά": "nationwide", "όλη η ελλάδα": "nationwide",
+          };
+
+          if (regionMap[lowerRegion]) {
+             region = regionMap[lowerRegion];
+          } else if (!Object.values(regionMap).includes(region as Region)) {
+             // If not in map and not already a valid enum value, fallback to undefined or 'other'
+             // Check if it matches any valid enum key
+             const validRegions = [
+                "attiki", "thessaloniki", "crete", "peloponnese", "macedonia", 
+                "thrace", "epirus", "thessaly", "central_greece", "western_greece", 
+                "aegean_islands", "ionian_islands", "nationwide", "other"
+             ];
+             if (!validRegions.includes(lowerRegion)) {
+                console.warn(`⚠️  Invalid region from AI: "${region}" -> setting to undefined`);
+                region = undefined;
+             }
+          }
+      }
+
+      // Update criteriaRulesJson with normalized region
+      if (region) {
+        criteriaRulesJson.region = { includes: [region] };
+      }
 
       // Map JSON to ExtractedOpportunity interface
       return {
@@ -295,7 +417,7 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
         summary: parsed.summary || "",
         deadlineAt: parsed.deadlineAt ? new Date(parsed.deadlineAt) : undefined,
         tags,
-        region: parsed.region || undefined,
+        region: region || undefined,
         criteriaJson: {}, 
         criteriaRulesJson,
         criteriaUnknown: !criteriaRulesJson.statusFlags && !criteriaRulesJson.region,
@@ -307,9 +429,18 @@ OUTPUT JSON SCHEMA ONLY (No markdown, no text before/after):
     throw new Error("Empty response from Groq");
 
   } catch (error: any) {
-    console.error("❌ Groq Extractor failed:", error.message);
+    if (error.response?.data) {
+      console.error("❌ Groq Extractor failed (API Error):", JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.error("❌ Groq Extractor failed:", error.message);
+    }
     // Fallback to stub on error
-    return fallbackStubExtractor(content);
+    const stubResult = fallbackStubExtractor(content);
+    // Ensure stub result has valid status enum
+    if (stubResult.status === "expired" as any) {
+        stubResult.status = "closed";
+    }
+    return stubResult;
   }
 }
 
@@ -539,6 +670,7 @@ function fallbackStubExtractor(content: string): ExtractedOpportunity {
     western_greece: ["δυτική ελλάδα", "western greece"],
     aegean_islands: ["αιγαίο", "aegean"],
     ionian_islands: ["ιόνιο", "ionian"],
+    nationwide: ["πανελλαδικά", "όλη η ελλάδα", "nationwide"],
     other: [],
   };
 

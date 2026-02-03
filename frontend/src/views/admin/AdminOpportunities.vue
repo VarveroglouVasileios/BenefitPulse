@@ -215,14 +215,16 @@ const endItem = computed(() => Math.min(page.value * limit.value, total.value));
 
 function nextPage() {
   if (page.value < totalPages.value) {
-    adminStore.setPage(page.value + 1);
+    adminStore.page = page.value + 1;
+    fetchData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
 
 function prevPage() {
   if (page.value > 1) {
-    adminStore.setPage(page.value - 1);
+    adminStore.page = page.value - 1;
+    fetchData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 }
@@ -392,17 +394,7 @@ const fetchData = async () => {
 
 
 
-watch(
-  filters,
-  () => {
-    adminStore.setPage(1); // Reset to page 1 to avoid empty results
-    // The store action handles the fetch, so we don't need to call fetchData() manually if setPage does it
-    // But currently fetchData uses local state search query, so let's call fetchData directly after resetting page state
-    // Actually setPage triggers fetch, but with its own params. Let's act strictly:
-    // adminStore.page = 1; (reactive) -> setPage updates state and fetches.
-  },
-  { deep: true }
-);
+
 
 // Better watcher implementation:
 watch(

@@ -33,14 +33,23 @@ if (!(global as any).DOMException) {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("web-streams-polyfill/polyfill");
 
-import { connectMongo } from "../db/mongo";
-import { IngestionService } from "../modules/ingestion/ingestion.service";
+import { ingestionQueue } from "../jobs/queues";
 
 async function main() {
-  await connectMongo();
-  const service = new IngestionService();
-  const count = await service.processAllEnabledSources();
-  console.log(`✅ Processed ${count} new items`);
+  console.log("🚀 Triggering ingestion worker...");
+  
+  await ingestionQueue.add("process-all-sources", {}, {
+    removeOnComplete: true,
+    removeOnFail: true
+  });
+  
+  console.log("✅ Job added to queue! Watch the worker logs.");
+  process.exit(0);
+}
+
+// Execute if run directly
+if (require.main === module) {
+  main().catch(console.error);
 }
 
 export default main;

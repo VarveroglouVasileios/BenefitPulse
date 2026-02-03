@@ -143,14 +143,21 @@ function onComplete(workerName: string) {
     
     // Ingestion completion notification
     if (workerName === "ingestion" && job.name === "process-all-sources" && returnValue) {
-      if (typeof returnValue === "object" && returnValue.count !== undefined) {
-          const { count, durationMs } = returnValue;
-          const seconds = (durationMs || 0) / 1000;
-          
+      // Handle both old format (count) and new format (dispatched)
+      let body = "";
+      if (typeof returnValue === "object") {
+         if (returnValue.dispatched !== undefined) {
+            body = `🚀 Ξεκίνησε η επεξεργασία ${returnValue.dispatched} πηγών`;
+         } else if (returnValue.count !== undefined) {
+            body = `✅ Βρέθηκαν ${returnValue.count} νέες εγγραφές`;
+         }
+      }
+
+      if (body) {
           try {
              await notificationService.sendToAdmins({
-                title: 'Ολοκλήρωση Ingestion',
-                body: `✅ Βρέθηκαν ${count} νέες εγγραφές σε ${seconds.toFixed(1)}s`,
+                title: 'Ingestion Started',
+                body,
                 url: '/admin',
                 icon: '/pwa-192x192.png'
              });

@@ -733,6 +733,13 @@ export class IngestionService {
         }
       }
       
+      // Helper to clean text from Cheerio element
+      function cleanCheerioText($el: any): string {
+        const clone = $el.clone();
+        clone.find("script, style, noscript, iframe, svg, meta, link").remove();
+        return clone.text().replace(/\s+/g, " ").trim();
+      }
+
       // Regular listing: find links ONLY in main content (ignore header/footer/nav)
       // Try to find main content container first
       const mainContent = $("main, article, [role='main'], .content, .main-content, #content, .main, [class*='content']").first();
@@ -741,7 +748,7 @@ export class IngestionService {
       searchContainer.find("a").each((_, el) => {
         const $el = $(el);
         const href = $el.attr("href");
-        const text = $el.text().trim();
+        const text = cleanCheerioText($el); // Use cleaner
         if (!href || !text) return;
         
         // Skip if link is in header/footer/nav
@@ -775,9 +782,21 @@ export class IngestionService {
           }
 
           const canonical = `${u.hostname}${u.pathname}`;
+          
+          // For content, try to find a parent paragraph or description
+          // But cleaning it properly
+          let content = text;
+          const parentBlock = $el.closest("p, li, div.card, article");
+          if (parentBlock.length > 0) {
+             const cleanParent = cleanCheerioText(parentBlock);
+             if (cleanParent.length > text.length && cleanParent.length < 500) {
+                content = cleanParent;
+             }
+          }
+
           items.push({
             title: text,
-            content: text,
+            content: content,
             url: u.toString(),
             publishedAt: new Date(),
             metadata: { canonical },
@@ -1570,16 +1589,26 @@ export class IngestionService {
       let rawItem = existingRawItem;
       const isDuplicate = !!rawItem;
       if (rawItem) {
+        // OPTIMIZATION: Only update and reprocess if content materially changed
+        const contentChanged = rawItem.content !== item.content;
+        const titleChanged = rawItem.title !== item.title;
+        
+        if (!contentChanged && !titleChanged) {
+          console.log(`   ⏭️  SKIP: Content unchanged for "${title.substring(0, 50)}"`);
+          if (reporter) reporter.trackSkipped(sourceId, 'unchanged', title, item.url, content.length, source.type);
+          continue;
+        }
+
         // Update existing
         rawItem.title = item.title;
         rawItem.content = item.content;
         rawItem.url = item.url;
         rawItem.publishedAt = item.publishedAt;
         rawItem.metadata = item.metadata || {};
-        rawItem.processed = false; // Reprocess
+        rawItem.processed = false; // Reprocess only if changed
         rawItem.updatedAt = new Date();
         await rawItem.save();
-        console.log(`   🔄 UPDATED existing raw item`);
+        console.log(`   🔄 UPDATED existing raw item (content changed)`);
       } else {
         // Create new
         rawItem = await RawItem.create({
@@ -1615,6 +1644,21 @@ export class IngestionService {
         };
 
         const cleaned = cleanAndValidate(cleanerInput);
+
+        // DEDUPLICATION OPTIMIZATION: Check if opportunity already exists BEFORE AI calls
+        const alreadyExists = await Opportunity.findOne({
+          officialUrl: cleaned.officialUrl,
+          deletedAt: null,
+        });
+
+        if (alreadyExists) {
+           console.log(`   ⏭️  SKIP: Opportunity already exists (skipping AI) - ${cleaned.officialUrl}`);
+           // Mark raw item as processed since we found the opportunity
+           rawItem.processed = true;
+           rawItem.updatedAt = new Date();
+           await rawItem.save();
+           continue; 
+        }
 
         // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status, try AI
         // OPTIMIZATION: Skip AI if status is rejected (e.g. service_info) to save tokens/time
@@ -1679,6 +1723,16 @@ export class IngestionService {
           } catch (aiError: any) {
             console.log(`   ⚠️ AI Eligibility failed: ${aiError.message?.substring(0, 50) || 'Unknown error'}`);
           }
+        }
+
+        // AI FILTER: Reject irrelevant news/announcements (e.g. app launches, press releases)
+        if (extracted.isIrrelevant) {
+          cleaned.status = "rejected";
+          if (!cleaned.evidence) {
+            cleaned.evidence = { notes: [], statusSignals: [], dateSignals: [] };
+          }
+          cleaned.evidence.notes = [...(cleaned.evidence.notes || []), "Απορρίφθηκε από AI ως άσχετο νέο"];
+          console.log(`   ⛔ AI Filter: Χαρακτηρίστηκε ως άσχετο νέο (παράβλεψη)`);
         }
 
         // AUTO-PUBLISH TRUSTED SOURCES: Check if source is trusted and confidence is sufficient
@@ -1794,6 +1848,14 @@ export class IngestionService {
         const applicationEndAt = cleaned.applicationEndAt
           ? normalizeDate(parseDate(cleaned.applicationEndAt).date) || deadlineAt
           : deadlineAt; // Fallback to deadlineAt
+
+        // STRICT DATE CHECK: If deadline is in the past, force status to closed
+        if (applicationEndAt && new Date(applicationEndAt) < new Date()) {
+           cleaned.applicationStatus = "closed";
+           if (!cleaned.evidence) cleaned.evidence = { notes: [], statusSignals: [], dateSignals: [] };
+           cleaned.evidence.notes?.push("System forced closed: Deadline in past");
+           console.log(`   🔒 System Override: Deadline ${applicationEndAt} is past -> forcing closed status`);
+        }
 
         // Use tags from cleaner if available, otherwise from extractor
         const tags = cleaned.tags.length > 0 ? cleaned.tags : (extracted.tags || []);

@@ -126,6 +126,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
         "western_greece",
         "aegean_islands",
         "ionian_islands",
+        "nationwide",
         "other",
       ],
     },
@@ -150,7 +151,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     applicationStatus: {
       type: String,
-      enum: ["upcoming", "open", "closed", "unknown"],
+      enum: ["upcoming", "open", "closed", "unknown", "results", "news"],
       index: true,
     },
     status: {

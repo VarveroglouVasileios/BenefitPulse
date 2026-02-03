@@ -291,6 +291,37 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
+    // --- NEW SOURCES (User Request Jan 2026) ---
+    {
+      name: "Greece 2.0 (Recovery Fund)",
+      url: "https://greece20.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "MinAgric (Rural Development)",
+      url: "https://www.minagric.gr/rural-development-programs",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "YPEN (Energy & Environment)",
+      url: "https://ypen.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Culture Portal (Grants)",
+      url: "https://portal.culture.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "EPA (National Development)",
+      url: "https://epa.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
   ];
 
   // Check for duplicates and deduplicate, update broken URLs

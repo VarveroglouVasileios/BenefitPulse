@@ -56,8 +56,6 @@ const SERVICE_INFO_KEYWORDS = [
   "συχνές ερωτήσεις",
   "faq",
   "ερωτήσεις",
-  "ανακοινώσεις",
-  "δελτία τύπου",
   "πολιτική απορρήτου",
   "privacy",
   "cookies",
@@ -66,8 +64,8 @@ const SERVICE_INFO_KEYWORDS = [
   "οικονομικά στοιχεία",
   "προϋπολογισμός",
   "προϋπολογισμος",
-  "διαγωνισμοί",
-  "διαγωνισμος",
+  // "διαγωνισμοί", // Removed: Essential for ASEP
+  // "διαγωνισμος", // Removed: Essential for ASEP
   "είσοδος",
   "login",
   "εγγραφή",
@@ -391,6 +389,39 @@ function checkOverrideRules(
         tags: ["ερωτηματολόγιο", "ενημέρωση"],
       };
     }
+
+    // Override 4: Past Events / Press Releases (News)
+    const pressReleaseKeywords = [
+      "συμμετείχε",
+      "συμμετειχε",
+      "πραγματοποιήθηκε",
+      "πραγματοποιηθηκε",
+      "παραβρέθηκε",
+      "παραβρεθηκε",
+      "συνάντηση",
+      "συναντηση",
+      "επίσκεψη",
+      "επισκεψη",
+      "εθιμοτυπική",
+      "παρουσίαση",
+      "ημερίδα",
+      "συνέντευξη",
+      "δελτίο τύπου",
+    ];
+
+    const isPressRelease = pressReleaseKeywords.some(
+      (kw) => lowerTitle.includes(kw)
+    );
+
+    if (isPressRelease) {
+      return {
+        kind: "news",
+        type: "manual",
+        status: "published", // News are published
+        reason: "Press release / Past event detected",
+        tags: ["δελτίο τύπου", "ενημέρωση", "news"],
+      };
+    }
   } catch {
     // URL parsing failed, skip override
   }
@@ -427,13 +458,16 @@ function isServiceInfo(title: string, content: string, url: string): boolean {
     // URL parsing failed, continue with normal check
   }
 
-  // Check for service info keywords
+  // Check for service info keywords in TITLE and URL only
+  // (Content check is too aggressive as these keywords appear in footers/headers)
   for (const keyword of SERVICE_INFO_KEYWORDS) {
     if (
       lowerTitle.includes(keyword) ||
-      lowerContent.includes(keyword) ||
+      // lowerContent.includes(keyword) || // REMOVED: False positives from footer/nav text
       lowerUrl.includes(keyword.replace(/\s+/g, "-"))
     ) {
+      // Double check: if it's a "menu" keyword, ensure it's short content or explicitly "menu" in title
+      // But for now, just strictly matching title/url is safer to avoid rejecting valid items
       return true;
     }
   }
