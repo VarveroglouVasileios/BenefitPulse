@@ -35,3 +35,9 @@ export const eventsRateLimiter = rateLimit({
   max: 30,
   message: 'Too many event requests, please try again later.',
 });
+
+export const contactRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: 'Too many contact form submissions. Please try again later.',
+});

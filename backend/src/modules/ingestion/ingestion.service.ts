@@ -12,6 +12,12 @@ import { cleanAndValidate, CleanerInput } from "./cleaner";
 import { checkSourceHealth, fixEndpointUrl } from "./source-health-check";
 import { IngestionReporter } from "./ingestion-reporter";
 import { parseDate, normalizeDate } from "../../utils/date-parser";
+import { ProgressTracker } from "../../utils/progress";
+
+// Simple in-memory caches for AI results (per worker process)
+// Key: hash of title+url (or content), Value: AIStatusResult / ExtractedOpportunity
+const aiStatusCache = new Map<string, Awaited<ReturnType<typeof extractApplicationStatus>>>();
+const aiExtractCache = new Map<string, Awaited<ReturnType<typeof extractOpportunity>>>();
 
 const rssParser = new Parser({
   customFields: {
@@ -113,6 +119,48 @@ async function fetchWithRedirects(
   }
 }
 
+/**
+ * Simple HTTP GET with retry for transient errors (429/503 and network timeouts).
+ */
+async function fetchWithRetry(
+  url: string,
+  options: any = {},
+  retries: number = 3,
+  baseDelayMs: number = 1500
+): Promise<{ 
+  data: any; 
+  finalUrl: string; 
+  statusCode: number; 
+  is404: boolean;
+  contentType?: string;
+  contentLength?: number;
+}> {
+  let lastError: any;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fetchWithRedirects(url, options);
+    } catch (err: any) {
+      lastError = err;
+      const status = err.response?.status;
+      const isTransient =
+        status === 429 ||
+        status === 503 ||
+        status === 502 ||
+        status === 504 ||
+        !status; // network/timeout
+
+      if (!isTransient || attempt === retries - 1) {
+        throw err;
+      }
+
+      const delay = baseDelayMs * (attempt + 1);
+      console.warn(`⚠️  Transient HTTP error (${status || 'network'}) for ${url} — retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 const AUTO_PUBLISH_DOMAINS = new Set([
   "vouchers.gov.gr",
   "www.vouchers.gov.gr",
@@ -153,7 +201,7 @@ export class IngestionService {
   async fetchRSS(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("rss");
-      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRedirects(source.url, {
+      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
         timeout: 15000,
@@ -282,24 +330,25 @@ export class IngestionService {
   async fetchAPI(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("api");
-      const response = await axios.get(source.url, {
+      const { data, finalUrl, statusCode, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         params: source.config?.params || {},
+        responseType: "json",
         timeout: 15000,
       });
 
       // Store fetch metadata
-      source.lastHttpStatus = response.status;
-      source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : JSON.stringify(response.data).length);
+      source.lastHttpStatus = statusCode;
+      source.lastFinalUrl = finalUrl;
+      source.lastContentType = contentType || '';
+      source.lastBytes = contentLength 
+        ? contentLength 
+        : (typeof data === 'string' ? data.length : JSON.stringify(data).length);
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        const rawData = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        const rawData = typeof data === 'string' ? data : JSON.stringify(data);
         await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, rawData);
       }
 
@@ -307,14 +356,14 @@ export class IngestionService {
       let items: any[] = [];
       
       // Διαύγεια API format: response.data.response.docs
-      if (response.data?.response?.docs) {
-        items = response.data.response.docs;
-      } else if (Array.isArray(response.data)) {
-        items = response.data;
-      } else if (response.data?.data) {
-        items = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-      } else if (response.data?.decisions) {
-        items = Array.isArray(response.data.decisions) ? response.data.decisions : [response.data.decisions];
+      if (data?.response?.docs) {
+        items = data.response.docs;
+      } else if (Array.isArray(data)) {
+        items = data;
+      } else if (data?.data) {
+        items = Array.isArray(data.data) ? data.data : [data.data];
+      } else if (data?.decisions) {
+        items = Array.isArray(data.decisions) ? data.decisions : [data.decisions];
       }
 
       // Filter Διαύγεια items by keyword relevance in subject
@@ -420,8 +469,12 @@ export class IngestionService {
           publishedAt = new Date();
         }
         
+        // Coerce title to string: some APIs return objects (e.g., { el: "...", en: "..." })
+        const rawTitle = item.title || item.name || item.subject || "";
+        const safeTitle = typeof rawTitle === "string" ? rawTitle : (rawTitle?.el || rawTitle?.en || rawTitle?.name || (typeof rawTitle === "object" ? JSON.stringify(rawTitle) : String(rawTitle)));
+        
         return {
-          title: item.title || item.name || item.subject || "",
+          title: safeTitle,
           content: content,
           url: url || item.id || "",
           publishedAt: publishedAt,
@@ -455,27 +508,30 @@ export class IngestionService {
   async fetchHTMLCatalog(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("html_catalog");
-      const response = await axios.get(source.url, {
+      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
         timeout: 15000,
       });
 
       // Store fetch metadata
-      source.lastHttpStatus = response.status;
-      source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : 0);
+      source.lastHttpStatus = statusCode;
+      source.lastFinalUrl = finalUrl;
+      source.lastContentType = contentType || '';
+      source.lastBytes = contentLength || 0;
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, response.data);
+        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, data);
       }
 
-      const $ = cheerio.load(response.data);
+      // Basic 404 detection for catalog pages as well
+      if (is404 || statusCode === 404) {
+        throw new Error(`HTTP 404: HTML catalog returned 404 - ${source.url}`);
+      }
+
+      const $ = cheerio.load(data);
       const items: any[] = [];
       $("a").each((_, el) => {
         const href = $(el).attr("href");
@@ -546,7 +602,7 @@ export class IngestionService {
   async fetchHTMLListing(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("html_listing");
-      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRedirects(source.url, {
+      const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
         timeout: 15000,
@@ -611,6 +667,11 @@ export class IngestionService {
       ];
       
       const baseHost = new URL(finalUrl || source.url).hostname;
+      const isEskaEsPa = baseHost.includes("espa.gr");
+      const isOpekepe = baseHost.includes("opekepe.gr");
+      const isMindev = baseHost.includes("mindev.gov.gr");
+      const isEpendyseis = baseHost.includes("ependyseis.mindev.gov.gr");
+      const isDiavgeiaHtml = baseHost.includes("diavgeia.gov.gr");
       
       // Special handling for dypa.gov.gr/proghrammata-anoikhta and proghrammata-apaskholisis-11
       if (source.url.includes("dypa.gov.gr/proghrammata-anoikhta") || 
@@ -744,24 +805,96 @@ export class IngestionService {
       // Try to find main content container first
       const mainContent = $("main, article, [role='main'], .content, .main-content, #content, .main, [class*='content']").first();
       const searchContainer = mainContent.length > 0 ? mainContent : $("body");
-      
+
+      const isBigPortal =
+        isEskaEsPa ||
+        isOpekepe ||
+        isMindev ||
+        isEpendyseis ||
+        isDiavgeiaHtml;
+
       searchContainer.find("a").each((_, el) => {
         const $el = $(el);
         const href = $el.attr("href");
         const text = cleanCheerioText($el); // Use cleaner
         if (!href || !text) return;
-        
+
         // Skip if link is in header/footer/nav
-        const parent = $el.parents("header, footer, nav, [role='navigation'], .header, .footer, .navigation, [class*='header'], [class*='footer'], [class*='nav']");
+        const parent = $el.parents(
+          "header, footer, nav, [role='navigation'], .header, .footer, .navigation, [class*='header'], [class*='footer'], [class*='nav']"
+        );
         if (parent.length > 0) return;
-        
-        // Skip blocklisted items (menu/FAQ/guides)
+
         const lowerText = text.toLowerCase();
         const lowerHref = href.toLowerCase();
+
+        // Skip blocklisted items (menu/FAQ/guides)
         if (blocklistKeywords.some((kw) => lowerText.includes(kw) || lowerHref.includes(kw))) {
           return;
         }
-        
+
+        // Domain-specific keyword filters for large portals
+        if (isBigPortal) {
+          let requiredKeywords: string[] = [];
+          if (isEskaEsPa) {
+            requiredKeywords = [
+              "πρόγραμμα",
+              "προγράμματα",
+              "προκηρύξη",
+              "προκήρυξη",
+              "προκηρυξη",
+              "proclamation",
+              "espa",
+            ];
+          } else if (isOpekepe) {
+            requiredKeywords = [
+              "ενίσχυση",
+              "ενισχυση",
+              "επιδότηση",
+              "επιδότησης",
+              "επιδοτηση",
+              "επιδότησης",
+              "καπ",
+              "αγρότες",
+              "αγροτες",
+              "πρόσκληση",
+              "προσκληση",
+            ];
+          } else if (isMindev || isEpendyseis) {
+            requiredKeywords = [
+              "αναπτυξιακός",
+              "αναπτυξιακος",
+              "επενδυση",
+              "επένδυση",
+              "επενδυτικ",
+              "πρόγραμμα",
+              "προγραμμα",
+              "προκήρυξη",
+              "προκηρυξη",
+            ];
+          } else if (isDiavgeiaHtml) {
+            requiredKeywords = [
+              "επίδομα",
+              "επιδότηση",
+              "epidoma",
+              "epidotisi",
+              "voucher",
+              "pass",
+              "youth pass",
+              "tourism4all",
+            ];
+          }
+
+          if (requiredKeywords.length > 0) {
+            const hasKeyword = requiredKeywords.some(
+              (kw) => lowerText.includes(kw) || lowerHref.includes(kw)
+            );
+            if (!hasKeyword) {
+              return;
+            }
+          }
+        }
+
         const url = href.startsWith("http")
           ? href
           : new URL(href, finalUrl || source.url).toString();
@@ -773,25 +906,26 @@ export class IngestionService {
           if (
             u.pathname === "/" ||
             u.pathname.split("/").filter(Boolean).length < 1
-          )
+          ) {
             return;
-          
+          }
+
           // Skip if URL contains blocklist keywords
           if (blocklistKeywords.some((kw) => u.pathname.toLowerCase().includes(kw))) {
             return;
           }
 
           const canonical = `${u.hostname}${u.pathname}`;
-          
+
           // For content, try to find a parent paragraph or description
           // But cleaning it properly
           let content = text;
           const parentBlock = $el.closest("p, li, div.card, article");
           if (parentBlock.length > 0) {
-             const cleanParent = cleanCheerioText(parentBlock);
-             if (cleanParent.length > text.length && cleanParent.length < 500) {
-                content = cleanParent;
-             }
+            const cleanParent = cleanCheerioText(parentBlock);
+            if (cleanParent.length > text.length && cleanParent.length < 500) {
+              content = cleanParent;
+            }
           }
 
           items.push({
@@ -833,27 +967,29 @@ export class IngestionService {
   async fetchSinglePage(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
     try {
       const headers = getHeadersForSourceType("single_page");
-      const response = await axios.get(source.url, {
+      const { data, finalUrl, statusCode, contentType, contentLength, is404 } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
         timeout: 15000,
       });
 
       // Store fetch metadata
-      source.lastHttpStatus = response.status;
-      source.lastFinalUrl = response.request?.responseURL || source.url;
-      source.lastContentType = response.headers['content-type'] || '';
-      source.lastBytes = response.headers['content-length'] 
-        ? parseInt(response.headers['content-length'], 10) 
-        : (typeof response.data === 'string' ? response.data.length : 0);
+      source.lastHttpStatus = statusCode;
+      source.lastFinalUrl = finalUrl;
+      source.lastContentType = contentType || '';
+      source.lastBytes = contentLength || 0;
       source.lastError = undefined;
 
       // Save raw response in debug mode
       if (reporter && sourceId) {
-        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, response.data);
+        await reporter.saveRawResponse(sourceId, source.name, source.lastContentType, data);
       }
 
-      const $ = cheerio.load(response.data);
+      if (is404 || statusCode === 404) {
+        throw new Error(`HTTP 404: Single page returned 404 - ${source.url}`);
+      }
+
+      const $ = cheerio.load(data);
       const text = $("body").text().trim();
       const canonical =
         new URL(source.url).hostname + new URL(source.url).pathname;
@@ -1471,21 +1607,31 @@ export class IngestionService {
       console.log(`   ℹ️  Deduplicated: ${items.length} -> ${uniqueItems.length} items (removed duplicates within same run)`);
     }
 
-    for (const item of uniqueItems) {
+    // Item-level progress tracking
+    const itemProgress = new ProgressTracker({
+      label: `Items from ${source.name}`,
+      total: uniqueItems.length,
+      logEvery: Math.max(1, Math.floor(uniqueItems.length / 10)), // Log ~10 progress updates
+      showItems: true,
+    });
+    itemProgress.start();
+
+    for (let itemIdx = 0; itemIdx < uniqueItems.length; itemIdx++) {
+      const item = uniqueItems[itemIdx];
       const canonical =
         item.metadata?.canonical || canonicalizeUrl(item.url || source.url);
       const hash = generateHash(canonical);
-
-      // Log extracted item
-      console.log(`\n📥 EXTRACTED: "${item.title?.substring(0, 60)}..." | URL: ${item.url?.substring(0, 80)}...`);
 
       // Check if already exists - upsert instead of skip
       // Check if already exists by hash
       const existingRawItem = await RawItem.findOne({ hash });
 
       // Min content filter: apply ONLY to body/summary, NOT title
-      let content = (item.content || "").trim();
-      const title = (item.title || "").trim();
+      // Coerce to string: some APIs (e.g., MITOS/digigov) return objects like { el: "...", en: "..." }
+      const rawTitle = item.title;
+      const rawContent = item.content;
+      let content = (typeof rawContent === "string" ? rawContent : typeof rawContent === "object" && rawContent ? (rawContent.el || rawContent.en || JSON.stringify(rawContent)) : "").trim();
+      const title = (typeof rawTitle === "string" ? rawTitle : typeof rawTitle === "object" && rawTitle ? (rawTitle.el || rawTitle.en || rawTitle.name || JSON.stringify(rawTitle)) : "").trim();
 
       // Deep Fetch: If content is too short AND we don't have a better version in DB
       // Skip for Diavgeia (metadata based) and if URL is missing
@@ -1674,11 +1820,19 @@ export class IngestionService {
           await new Promise(resolve => setTimeout(resolve, 20000));
           
           try {
-            const aiStatus = await extractApplicationStatus(
-              item.title || "",
-              item.content || "",
-              item.url
-            );
+            const statusKey = `${(item.url || canonical) || ""}::${(item.title || "").substring(0, 120)}`;
+            let aiStatus = aiStatusCache.get(statusKey);
+            if (!aiStatus) {
+              aiStatus = await extractApplicationStatus(
+                item.title || "",
+                item.content || "",
+                item.url
+              );
+              aiStatusCache.set(statusKey, aiStatus);
+              reporter?.trackAIStatusCall(true);
+            } else {
+              console.log("   🤖 AI Status Cache hit");
+            }
             
             // If AI is confident enough, use its determination
             if (aiStatus.status !== "unknown" && aiStatus.confidence >= 0.7) {
@@ -1705,23 +1859,43 @@ export class IngestionService {
             }
           } catch (aiError: any) {
             console.log(`   ⚠️ AI Status failed: ${aiError.message?.substring(0, 50) || 'Unknown error'}`);
+            reporter?.trackAIStatusCall(false);
           }
         }
 
-        // Extract eligibility rules using AI extractor (for criteria and confidence check)
-        // THRROTTLING: Wait 5s to respect limits
+        // Extract eligibility rules + high-quality summary using AI extractor
+        // THROTTLING: Wait a few seconds to respect limits
         // OPTIMIZATION: Skip eligibility extraction if item is rejected
-        let extracted: any = { confidence: 0, criteriaRulesJson: {}, criteriaJson: {} }; // Initialize extracted with safe defaults
+        let extracted: any = { confidence: 0, criteriaRulesJson: {}, criteriaJson: {}, summary: "" }; // Initialize extracted with safe defaults
         if (config.groq.apiKey && cleaned.status !== "rejected") {
           console.log("   ⏳ Throttling AI request (Groq 20s)...");
           await new Promise(resolve => setTimeout(resolve, 20000)); // Using 20s for safe TPM
           
           try {
-            extracted = await extractOpportunity(
-              item.title + "\n\n" + item.content
-            );
+            const extractKey = `${(item.url || canonical) || ""}::${(item.title || "").substring(0, 120)}`;
+            let cachedExtract = aiExtractCache.get(extractKey);
+            if (!cachedExtract) {
+              cachedExtract = await extractOpportunity(
+                item.title + "\n\n" + item.content
+              );
+              aiExtractCache.set(extractKey, cachedExtract);
+              reporter?.trackAIExtractCall(true);
+            } else {
+              console.log("   🤖 AI Extractor Cache hit");
+            }
+            extracted = cachedExtract;
           } catch (aiError: any) {
             console.log(`   ⚠️ AI Eligibility failed: ${aiError.message?.substring(0, 50) || 'Unknown error'}`);
+            reporter?.trackAIExtractCall(false);
+          }
+        }
+
+        // If AI produced a good short summary, prefer it over the heuristic cleanSummary output.
+        if (extracted.summary && typeof extracted.summary === "string") {
+          const aiSummary = extracted.summary.trim();
+          if (aiSummary.length >= 40) {
+            // Hard cap to keep previews compact
+            cleaned.summary = aiSummary.length > 320 ? aiSummary.substring(0, 317).trimEnd() + "…" : aiSummary;
           }
         }
 
@@ -1896,11 +2070,8 @@ export class IngestionService {
           }
         }
         
-        // Validation Fix: Map 'results' status (from cleaner/AI fallback) to valid enum 'closed'
-        // This prevents Mongoose ValidationError: `results` is not a valid enum value
-        if ((cleaned.applicationStatus as string) === 'results') {
-           cleaned.applicationStatus = 'closed'; 
-        }
+        // Note: 'results', 'expired', and 'news' are now valid applicationStatus enum values
+        // No mapping needed
 
         if (existingOpp) {
           // Update existing opportunity (don't create duplicate)
@@ -1972,7 +2143,18 @@ export class IngestionService {
           reporter.trackError(sourceId, error.message || String(error));
         }
       }
+
+      // Tick item progress
+      itemProgress.tick(item.title?.substring(0, 50));
     }
+
+    // Finish item progress
+    const totalSkippedForSummary = Object.values(skipReasons).reduce((sum, count) => sum + count, 0);
+    itemProgress.finish({
+      "Published": processedCount,
+      "Kept": itemsKept,
+      "Skipped": totalSkippedForSummary,
+    });
 
     // Update source with processing stats
     source.lastFetchedAt = new Date();

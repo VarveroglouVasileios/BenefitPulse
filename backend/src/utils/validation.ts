@@ -28,3 +28,13 @@ export function sanitizeSearchQuery(query: string): string {
     .substring(0, 100); // Limit length to prevent DoS
 }
 
+/** Escape HTML to prevent XSS when inserting user content into HTML (e.g. email body) */
+export function escapeHtml(unsafe: string): string {
+  if (!unsafe || typeof unsafe !== 'string') return '';
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}

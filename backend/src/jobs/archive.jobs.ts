@@ -4,6 +4,7 @@ import { RawItem } from "../models/rawItem.model";
 import { cleanAndValidate, CleanerInput } from "../modules/ingestion/cleaner";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { ProgressTracker, logPhaseStart } from "../utils/progress";
 
 /**
  * Canonicalize URL for matching
@@ -72,20 +73,14 @@ async function fetchFullPageContent(url: string): Promise<string | null> {
 }
 
 export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
-  console.log(
-    `🔍 [Archive] Starting archive expired opportunities check (job ${job.id})...`
-  );
+  logPhaseStart("ARCHIVE EXPIRED", "🗄️");
 
-  const today = new Date().toISOString();
   const now = new Date();
 
-  // Find all published opportunities
   const published = await Opportunity.find({
     status: "published",
     deletedAt: null,
   });
-
-  console.log(`📊 [Archive] Found ${published.length} published opportunities`);
 
   let archivedCount = 0;
   let checkedCount = 0;
@@ -94,12 +89,23 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
   let summaryExpiredCount = 0;
   let cleanerExpiredCount = 0;
 
+  const progress = new ProgressTracker({
+    label: "Archive Check",
+    total: published.length,
+    logEvery: Math.max(1, Math.floor(published.length / 10)),
+    showItems: false,
+  });
+  progress.start();
+
   for (const opp of published) {
     checkedCount++;
     let shouldArchive = false;
 
-    // Check 1: deadlineAt < today
-    if (opp.deadlineAt && opp.deadlineAt < now) {
+    // Check 1: deadlineAt or applicationEndAt < today
+    if (
+      (opp.deadlineAt && opp.deadlineAt < now) ||
+      (opp.applicationEndAt && opp.applicationEndAt < now)
+    ) {
       shouldArchive = true;
       deadlineExpiredCount++;
     }
@@ -128,7 +134,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       }
     }
 
-    // Check 3: Try to find raw item and re-validate with Cleaner
+    // Check 4: Try to find raw item and re-validate with Cleaner
     if (!shouldArchive) {
       try {
         // Try exact URL match first
@@ -216,12 +222,15 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       );
       archivedCount++;
     }
+
+    progress.tick();
   }
 
-  console.log(
-    `✅ [Archive] Completed: archived ${archivedCount}/${checkedCount} opportunities`
-  );
-  console.log(
-    `   Breakdown: deadline=${deadlineExpiredCount}, summary=${summaryExpiredCount}, cleaner=${cleanerExpiredCount}, noRawItem=${noRawItemCount}`
-  );
+  progress.finish({
+    "Archived": archivedCount,
+    "Deadline expired": deadlineExpiredCount,
+    "Summary expired": summaryExpiredCount,
+    "Cleaner expired": cleanerExpiredCount,
+    "No raw item": noRawItemCount,
+  });
 }

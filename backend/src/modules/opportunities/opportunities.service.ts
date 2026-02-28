@@ -32,7 +32,7 @@ export class OpportunitiesService {
     const filter: any = {
       status: "published",
       deletedAt: null,
-      kind: { $ne: "service_info" },
+      kind: { $nin: ["service_info", "tender"] },
     };
 
     // Tab-based filtering
@@ -40,8 +40,26 @@ export class OpportunitiesService {
       // Results tab: only results
       filter["criteriaJson.applicationStatus"] = "results";
     } else if (query.tab === "news") {
-      // News tab: news/announcements
-      filter["criteriaJson.applicationStatus"] = "news";
+      // News tab: ONLY ASEP results (αποτελέσματα, πίνακες, ενστάσεις) and only if not expired (< 3 weeks)
+      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+      filter.$and = [
+        { source: { $regex: /asep|ασεπ/i } },
+        { publishedAt: { $gte: threeWeeksAgo } },
+      ];
+      filter["$or"] = [
+        { kind: "news" },
+        { applicationStatus: "results" },
+        { "criteriaJson.applicationStatus": "results" },
+      ];
+      // Title must contain results/objections keywords (ASEP results only)
+      const resultsKeywords = [
+        "αποτελέσματα", "αποτελεσματα", "οριστικοί πίνακες", "οριστικοι πινακες",
+        "προσωρινός πίνακας", "προσωρινος πινακας", "πίνακας τοποθετήσεων", "πινακας τοποθετησεων",
+        "πίνακας επιλαχόντων", "πινακας επιλαχοντων", "πίνακας διοριστέων", "πινακας διοριστεων",
+        "ένσταση", "ενσταση", "ενστάσεις", "ενστασεις", "προθεσμία ενστάσεων", "προθεσμια ενστασεων",
+        "1γ", "2γ", "3γ", "αριθμός προκήρυξης", "αριθμος προκηρυξης",
+      ];
+      filter.title = { $regex: new RegExp(resultsKeywords.join("|"), "i") };
     } else if (query.tab === "archived") {
       // Archived tab: archived/closed/expired
       filter.status = { $in: ["archived", "draft"] };
@@ -51,14 +69,20 @@ export class OpportunitiesService {
         { applicationEndAt: { $lt: now } },
       ];
     } else {
-      // Active tab (default): only open/upcoming
+      // Active tab (default): only open/upcoming, exclude closed/expired
       filter.$and = [
         {
-          "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] },
+          $or: [
+            { "criteriaJson.applicationStatus": { $in: ["open", "upcoming"] } },
+            { applicationStatus: { $in: ["open", "upcoming"] } },
+          ],
+        },
+        {
+          applicationStatus: { $nin: ["expired", "closed", "news", "results"] },
         },
         {
           "criteriaJson.applicationStatus": {
-            $nin: ["expired", "closed", "news", "results", "unknown"],
+            $nin: ["expired", "closed", "news", "results"],
           },
         },
       ];
@@ -131,10 +155,6 @@ export class OpportunitiesService {
     tab?: "news" | "upcoming" | "current" | "all";
     page?: number;
     limit?: number;
-    type?: string;
-    kind?: string;
-    source?: string;
-    status?: string;
     search?: string;
     showRejected?: boolean; // Admin filter: show rejected items
     showTendersNews?: boolean; // Admin filter: show tenders/news
@@ -196,10 +216,8 @@ export class OpportunitiesService {
 
     // Tab-based filtering (non-overlapping criteria)
     if (tab === "news") {
-      // Νέα: STRICT filter - ONLY show results and objections
-      // Removed general announcement keywords to focus only on actionable outcomes
+      // News tab: ONLY ASEP results (αποτελέσματα, πίνακες, ενστάσεις) and only if not expired (< 3 weeks)
       const resultsAndObjectionsKeywords = [
-        // Αποτελέσματα
         "αποτελέσματα", "αποτελεσματα",
         "οριστικοί πίνακες", "οριστικοι πινακες",
         "προσωρινός πίνακας", "προσωρινος πινακας",
@@ -209,49 +227,24 @@ export class OpportunitiesService {
         "πίνακας επιλαχόντων", "πινακας επιλαχοντων",
         "πίνακας διοριστέων", "πινακας διοριστεων",
         "πίνακες κατάταξης", "πινακες καταταξης",
-        // Ενστάσεις
-        "ένσταση", "ενσταση",
-        "ενστάσεις", "ενστασεις",
+        "ένσταση", "ενσταση", "ενστάσεις", "ενστασεις",
         "προθεσμία ενστάσεων", "προθεσμια ενστασεων",
         "δικαίωμα ένστασης", "δικαιωμα ενστασης",
         "υποβολή ενστάσεων", "υποβολη ενστασεων",
-        // ASEP specific stages
-        "1γ", "2γ", "3γ",
-        "αριθμός προκήρυξης", "αριθμος προκηρυξης",
+        "1γ", "2γ", "3γ", "αριθμός προκήρυξης", "αριθμος προκηρυξης",
       ];
+      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
+      const resultsRegex = new RegExp(resultsAndObjectionsKeywords.join("|"), "i");
 
-      // STRICT: Only items with results/objections keywords in title
       filter.$and = filter.$and || [];
-      filter.$and.push({
-        $or: [
-          // Kind is explicitly "news" AND has results/objections keywords in title
-          {
-            $and: [
-              { kind: "news" },
-              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
-            ],
-          },
-          // ASEP source with results keywords
-          {
-            $and: [
-              { $or: [{ source: { $regex: /asep/i } }, { source: { $regex: /ασεπ/i } }] },
-              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
-            ],
-          },
-          // Program kind with results keywords (e.g., program results announcements)
-          {
-            $and: [
-              { kind: "program" },
-              { title: { $regex: new RegExp(resultsAndObjectionsKeywords.join("|"), "i") } },
-            ],
-          },
-        ],
-      });
-      filter.$and.push({
-        kind: { $ne: "service_info" },
-      });
+      // ONLY ASEP source
+      filter.$and.push({ $or: [{ source: { $regex: /asep/i } }, { source: { $regex: /ασεπ/i } }] });
+      // Only results/objections keywords in title
+      filter.$and.push({ title: { $regex: resultsRegex } });
+      // Not expired: published in last 3 weeks (aligned with archive job)
+      filter.$and.push({ publishedAt: { $gte: threeWeeksAgo } });
+      filter.$and.push({ kind: { $ne: "service_info" } });
 
-      // Sort strictly by updatedAt desc (news is about recency)
       sort = { updatedAt: -1 };
     } else if (tab === "upcoming") {
       // Upcoming: ALL real kinds (benefit, voucher_pass, program) with applicationStatus="upcoming"
@@ -266,15 +259,22 @@ export class OpportunitiesService {
       filter.$and = filter.$and || [];
       filter.$and.push({
         $or: [
-          { brokenLink: { $exists: false } }, // Not verified yet - allow it
-          { brokenLink: false }, // Verified and not broken
+          { brokenLink: { $exists: false } },
+          { brokenLink: false },
         ],
       });
       filter.$and.push({
         $or: [
-          { verificationResult: { $exists: false } }, // Not verified yet - allow it
-          { verificationResult: { $ne: "dead_link" } }, // Not dead link
+          { verificationResult: { $exists: false } },
+          { verificationResult: { $ne: "dead_link" } },
         ],
+      });
+      // Date guards: exclude items whose application window has already closed
+      filter.$and.push({
+        $or: [{ applicationEndAt: null }, { applicationEndAt: { $gte: now } }],
+      });
+      filter.$and.push({
+        $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
       });
 
       // Calculate exclusion stats
@@ -371,19 +371,28 @@ export class OpportunitiesService {
       exclusionReasons.expiredEndAt = excludedExpiredEndAt;
       exclusionReasons.expiredDeadline = excludedExpiredDeadline;
     } else {
-      // Όλα: Show EVERYTHING that is published (no kind filtering)
-      // User wants to see all active & published items here
-      
-      // We do NOT filter by kind here anymore.
-      // If it's published, show it.
-      
-      // (Optional) We still calculate stats but don't filter
-      const baseFilterForStats: any = {
-        status: showRejected
-          ? { $in: ["published", "draft", "archived", "rejected"] }
-          : "published",
-        deletedAt: null,
-      };
+      // Όλα: Show only actionable published items
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        applicationStatus: { $nin: ["closed", "expired", "unknown", "results", "news"] },
+      });
+      filter.$and.push({
+        "criteriaJson.applicationStatus": { $nin: ["closed", "expired"] },
+      });
+      // Exclude items with past deadlines or applicationEndAt
+      filter.$and.push({
+        $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+      });
+      filter.$and.push({
+        $or: [
+          { applicationEndAt: null },
+          { applicationEndAt: { $gte: now } },
+        ],
+      });
+      // Exclude service_info and tenders
+      filter.$and.push({
+        kind: { $nin: ["service_info", "tender"] },
+      });
     }
 
     // Calculate exclusion stats for News tab
@@ -399,25 +408,14 @@ export class OpportunitiesService {
       // News tab includes tenders, so no exclusion for tenders here
     }
 
-    // Additional filters
-    if (query.type) {
-      filter.type = query.type;
-    }
-
-    if (query.kind) {
-      filter.kind = query.kind;
-    }
-
-    if (query.source) {
-      filter.source = query.source;
-    }
-
-    if (query.status) {
-      filter.status = query.status;
-    }
+    // Additional filters (only safe ones — kind/status overrides removed to prevent
+    // bypassing tab-level security filters on public endpoint)
 
     if (query.search) {
-      filter.$text = { $search: query.search };
+      const sanitized = sanitizeSearchQuery(query.search);
+      if (sanitized) {
+        filter.$text = { $search: sanitized };
+      }
     }
 
     // Sort based on tab (if not already set by news tab)

@@ -25,10 +25,14 @@ export async function recomputeUserMatchesJob(
 
   const now = new Date();
 
+  // Only match opportunities that are still "active": not past deadline or application end
   const opportunities = await Opportunity.find({
     status: "published",
     deletedAt: null,
-    $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+    $and: [
+      { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+      { $or: [{ applicationEndAt: null }, { applicationEndAt: { $gte: now } }] },
+    ],
   });
 
   for (const opp of opportunities) {

@@ -1,6 +1,7 @@
 import { Event } from "../../models/event.model";
 import { sendEmail } from "../../utils/email";
 import { config } from "../../config/env";
+import { escapeHtml } from "../../utils/validation";
 
 interface ContactData {
   name: string;
@@ -41,11 +42,11 @@ export class ContactService {
           subject: `[BenefitPulse] Νέα υποβολή: ${typeLabels[data.type] || data.type}`,
           html: `
             <h2>Νέα υποβολή επικοινωνίας</h2>
-            <p><strong>Τύπος:</strong> ${typeLabels[data.type] || data.type}</p>
-            <p><strong>Από:</strong> ${data.name} (${data.email})</p>
-            <p><strong>Θέμα:</strong> ${data.subject}</p>
+            <p><strong>Τύπος:</strong> ${escapeHtml(typeLabels[data.type] || data.type)}</p>
+            <p><strong>Από:</strong> ${escapeHtml(data.name)} (${escapeHtml(data.email)})</p>
+            <p><strong>Θέμα:</strong> ${escapeHtml(data.subject)}</p>
             <p><strong>Μήνυμα:</strong></p>
-            <div style="background: #f5f5f5; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap;">${data.message}</div>
+            <div style="background: #f5f5f5; padding: 1rem; border-radius: 0.5rem; white-space: pre-wrap;">${escapeHtml(data.message)}</div>
             <p style="margin-top: 1rem; font-size: 0.9rem; color: #666;">
               Απάντησε από το admin panel: <a href="${config.frontendUrl}/admin/contact">${config.frontendUrl}/admin/contact</a>
             </p>

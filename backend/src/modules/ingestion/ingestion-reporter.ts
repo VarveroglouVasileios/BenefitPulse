@@ -77,6 +77,10 @@ export interface IngestionReport {
     topBlockedDomains: Array<{ domain: string; count: number; samples: SkipSample[] }>;
     topRejectedTitles: Array<{ title: string; count: number; url: string }>;
     topInvalidDates: Array<{ source: string; input: string; parser: string; count: number }>;
+    aiCalls: {
+      status: { total: number; failed: number };
+      extract: { total: number; failed: number };
+    };
   };
   debugMode: boolean;
 }
@@ -103,6 +107,10 @@ export class IngestionReporter {
     draft: number;
     rejected: number;
   }> = new Map();
+
+  // AI metrics
+  private aiStatusCalls = { total: 0, failed: 0 };
+  private aiExtractCalls = { total: 0, failed: 0 };
 
   constructor(debugMode: boolean = false) {
     this.runId = `ingestion-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}`;
@@ -311,6 +319,26 @@ export class IngestionReporter {
   }
 
   /**
+   * Track AI status call
+   */
+  trackAIStatusCall(success: boolean): void {
+    this.aiStatusCalls.total++;
+    if (!success) {
+      this.aiStatusCalls.failed++;
+    }
+  }
+
+  /**
+   * Track AI extract call
+   */
+  trackAIExtractCall(success: boolean): void {
+    this.aiExtractCalls.total++;
+    if (!success) {
+      this.aiExtractCalls.failed++;
+    }
+  }
+
+  /**
    * Save raw response (debug mode only)
    */
   async saveRawResponse(sourceId: string, sourceName: string, contentType: string, data: string | Buffer): Promise<void> {
@@ -447,6 +475,10 @@ export class IngestionReporter {
         topBlockedDomains,
         topRejectedTitles,
         topInvalidDates,
+        aiCalls: {
+          status: { ...this.aiStatusCalls },
+          extract: { ...this.aiExtractCalls },
+        },
       },
       debugMode: this.debugMode,
     };

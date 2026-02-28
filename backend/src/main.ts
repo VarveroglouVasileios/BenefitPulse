@@ -33,14 +33,17 @@ if (!(global as any).DOMException) {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 require("web-streams-polyfill/polyfill");
 
+// Sentry must be initialized before Express is imported
+import "./sentry-init";
+
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
-import { securityMiddleware, rateLimiter } from "./config/security";
+import { securityMiddleware, rateLimiter, contactRateLimiter } from "./config/security";
 import { authMiddleware, adminMiddleware } from "./middleware/auth.middleware";
-import { validateObjectId } from "./middleware/validation.middleware";
+import { validateObjectId, validateObjectIdParam } from "./middleware/validation.middleware";
 import * as Sentry from "@sentry/node";
 
 import { Opportunity } from "./models/opportunity.model";
@@ -75,21 +78,6 @@ import * as adminController from "./modules/admin/admin.controller";
 import { scheduleIngestionJobs } from "./jobs/schedules";
 
 const app = express();
-
-// Sentry (enable only when DSN is provided)
-if (config.sentry.enabled) {
-  Sentry.init({
-    dsn: config.sentry.dsn,
-    environment: config.nodeEnv,
-    tracesSampleRate: config.sentry.tracesSampleRate,
-    profilesSampleRate: config.sentry.profilesSampleRate,
-    integrations: [
-      Sentry.httpIntegration(),
-      Sentry.expressIntegration(),
-      Sentry.mongoIntegration(),
-    ],
-  });
-}
 
 // Middleware
 app.use(express.json());
@@ -246,11 +234,13 @@ app.get("/api/me/bookmarks", authMiddleware, bookmarksController.getBookmarks);
 app.post(
   "/api/me/bookmarks/:opportunityId",
   authMiddleware,
+  validateObjectIdParam("opportunityId"),
   bookmarksController.addBookmark
 );
 app.delete(
   "/api/me/bookmarks/:opportunityId",
   authMiddleware,
+  validateObjectIdParam("opportunityId"),
   bookmarksController.removeBookmark
 );
 
@@ -261,9 +251,9 @@ app.post("/api/events", eventsController.trackEvent);
 import { notificationsRoutes } from "./routes/notifications.routes";
 app.use("/api/notifications", notificationsRoutes);
 
-// Contact route
+// Contact route (rate-limited to prevent abuse)
 import * as contactController from "./modules/contact/contact.controller";
-app.post("/api/contact", contactController.submitContact);
+app.post("/api/contact", contactRateLimiter, contactController.submitContact);
 
 // Chatbot route
 import * as chatbotController from "./modules/chatbot/chatbot.controller";

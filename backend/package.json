@@ -11,7 +11,9 @@
     "trigger": "ts-node src/scripts/run-ingestion-once.ts",
     "cli": "ts-node src/cli.ts",
     "seed": "npm run cli seed",
-    "migrate:user-profiles": "npm run cli migrate:profiles"
+    "migrate:user-profiles": "npm run cli migrate:profiles",
+    "vapid-keys": "npm exec -- web-push generate-vapid-keys",
+    "cleanup": "ts-node src/scripts/cleanup-opportunities.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",

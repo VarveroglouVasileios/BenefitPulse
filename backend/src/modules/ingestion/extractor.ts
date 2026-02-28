@@ -103,16 +103,18 @@ export async function extractApplicationStatus(
   try {
     const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
     
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentYear = now.getFullYear();
 
     const prompt = `Είσαι ειδικός αναλυτής για ελληνικές ευκαιρίες επιδομάτων/προγραμμάτων. Σήμερα είναι: ${today}
 
 Ανάλυσε αυτό το κείμενο και προσδιόρισε την ΚΑΤΑΣΤΑΣΗ ΑΙΤΗΣΕΩΝ.
 ΨΑΞΕ ΠΡΟΣΕΚΤΙΚΑ ΓΙΑ ΗΜΕΡΟΜΗΝΙΕΣ ΛΗΞΗΣ (keywords: "Προθεσμία", "Υποβολή έως", "Λήξη", "μέχρι").
 
-ΣΗΜΑΝΤΙΚΟ: Τώρα έχουμε 2026.
-- Προσοχή: Ημερομηνίες ΕΝΑΡΞΗΣ (Start Date) μπορεί να είναι στο παρελθόν (π.χ. 2024, 2025). Αυτό ΔΕΝ σημαίνει ότι έληξε.
-- ΜΟΝΟ αν η Ημερομηνία ΛΗΞΗΣ (Deadline) είναι στο παρελθόν, τότε είναι EXPIRED.
+ΣΗΜΑΝΤΙΚΟ: Τώρα έχουμε έτος ${currentYear}.
+- Προσοχή: Ημερομηνίες ΕΝΑΡΞΗΣ (Start Date) μπορεί να είναι στο παρελθόν (π.χ. προηγούμενα έτη). Αυτό ΔΕΝ σημαίνει ότι έληξε.
+- ΜΟΝΟ αν η Ημερομηνία ΛΗΞΗΣ (Deadline) είναι στο παρελθόν σε σχέση με το ${today}, τότε είναι EXPIRED.
 - Αν βλέπεις "μέχρι εξαντλήσεως προϋπολογισμού" ή "ανοικτό", είναι OPEN.
 
 ΤΙΤΛΟΣ: ${title}
@@ -244,7 +246,9 @@ export async function extractOpportunity(
   // Real Groq Implementation
   try {
     const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentYear = now.getFullYear();
 
     const systemPrompt = `Είσαι το "BenefitPulse AI", μια εξειδικευμένη μηχανή εξαγωγής δεδομένων για ελληνικές κρατικές προκηρύξεις, επιδόματα και θέσεις εργασίας.
 
@@ -281,8 +285,8 @@ export async function extractOpportunity(
    - "status": "open" | "closed" | "expected" | "unknown".
    
    ΚΑΝΟΝΕΣ ΗΜΕΡΟΜΗΝΙΩΝ (ΣΗΜΑΝΤΙΚΟ):
-   - ΤΩΡΑ ΕΙΝΑΙ 2026.
-   - Hμερομηνίες έναρξης (Start Dates) του 2024/2025 είναι αποδεκτές αν το πρόγραμμα τρέχει ακόμα.
+   - ΤΩΡΑ ΕΙΝΑΙ ${currentYear}.
+   - Hμερομηνίες έναρξης (Start Dates) σε προηγούμενα έτη είναι αποδεκτές αν το πρόγραμμα τρέχει ακόμα.
    - ΜΟΝΟ αν η ημερομηνία ΛΗΞΗΣ (Deadline) είναι πριν από ${today}, τότε status="closed".
    - Αν είναι "ανοικτό" ή "μέχρι εξαντλήσεως", status="open".
 
@@ -765,5 +769,8 @@ function fallbackStubExtractor(content: string): ExtractedOpportunity {
     criteriaJson: {},
     criteriaRulesJson,
     confidence, // Use calculated confidence (higher if keywords found)
+    // Default AI-like status when running without Groq:
+    // we never want to guess open/closed here, μόνο "unknown".
+    status: "unknown",
   };
 }

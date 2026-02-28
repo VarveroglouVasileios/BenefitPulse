@@ -21,7 +21,7 @@ export interface IOpportunity extends Document {
   criteriaRulesJson: Record<string, any>;
   criteriaUnknown?: boolean;
   confidence: number;
-  applicationStatus?: "upcoming" | "open" | "closed" | "unknown"; // Application status (computed)
+  applicationStatus?: "upcoming" | "open" | "closed" | "expired" | "unknown" | "results" | "news"; // Application status (computed)
   status: "draft" | "published" | "archived" | "rejected";
   // Live verification fields
   verifiedAt?: Date;
@@ -151,7 +151,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     applicationStatus: {
       type: String,
-      enum: ["upcoming", "open", "closed", "unknown", "results", "news"],
+      enum: ["upcoming", "open", "closed", "expired", "unknown", "results", "news"],
       index: true,
     },
     status: {

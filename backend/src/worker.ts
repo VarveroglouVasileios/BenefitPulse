@@ -69,8 +69,12 @@ const connection = config.redis.url
       maxRetriesPerRequest: null,
     });
 
-console.log("🚀 Starting worker entrypoint...");
-console.log("📋 Queues: ingestion, matching, aggregation, verification");
+console.log(`\n${"═".repeat(70)}`);
+console.log(`  🚀 BENEFITPULSE WORKER — Started`);
+console.log(`  ⏱️  ${new Date().toLocaleString("el-GR", { hour12: false })}`);
+console.log(`  📋 Queues: ingestion | matching | aggregation | verification`);
+console.log(`${"═".repeat(70)}\n`);
+console.log(`  Waiting for jobs...\n`);
 
 // Ingestion worker
 const ingestionWorker = new Worker(
@@ -81,6 +85,8 @@ const ingestionWorker = new Worker(
       await processAllSourcesJob(job);
     } else if (job.name === "process-source") {
       await processSourceJob(job);
+    } else {
+      throw new Error(`Unknown ingestion job name: ${job.name}`);
     }
   },
   { 
@@ -99,6 +105,8 @@ const matchingWorker = new Worker(
       await recomputeUserMatchesJob(job as any);
     } else if (job.name === "recompute-opportunity-matches") {
       await recomputeOpportunityMatchesJob(job as any);
+    } else {
+      throw new Error(`Unknown matching job name: ${job.name}`);
     }
   },
   { 
@@ -116,9 +124,14 @@ const aggregationWorker = new Worker(
       console.log("Daily metrics aggregation (placeholder)");
     } else if (job.name === "archive-expired-opportunities") {
       await archiveExpiredOpportunitiesJob(job);
+    } else {
+      throw new Error(`Unknown aggregation job name: ${job.name}`);
     }
   },
-  { connection: connection as any }
+  {
+    connection: connection as any,
+    lockDuration: 600000, // 10 minutes (archive re-validates items via HTTP/cleaner)
+  }
 );
 
 // Verification worker
@@ -130,20 +143,54 @@ const verificationWorker = new Worker(
       await verifyAllPublishedJob(job);
     } else if (job.name === "verify-opportunity") {
       await verifyOpportunityJob(job);
+    } else {
+      throw new Error(`Unknown verification job name: ${job.name}`);
     }
   },
-  { connection: connection as any }
+  {
+    connection: connection as any,
+    lockDuration: 300000, // 5 minutes (verification fetches live URLs)
+  }
 );
 
 import { notificationService } from "./services/notification.service";
+import { ProgressTracker } from "./utils/progress";
+
+// Track when jobs started for duration logging
+const jobStartTimes = new Map<string, number>();
+
+function onActive(workerName: string) {
+  return (job: any) => {
+    const key = `${workerName}:${job.id}`;
+    jobStartTimes.set(key, Date.now());
+
+    // Only log non-noisy jobs (skip per-source jobs which have their own progress)
+    if (job.name !== "process-source") {
+      console.log(
+        `\n  ▶️  [${workerName}] Job started: ${job.name} (${job.id}) at ${new Date().toLocaleTimeString("el-GR", { hour12: false })}`
+      );
+    }
+  };
+}
 
 function onComplete(workerName: string) {
   return async (job: any, returnValue: any) => {
-    console.log(`✅ [${workerName}] Job ${job.id} completed (${job.name})`);
+    const key = `${workerName}:${job.id}`;
+    const startTime = jobStartTimes.get(key);
+    jobStartTimes.delete(key);
+    const duration = startTime
+      ? ProgressTracker.formatDuration(Date.now() - startTime)
+      : "?";
+
+    // Only log non-noisy jobs
+    if (job.name !== "process-source") {
+      console.log(
+        `  ✅ [${workerName}] Job completed: ${job.name} (${job.id}) in ${duration}`
+      );
+    }
     
     // Ingestion completion notification
     if (workerName === "ingestion" && job.name === "process-all-sources" && returnValue) {
-      // Handle both old format (count) and new format (dispatched)
       let body = "";
       if (typeof returnValue === "object") {
          if (returnValue.dispatched !== undefined) {
@@ -171,12 +218,15 @@ function onComplete(workerName: string) {
 
 function onFailed(workerName: string) {
   return (job: any, err: any) => {
-    console.error(`❌ [${workerName}] Job ${job?.id} failed:`, err);
+    const key = `${workerName}:${job?.id}`;
+    jobStartTimes.delete(key);
+
+    console.error(`  ❌ [${workerName}] Job FAILED: ${job?.name} (${job?.id}) — ${err?.message || err}`);
+
     if (workerName === "ingestion" && job?.name === "process-all-sources") {
-       // Notify on failure too
        notificationService.sendToAdmins({
           title: 'Σφάλμα Ingestion',
-          body: `❌ Η διαδικασία απέτυχε: ${err.message || 'Unknown error'}`,
+          body: `❌ Η διαδικασία απέτυχε: ${err?.message || 'Unknown error'}`,
           url: '/admin',
           icon: '/pwa-192x192.png'
        }).catch(() => {});
@@ -198,12 +248,16 @@ function onFailed(workerName: string) {
   };
 }
 
+ingestionWorker.on("active", onActive("ingestion"));
 ingestionWorker.on("completed", onComplete("ingestion"));
 ingestionWorker.on("failed", onFailed("ingestion"));
+matchingWorker.on("active", onActive("matching"));
 matchingWorker.on("completed", onComplete("matching"));
 matchingWorker.on("failed", onFailed("matching"));
+aggregationWorker.on("active", onActive("aggregation"));
 aggregationWorker.on("completed", onComplete("aggregation"));
 aggregationWorker.on("failed", onFailed("aggregation"));
+verificationWorker.on("active", onActive("verification"));
 verificationWorker.on("completed", onComplete("verification"));
 verificationWorker.on("failed", onFailed("verification"));
 

@@ -233,6 +233,13 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
+    // ΔΥΠΑ Κοινωνικός Τουρισμός (single page program description)
+    {
+      name: "ΔΥΠΑ - Κοινωνικός Τουρισμός",
+      url: "https://www.dypa.gov.gr/koinonikos-toyrismos",
+      type: "single_page" as const,
+      enabled: true,
+    },
     // AADE myΘέρμανση (Greek page)
     {
       name: "AADE - myΘέρμανση (EL)",
@@ -319,6 +326,62 @@ export async function seed() {
     {
       name: "EPA (National Development)",
       url: "https://epa.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    // --- NEW SOURCES (User Request Feb 2026) ---
+    {
+      name: "Gov.gr - Επιδοτήσεις Πολιτών (κεντρική)",
+      url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Gov.gr - Ενίσχυση Επιχειρήσεων (κεντρική)",
+      url: "https://www.gov.gr/ipiresies/epikheirematike-drasterioteta/eniskhuse-epikheireseon",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ESPA - Όλες οι Προκηρύξεις (κύρια λίστα)",
+      url: "https://www.espa.gr/el/Pages/Proclamations.aspx",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ΟΠΕΚΕΠΕ - Αγροτικές Επιδοτήσεις & ΚΑΠ",
+      url: "https://www.opekepe.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ΟΠΕΚΕΠΕ - Ενιαία Αίτηση Ενίσχυσης (ΕΑΕ)",
+      url: "https://eae.opekepe.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Αναπτυξιακός Νόμος - Επενδύσεις (mindev)",
+      url: "https://www.mindev.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Αναπτυξιακός Νόμος - Πλατφόρμα Επενδύσεων",
+      url: "https://ependyseis.mindev.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    // Optional / high-coverage sources
+    {
+      name: "Diavgeia - Επιχορηγήσεις & Επιδόσεις",
+      url: "https://diavgeia.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Oikogeneia - Οικογενειακά Επιδόματα",
+      url: "https://www.oikogeneia.gov.gr/",
       type: "html_listing" as const,
       enabled: true,
     },

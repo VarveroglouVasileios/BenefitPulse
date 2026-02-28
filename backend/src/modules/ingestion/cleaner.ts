@@ -67,6 +67,8 @@ const SERVICE_INFO_KEYWORDS = [
   // "διαγωνισμοί", // Removed: Essential for ASEP
   // "διαγωνισμος", // Removed: Essential for ASEP
   "είσοδος",
+  "σύνδεση στην υπηρεσία",
+  "συνδεση στην υπηρεσια",
   "login",
   "εγγραφή",
   "register",
@@ -80,6 +82,11 @@ const SERVICE_INFO_KEYWORDS = [
   "στατιστικα",
   "κατάλογος",
   "καταλογος",
+  "επιδόματα-βοηθήματα",
+  "επιδomata-boithimata",
+  "epidomata-boithimata",
+  "more-anerghia",
+  "europeanyearofskills",
   
   // Administrative / Corporate News (ASEP/Public bodies)
   "ετήσια έκθεση",
@@ -315,6 +322,9 @@ function checkOverrideRules(
     const pathname = urlObj.pathname.toLowerCase();
     
     // Override 1: AADE myΘέρμανση
+    // Treat the main myΘέρμανση landing page as informational (news),
+    // not as an "upcoming" benefit opportunity. Year-specific calls
+    // will appear as separate announcements.
     if (
       domain === "aade.gr" &&
       pathname.includes("/mythermansi") &&
@@ -328,12 +338,27 @@ function checkOverrideRules(
        lowerContent.includes("mythermansi"))
     ) {
         return {
-          kind: "benefit",
-          type: "subsidy",
+          kind: "news",
+          type: "manual",
           status: "published",
-          reason: "AADE myΘέρμανση override",
+          reason: "AADE myΘέρμανση info page (news, not direct opportunity)",
           tags: ["θέρμανση", "επίδομα", "aade"],
         };
+    }
+    
+    // Override 1b: ΔΥΠΑ Κοινωνικός Τουρισμός
+    // Treat the main Κοινωνικός Τουρισμός page as informational/news.
+    if (
+      domain === "dypa.gov.gr" &&
+      pathname.includes("/koinonikos-toyrismos")
+    ) {
+      return {
+        kind: "news",
+        type: "manual",
+        status: "published",
+        reason: "DYPA Κοινωνικός Τουρισμός info page (news, not direct opportunity)",
+        tags: ["κοινωνικός τουρισμός", "voucher", "διακοπές"],
+      };
     }
     
     // Override 2: Tenders/Procurements
@@ -588,6 +613,15 @@ export function extractDates(
     /(?:ενστάσεις|ενστασεις)\s+(?:υποβάλλονται|γίνονται δεκτές)?[\s\S]{0,100}?(?:έως|μέχρι|μέχρι\s+και|εως)[\s:]+([^\.\n]{0,80})/gi,
     // "Προθεσμία υποβολής έως ..."
     /(?:προθεσμία|αιτήσεις|λήξη|καταληκτική\s+ημερομηνία|υποβολή\s+αιτήσεων)\s+(?:έως|μέχρι|μέχρι\s+και|έως\s+και|έκλεισε|έληξε)[\s:]+([^\.\n]{0,80})/gi,
+    // "Προθεσμία/Προθεσμίες" directly followed by a date (no "έως" required)
+    // e.g. "Προθεσμίες 5η Δεκεμβρίου 2025, για υποβολή αίτησης"
+    /(?:προθεσμία|προθεσμίες|προθεσμιες|προθεσμια)\s*:?\s*(\d{1,2}(?:η|ης|ου|ος)?\s+[α-ωά-ώ]+\s+\d{4})/gi,
+    // Greek date followed by application context: "5η Δεκεμβρίου 2025, για υποβολή αίτησης"
+    /(\d{1,2}(?:η|ης|ου|ος)?\s+[α-ωά-ώ]+\s+\d{4})[,\s]+(?:για\s+(?:υποβολή|υποβολη)\s+(?:αίτησης|αιτησης|αιτήσεων|αιτησεων))/gi,
+    // Greek date followed by deadline context: "5η Δεκεμβρίου 2025, λήξη υποβολής"
+    /(\d{1,2}(?:η|ης|ου|ος)?\s+[α-ωά-ώ]+\s+\d{4})[,\s]+(?:λήξη|ληξη|καταληκτική|καταληκτικη)/gi,
+    // DD/MM/YYYY format directly after "Προθεσμία"
+    /(?:προθεσμία|προθεσμίες|προθεσμιες|προθεσμια)\s*:?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{4})/gi,
     // "Παράταση έως ..."
     /(?:παράταση|παραταση)\s+(?:έως|μέχρι|έως\s+και|μέχρι\s+και)[\s:]+([^\.\n]{0,80})/gi,
     // "Παρατείνεται ... έως ..." (Long distance)
@@ -1135,6 +1169,9 @@ function cleanTitle(rawTitle: string): string {
   cleaned = cleaned.replace(/^\.\.\.\s*/, "");
   cleaned = cleaned.replace(/\s*\.\.\.$/, "");
 
+  // Remove the word "test" (case-insensitive, standalone)
+  cleaned = cleaned.replace(/\btest\b/gi, "").trim();
+
   // Remove duplicate spaces
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
@@ -1161,6 +1198,30 @@ export function cleanSummary(title: string, content: string): string {
     .replace(/μετάβαση[^.]*/gi, "")
     .trim();
 
+  // Strip obvious JS/CSS artifacts that sometimes leak into text (e.g. AADE banners)
+  // Remove inline @media blocks and simple const/function snippets
+  cleaned = cleaned
+    .replace(/@media[\s\S]*?\{/gi, " ")
+    .replace(/const\s+[A-Za-zΑ-Ωα-ω0-9_]+\s*=\s*[^;]+;/gi, " ")
+    .replace(/function\s+[A-Za-zΑ-Ωα-ω0-9_]+\s*\([^)]*\)\s*\{[\s\S]*?\}/gi, " ")
+    .replace(/document\.[A-Za-z0-9_.]+\([^)]*\);?/gi, " ");
+
+  // If script-like tokens still remain, cut everything after the first occurrence
+  const jsIdx = cleaned.search(/@media|const\s+|function\s+|document\./i);
+  if (jsIdx > 0) {
+    cleaned = cleaned.substring(0, jsIdx);
+  }
+
+  // Remove "test" artifacts
+  cleaned = cleaned.replace(/\btest\b/gi, "").trim();
+
+  // Fix concatenated words: insert space before uppercase Greek/Latin letter
+  // that follows a lowercase letter (e.g. "ΝιγρίταςΦεβ" → "Νιγρίτας Φεβ")
+  cleaned = cleaned.replace(/([α-ωά-ώa-z])([Α-ΩΆ-ΏA-Z])/g, "$1 $2");
+
+  // Fix date glued to text (e.g. "2026Κατάρτιση" → "2026 Κατάρτιση")
+  cleaned = cleaned.replace(/(\d{4})([Α-ΩΆ-Ώα-ωά-ώA-Za-z])/g, "$1 $2");
+
   // Remove title if it appears at start
   const titleWords = title.toLowerCase().split(/\s+/).slice(0, 3);
   if (titleWords.length > 0) {
@@ -1173,6 +1234,12 @@ export function cleanSummary(title: string, content: string): string {
       cleaned = cleaned.replace(titlePattern, "").trim();
     }
   }
+
+  // Remove inline date fragments that look like "Φεβ 16, 2026" stuck inside sentences
+  cleaned = cleaned.replace(/\s*(?:Ιαν|Φεβ|Μαρ|Απρ|Μαι|Ιουν|Ιουλ|Αυγ|Σεπ|Οκτ|Νοε|Δεκ)\s+\d{1,2},?\s*\d{4}\s*/gi, " ");
+
+  // Normalize whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
 
   // Extract first 1-3 meaningful sentences
   const sentences = cleaned.split(/[.!?]\s+/).filter((s) => s.length > 20);
@@ -1881,6 +1948,77 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     }
   }
   
+  // REJECT TEST CONTENT: items with "test" in the title are test/demo pages
+  if (/\btest\b/i.test(rawTitle)) {
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: "service_info",
+      type: "manual",
+      applicationStatus: "unknown",
+      startAt: null,
+      deadlineAt: null,
+      announcedAt: null,
+      applicationStartAt: null,
+      applicationEndAt: null,
+      status: "rejected",
+      tags: [],
+      criteriaUnknown: true,
+      confidence: 0.1,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals: [],
+        dateSignals: [],
+        notes: [`Rejected: title contains "test" → test/demo content`],
+      },
+    };
+  }
+  
+  // REJECT PORTAL/APP INFO PAGES: digital services, app downloads, general info
+  const portalInfoKeywords = [
+    "mydypaapp", "mydypalive", "mydypaραντεβού", "mydypa ραντεβού", "jobmatch",
+    "δυπα digital", "dypa digital",
+    "θέματα τ.οεκ", "θεματα τ.οεκ", "θέματα τ. οεκ", "θεματα τ. οεκ",
+    "θέματα οεκ", "θεματα οεκ",
+    "εφαρμογή κινητού", "εφαρμογη κινητου",
+    "κατεβάστε την εφαρμογή", "κατεβαστε την εφαρμογη",
+    "ψηφιακές υπηρεσίες δυπα", "ψηφιακες υπηρεσιες δυπα",
+  ];
+  const lowerContent = rawContent.toLowerCase();
+  const matchedPortalKeyword = portalInfoKeywords.find(
+    kw => lowerTitle.includes(kw) || lowerContent.substring(0, 300).includes(kw)
+  );
+  if (matchedPortalKeyword) {
+    return {
+      title: cleanTitle(rawTitle),
+      summary: cleanSummary(rawTitle, rawContent),
+      officialUrl: canonicalizeUrl(itemUrl),
+      source,
+      kind: "service_info",
+      type: "manual",
+      applicationStatus: "unknown",
+      startAt: null,
+      deadlineAt: null,
+      announcedAt: null,
+      applicationStartAt: null,
+      applicationEndAt: null,
+      status: "rejected",
+      tags: [],
+      criteriaUnknown: true,
+      confidence: 0.2,
+      requirementsNormalized: undefined,
+      requirementsSummaryBullets: [],
+      evidence: {
+        statusSignals: [],
+        dateSignals: [],
+        notes: [`Rejected: portal/app info page (matched: "${matchedPortalKeyword}")`],
+      },
+    };
+  }
+
   // Check for administrative noise keywords first
   const matchedAdminKeyword = administrativeKeywords.find(keyword => lowerTitle.includes(keyword.toLowerCase()));
   if (matchedAdminKeyword) {
@@ -1942,10 +2080,10 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     };
   }
   
-  // Check for other procurement keywords
+  // Check for other procurement keywords (exempt ASEP sources)
   const matchedKeyword = procurementKeywords.find(keyword => lowerTitle.includes(keyword.toLowerCase()));
   
-  if (matchedKeyword) {
+  if (matchedKeyword && !isAsepSource) {
     return {
       title: cleanTitle(rawTitle),
       summary: cleanSummary(rawTitle, rawContent),
@@ -1989,7 +2127,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     
     // Determine application status
     const {
-      status: applicationStatus,
+      status: detectedStatus,
       statusSignals,
       applicationStartAt: computedApplicationStartAt,
       applicationEndAt: computedApplicationEndAt,
@@ -2002,9 +2140,32 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       sourceUrl // Pass sourceUrl for trusted domain check
     );
     
+    // Allow overrides to adjust high-level status semantics.
+    let applicationStatus = detectedStatus;
+    if (overrideResult.reason.includes("myΘέρμανση info page")) {
+      // myΘέρμανση landing is informational; treat it as news, not upcoming.
+      applicationStatus = "news";
+      evidence.notes.push("Override: myΘέρμανση treated as news (informational page)");
+    } else if (overrideResult.reason.includes("Κοινωνικός Τουρισμός info page")) {
+      // Κοινωνικός Τουρισμός main page is also informational about a running scheme.
+      // From the app perspective, it should not appear as an 'upcoming' opportunity.
+      applicationStatus = "news";
+      evidence.notes.push("Override: Κοινωνικός Τουρισμός treated as news (informational page)");
+    }
+    
     const applicationStartAt = computedApplicationStartAt || startAt;
     const applicationEndAt = computedApplicationEndAt || deadlineAt;
     evidence.statusSignals = statusSignals;
+    
+    // Override must STILL respect closed/expired → archived
+    let finalOverrideStatus: "published" | "draft" | "archived" | "rejected" = overrideResult.status;
+    if (applicationStatus === "closed" || applicationStatus === "expired") {
+      finalOverrideStatus = "archived";
+      evidence.notes.push(`Override status downgraded: ${applicationStatus} → archived`);
+    } else if (applicationStatus === "results") {
+      finalOverrideStatus = "archived";
+      evidence.notes.push(`Override status downgraded: results → archived`);
+    }
     
     return {
       title: cleanTitle(rawTitle),
@@ -2019,7 +2180,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       announcedAt: now.toISOString(),
       applicationStartAt: applicationStartAt ? applicationStartAt.toISOString() : null,
       applicationEndAt: applicationEndAt ? applicationEndAt.toISOString() : null,
-      status: overrideResult.status,
+      status: finalOverrideStatus,
       tags: overrideResult.tags || [],
       criteriaUnknown: true,
       confidence: 0.8,

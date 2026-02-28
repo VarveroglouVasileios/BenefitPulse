@@ -28,18 +28,20 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
 
 export async function getFeed(req: Request, res: Response): Promise<void> {
   try {
-    const { tab, page, limit, type, kind, source, status, search, showRejected, showTendersNews } = req.query;
+    const { tab, page, limit, search } = req.query;
+
+    // Admin-only flags: only honor if user is authenticated as admin
+    const isAdmin = !!(req as any).userId && (req as any).isAdmin;
+    const showRejected = isAdmin && (req.query.showRejected === "true" || req.query.showRejected === "1");
+    const showTendersNews = isAdmin && (req.query.showTendersNews === "true" || req.query.showTendersNews === "1");
+
     const result = await opportunitiesService.getFeed({
       tab: tab as "news" | "upcoming" | "current" | "all",
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
-      type: type as string,
-      kind: kind as string,
-      source: source as string,
-      status: status as string,
       search: search as string,
-      showRejected: typeof showRejected === "string" ? (showRejected === "true" || showRejected === "1") : Boolean(showRejected),
-      showTendersNews: typeof showTendersNews === "string" ? (showTendersNews === "true" || showTendersNews === "1") : Boolean(showTendersNews),
+      showRejected,
+      showTendersNews,
     });
     res.status(200).json(result);
   } catch (error: any) {

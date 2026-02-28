@@ -192,14 +192,17 @@ export class AdminService {
     // If showTendersNews is true, we show EVERYTHING (no kind filter)
     // This allows the admin to see "service_info" which might be misclassified opportunities
 
-    // Search filter (Title or Summary)
-    if (query.search) {
-      const searchRegex = new RegExp(query.search, "i");
-      filter.$or = [
-        { title: searchRegex },
-        { summary: searchRegex },
-        { officialUrl: searchRegex },
-      ];
+    // Search filter (Title or Summary) - escape regex special chars to prevent ReDoS
+    if (query.search && typeof query.search === 'string') {
+      const escaped = query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').substring(0, 200);
+      if (escaped) {
+        const searchRegex = new RegExp(escaped, "i");
+        filter.$or = [
+          { title: searchRegex },
+          { summary: searchRegex },
+          { officialUrl: searchRegex },
+        ];
+      }
     }
 
     const opportunities = await Opportunity.find(filter)
@@ -633,13 +636,6 @@ export class AdminService {
               }
             }
 
-            if (rawItem.content.length < 500 && opp.officialUrl) {
-              const fullContent = await fetchFullPageContent(opp.officialUrl);
-              if (fullContent && fullContent.length > rawItem.content.length) {
-                contentToCheck = fullContent;
-              }
-            }
-            
             // Check text expiration in full content too
             const contentExpiration = findExpirationDateInText(contentToCheck);
             if (contentExpiration && contentExpiration < now) {

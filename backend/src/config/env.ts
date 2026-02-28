@@ -19,7 +19,13 @@ export const config = {
   },
   
   jwt: {
-    secret: process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
+    secret: (() => {
+      const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+      if (process.env.NODE_ENV === 'production' && secret === 'your-super-secret-jwt-key-change-in-production') {
+        console.warn('SECURITY: JWT_SECRET is not set; using default. Set JWT_SECRET in production.');
+      }
+      return secret;
+    })(),
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
   

@@ -3,6 +3,9 @@ import { config } from '../config/env';
 import { PushSubscription, IPushSubscription } from '../models/pushSubscription.model';
 
 export class NotificationService {
+  private vapidConfigured = false;
+  private vapidWarned = false;
+
   constructor() {
     if (config.vapid.publicKey && config.vapid.privateKey) {
       webpush.setVapidDetails(
@@ -10,12 +13,20 @@ export class NotificationService {
         config.vapid.publicKey,
         config.vapid.privateKey
       );
-    } else {
-      console.warn('VAPID keys not configured. Push notifications will not work.');
+      this.vapidConfigured = true;
+    }
+  }
+
+  private ensureVapid(): void {
+    if (!this.vapidConfigured && !this.vapidWarned) {
+      this.vapidWarned = true;
+      console.warn('VAPID keys not configured. Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to .env (run: npx web-push generate-vapid-keys)');
     }
   }
 
   async sendNotification(subscription: IPushSubscription, payload: any): Promise<void> {
+    this.ensureVapid();
+    if (!this.vapidConfigured) return;
     try {
       await webpush.sendNotification(
         {
@@ -80,6 +91,8 @@ export class NotificationService {
   }
 
   async sendToAdmins(payload: any): Promise<void> {
+    this.ensureVapid();
+    if (!this.vapidConfigured) return;
     try {
       const { User } = require('../models/user.model');
       // Find all admins

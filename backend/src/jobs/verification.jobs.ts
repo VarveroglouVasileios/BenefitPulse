@@ -7,6 +7,7 @@
 import { Job } from "bullmq";
 import { Opportunity } from "../models/opportunity.model";
 import { verifyLiveStatus } from "../modules/verification/live-status-verifier";
+import { ProgressTracker, logPhaseStart } from "../utils/progress";
 
 interface VerificationStats {
   total: number;
@@ -20,7 +21,7 @@ interface VerificationStats {
  * Verify all published opportunities
  */
 export async function verifyAllPublishedJob(job: Job): Promise<void> {
-  console.log(`\n🔍 [Verification] Verifying all published opportunities (job ${job.id})...`);
+  logPhaseStart("VERIFICATION", "🔍");
   
   const stats: VerificationStats = {
     total: 0,
@@ -42,10 +43,17 @@ export async function verifyAllPublishedJob(job: Job): Promise<void> {
       { verifiedAt: { $exists: false } },
       { verifiedAt: { $lt: oneDayAgo } },
     ],
-  }).limit(100); // Process in batches
+  }).limit(100);
   
   stats.total = opportunities.length;
-  console.log(`📊 Found ${stats.total} opportunities to verify`);
+
+  const progress = new ProgressTracker({
+    label: "Link Verification",
+    total: stats.total,
+    logEvery: Math.max(1, Math.floor(stats.total / 15)),
+    showItems: true,
+  });
+  progress.start();
   
   for (const opp of opportunities) {
     try {
@@ -121,25 +129,20 @@ export async function verifyAllPublishedJob(job: Job): Promise<void> {
         await opp.save();
       }
       
-      // Progress indicator
-      if (stats.processed % 10 === 0) {
-        console.log(`   ⏳ Processed ${stats.processed}/${stats.total}...`);
-      }
     } catch (error: any) {
       stats.errors++;
       console.error(`   ❌ Error verifying ${opp._id}:`, error.message);
     }
+
+    progress.tick(opp.title?.substring(0, 50));
   }
   
-  console.log("\n" + "=".repeat(60));
-  console.log("📊 VERIFICATION SUMMARY");
-  console.log("=".repeat(60));
-  console.log(`Total: ${stats.total}`);
-  console.log(`Processed: ${stats.processed}`);
-  console.log(`Updated: ${stats.updated}`);
-  console.log(`Dead links: ${stats.deadLinks}`);
-  console.log(`Errors: ${stats.errors}`);
-  console.log("=".repeat(60) + "\n");
+  progress.finish({
+    "Processed": stats.processed,
+    "Updated": stats.updated,
+    "Dead links": stats.deadLinks,
+    "Errors": stats.errors,
+  });
 }
 
 /**

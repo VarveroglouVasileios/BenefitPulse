@@ -11,6 +11,11 @@ export async function chat(req: Request, res: Response): Promise<void> {
       res.status(400).json({ error: 'Το μήνυμα είναι υποχρεωτικό' });
       return;
     }
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length > 2000) {
+      res.status(400).json({ error: 'Το μήνυμα είναι πολύ μεγάλο' });
+      return;
+    }
 
     // Build conversation messages
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -24,7 +29,7 @@ export async function chat(req: Request, res: Response): Promise<void> {
     // Add current message
     messages.push({
       role: 'user',
-      content: message.trim(),
+      content: trimmedMessage,
     });
 
     // Convert to format expected by service

@@ -126,7 +126,7 @@ function extractDateFromText(text: string): { date: Date | null; matchedText: st
   
   // Try to extract date after common prefixes
   const prefixes = [
-    /(?:ημερομηνία|ημερομηνια|date|published|updated|έως|μέχρι|από|έναρξη|λήξη)[\s:]+([^\.\n]{0,80})/i,
+    /(?:ημερομηνία|ημερομηνια|date|published|updated|έως|μέχρι|από|έναρξη|λήξη|προθεσμία|προθεσμια|προθεσμίες|προθεσμιες)[\s:]+([^\.\n]{0,80})/i,
     /(?:ημερομηνία|ημερομηνια|date)[\s:]+([^\.\n]{0,80})/i,
   ];
   

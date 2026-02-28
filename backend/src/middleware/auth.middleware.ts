@@ -25,7 +25,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
       return;
     }
 
-    const decoded = jwt.verify(token, config.jwt.secret) as any;
+    const decoded = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] }) as any;
     req.userId = decoded.userId;
     req.userRole = decoded.role;
     next();
@@ -59,7 +59,7 @@ export function optionalAuthMiddleware(req: AuthRequest, res: Response, next: Ne
 
     // If token exists, try to verify it and extract userId
     try {
-      const decoded = jwt.verify(token, config.jwt.secret) as any;
+      const decoded = jwt.verify(token, config.jwt.secret, { algorithms: ['HS256'] }) as any;
       req.userId = decoded.userId;
       req.userRole = decoded.role;
     } catch (error) {

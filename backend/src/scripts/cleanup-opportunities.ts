@@ -98,6 +98,22 @@ function isGarbage(title: string, summary: string, url: string): boolean {
   // Check if title is very short or generic
   if (title.length < 10) return true;
   
+  // Check for "test" in title (test/demo content)
+  if (/\btest\b/i.test(title)) return true;
+  
+  // Check for portal/app info pages
+  const portalKeywords = [
+    "mydypaapp", "mydypalive", "mydypaραντεβού", "jobmatch",
+    "δυπα digital", "dypa digital",
+    "θέματα τ.οεκ", "θεματα τ.οεκ", "θέματα τ. οεκ",
+    "θέματα οεκ", "θεματα οεκ",
+  ];
+  for (const pk of portalKeywords) {
+    if (lowerTitle.includes(pk) || lowerSummary.substring(0, 300).includes(pk)) {
+      return true;
+    }
+  }
+  
   // Check for garbage keywords
   for (const keyword of garbageKeywords) {
     if (lowerTitle === keyword || 
@@ -120,6 +136,41 @@ function isGarbage(title: string, summary: string, url: string): boolean {
   }
   
   return false;
+}
+
+/**
+ * Clean summary text: fix concatenated words, remove "test", normalize
+ */
+function fixSummaryText(summary: string, title: string): string {
+  let cleaned = summary;
+  
+  // Remove "test" artifacts
+  cleaned = cleaned.replace(/\btest\b/gi, "").trim();
+  
+  // Fix concatenated words: insert space before uppercase Greek/Latin letter
+  // that follows a lowercase letter (e.g. "ΝιγρίταςΦεβ" → "Νιγρίτας Φεβ")
+  cleaned = cleaned.replace(/([α-ωά-ώa-z])([Α-ΩΆ-ΏA-Z])/g, "$1 $2");
+  
+  // Fix date glued to text (e.g. "2026Κατάρτιση" → "2026 Κατάρτιση")
+  cleaned = cleaned.replace(/(\d{4})([Α-ΩΆ-Ώα-ωά-ώA-Za-z])/g, "$1 $2");
+  
+  // Remove inline date fragments ("Φεβ 16, 2026" stuck inside sentences)
+  cleaned = cleaned.replace(/\s*(?:Ιαν|Φεβ|Μαρ|Απρ|Μαι|Ιουν|Ιουλ|Αυγ|Σεπ|Οκτ|Νοε|Δεκ)\s+\d{1,2},?\s*\d{4}\s*/gi, " ");
+  
+  // Normalize whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  
+  return cleaned;
+}
+
+/**
+ * Clean title text: remove "test" artifacts
+ */
+function fixTitleText(title: string): string {
+  let cleaned = title;
+  cleaned = cleaned.replace(/\btest\b/gi, "").trim();
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  return cleaned;
 }
 
 export async function cleanupOpportunities(): Promise<CleanupStats> {
@@ -437,8 +488,54 @@ export async function cleanupOpportunities(): Promise<CleanupStats> {
   
   console.log(`  ✅ Recomputed status for ${stats.recomputedStatus} opportunities\n`);
   
-  // Step 4: Soft delete garbage
-  console.log("Step 4: Identifying garbage items...");
+  // Step 4: Clean titles and summaries (fix concatenated text, remove "test", etc.)
+  console.log("Step 4: Cleaning titles and summaries...");
+  let textFixed = 0;
+  for (const opp of opportunities) {
+    if (opp.deletedAt) continue;
+    
+    const fixedTitle = fixTitleText(opp.title);
+    const fixedSummary = fixSummaryText(opp.summary, opp.title);
+    
+    let changed = false;
+    if (fixedTitle !== opp.title) {
+      opp.title = fixedTitle;
+      changed = true;
+    }
+    if (fixedSummary !== opp.summary) {
+      opp.summary = fixedSummary;
+      changed = true;
+    }
+    
+    if (changed) {
+      opp.updatedAt = new Date();
+      await opp.save();
+      textFixed++;
+      console.log(`  ✏️  Fixed text: ${opp.title.substring(0, 60)}...`);
+    }
+  }
+  console.log(`  ✅ Fixed text in ${textFixed} opportunities\n`);
+  
+  // Step 5: Force-archive published items with closed/expired applicationStatus
+  console.log("Step 5: Archiving published items with closed/expired status...");
+  let forceArchived = 0;
+  for (const opp of opportunities) {
+    if (opp.deletedAt) continue;
+    if (opp.status !== "published") continue;
+    
+    const appStatus = opp.applicationStatus || (opp.criteriaJson as any)?.applicationStatus;
+    if (appStatus === "closed" || appStatus === "expired") {
+      opp.status = "archived";
+      opp.updatedAt = new Date();
+      await opp.save();
+      forceArchived++;
+      console.log(`  📦 Archived (${appStatus}): ${opp.title.substring(0, 60)}...`);
+    }
+  }
+  console.log(`  ✅ Force-archived ${forceArchived} closed/expired items\n`);
+  
+  // Step 6: Soft delete garbage
+  console.log("Step 6: Identifying garbage items...");
   for (const opp of opportunities) {
     if (opp.deletedAt) continue;
     
