@@ -42,7 +42,7 @@ import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
 import { securityMiddleware, rateLimiter, contactRateLimiter } from "./config/security";
-import { authMiddleware, adminMiddleware } from "./middleware/auth.middleware";
+import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from "./middleware/auth.middleware";
 import { validateObjectId, validateObjectIdParam } from "./middleware/validation.middleware";
 import * as Sentry from "@sentry/node";
 
@@ -88,19 +88,17 @@ app.use(cors({
 }));
 app.use(securityMiddleware);
 
-// Rate limiting - μόνο σε production για να μην ενοχλεί development flows
-if (config.nodeEnv === "production") {
-  app.use(rateLimiter);
-}
+// Rate limiting - always enabled; protects against brute force and DoS
+app.use(rateLimiter);
 
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Debug counts (dev only)
+// Debug endpoints (dev only) - protected: admin auth required
 if (config.nodeEnv !== "production") {
-  app.get("/api/debug/counts", async (_req, res) => {
+  app.get("/api/debug/counts", authMiddleware, adminMiddleware, async (_req, res) => {
     const [draft, published, archived] = await Promise.all([
       Opportunity.countDocuments({ status: "draft", deletedAt: null }),
       Opportunity.countDocuments({ status: "published", deletedAt: null }),
@@ -115,7 +113,7 @@ if (config.nodeEnv !== "production") {
     res.json({ draft, published, archived, latest });
   });
 
-  app.get("/api/debug/profile/:userId", async (req, res) => {
+  app.get("/api/debug/profile/:userId", authMiddleware, adminMiddleware, async (req, res) => {
     try {
       const { userId } = req.params;
       const profile = await UserProfile.findOne({ userId });
@@ -129,7 +127,7 @@ if (config.nodeEnv !== "production") {
     }
   });
 
-  app.get("/api/debug/matching/:userId", async (req, res) => {
+  app.get("/api/debug/matching/:userId", authMiddleware, adminMiddleware, async (req, res) => {
     try {
       const { userId } = req.params;
 
@@ -191,7 +189,7 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 
 // Public opportunities routes
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
-app.get("/api/feed", opportunitiesController.getFeed); // New feed endpoint with tabs
+app.get("/api/feed", optionalAuthMiddleware, opportunitiesController.getFeed); // Feed with optional admin filters
 app.get("/api/opportunities/trending", opportunitiesController.getTrending);
 app.get("/api/opportunities/:id", validateObjectId, opportunitiesController.getOpportunityById);
 app.get("/api/stats", statsController.getStats);

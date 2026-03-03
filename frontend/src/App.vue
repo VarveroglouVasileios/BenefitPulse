@@ -104,6 +104,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  --primary-color: #3b82f6;
   --accent-primary: #3b82f6;
   --accent-hover: #2563eb;
   --accent-light: #eff6ff;
@@ -125,6 +126,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --primary-color: #3b82f6;
   --accent-primary: #3b82f6;
   --accent-hover: #60a5fa;
   --accent-light: #1e3a8a;
@@ -136,6 +138,7 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 html {
   scroll-behavior: auto !important;
   overflow-anchor: none;
+  overflow-x: hidden;
 }
 
 body {
@@ -146,16 +149,21 @@ body {
   background-color: var(--bg-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
   overflow-anchor: none;
+  overflow-x: hidden;
 }
 
 #app {
   min-height: 100vh;
   background-color: var(--bg-primary);
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 .content {
   min-height: calc(100vh - 56px);
   padding-top: 0.5rem;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background-color: var(--bg-primary);
 }
 </style>

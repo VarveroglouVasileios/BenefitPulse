@@ -85,12 +85,16 @@ export const opportunityTypeSchema = z.enum([
   "public_call",
   "asep_competition",
   "manual",
+  "decision",
 ]);
 
 export const opportunityKindSchema = z.enum([
   "benefit",
   "voucher_pass",
   "service_info",
+  "decision",
+  "tender",
+  "news",
   // legacy kinds
   "program",
   "voucher",
@@ -115,6 +119,52 @@ export const opportunitySchema = z.object({
   confidence: z.number().min(0).max(1),
   status: z.enum(["draft", "published", "archived"]).default("draft"),
 });
+
+/** Admin create: required fields, status forced to draft */
+export const adminOpportunityCreateSchema = z.object({
+  type: opportunityTypeSchema,
+  kind: opportunityKindSchema.optional(),
+  title: z.string().min(1).max(500),
+  summary: z.string().min(1).max(10000),
+  officialUrl: z.string().url().max(2000),
+  source: z.string().min(1).max(200),
+  publishedAt: z.union([z.date(), z.string().datetime(), z.string()]).transform((v) => new Date(v)),
+  deadlineAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  startAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  announcedAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  applicationStartAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  applicationEndAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  tags: z.array(z.string().max(100)).max(50).default([]),
+  region: regionSchema.optional(),
+  criteriaJson: z.record(z.any()).default({}),
+  criteriaRulesJson: z.record(z.any()).default({}),
+  criteriaUnknown: z.boolean().optional(),
+  confidence: z.number().min(0).max(1).default(0.5),
+}).strict();
+
+/** Admin update: all fields optional, status/type/kind whitelisted */
+const adminUpdateStatusSchema = z.enum(["draft", "published", "archived", "rejected"]);
+export const adminOpportunityUpdateSchema = z.object({
+  type: opportunityTypeSchema.optional(),
+  kind: opportunityKindSchema.optional(),
+  title: z.string().min(1).max(500).optional(),
+  summary: z.string().min(1).max(10000).optional(),
+  officialUrl: z.string().url().max(2000).optional(),
+  source: z.string().min(1).max(200).optional(),
+  publishedAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().transform((v) => (v ? new Date(v) : undefined)),
+  deadlineAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().nullable().transform((v) => (v ? new Date(v) : undefined)),
+  startAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().nullable().transform((v) => (v ? new Date(v) : undefined)),
+  announcedAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().nullable().transform((v) => (v ? new Date(v) : undefined)),
+  applicationStartAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().nullable().transform((v) => (v ? new Date(v) : undefined)),
+  applicationEndAt: z.union([z.date(), z.string().datetime(), z.string()]).optional().nullable().transform((v) => (v ? new Date(v) : undefined)),
+  tags: z.array(z.string().max(100)).max(50).optional(),
+  region: regionSchema.optional().nullable(),
+  criteriaJson: z.record(z.any()).optional(),
+  criteriaRulesJson: z.record(z.any()).optional(),
+  criteriaUnknown: z.boolean().optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  status: adminUpdateStatusSchema.optional(),
+}).strict();
 
 export const eventDataSchema = z.object({
   type: z.enum([

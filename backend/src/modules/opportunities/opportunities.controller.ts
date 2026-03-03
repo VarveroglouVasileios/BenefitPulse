@@ -2,19 +2,22 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { OpportunitiesService } from './opportunities.service';
 import { config } from '../../config/env';
+import { safeParsePage, safeParseLimit, isValidOpportunityType, isValidOpportunityTab, isValidFeedTab } from '../../utils/validation';
 
 const opportunitiesService = new OpportunitiesService();
 
 export async function getOpportunities(req: Request, res: Response): Promise<void> {
   try {
     const { page, limit, type, status, search, tab } = req.query;
+    const validatedTab = isValidOpportunityTab(tab) ? (tab as "active" | "results" | "news" | "archived" | "upcoming" | "current" | "all") : undefined;
+    const validatedType = isValidOpportunityType(type) ? type : undefined;
     const result = await opportunitiesService.getPublicOpportunities({
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
-      type: type as string,
-      status: status as string,
-      search: search as string,
-      tab: tab as "active" | "results" | "news" | "archived" | "upcoming" | "current" | "all",
+      page: safeParsePage(page),
+      limit: safeParseLimit(limit),
+      type: validatedType,
+      status: typeof status === 'string' ? status : undefined,
+      search: typeof search === 'string' ? search : undefined,
+      tab: validatedTab,
     });
     res.status(200).json(result);
   } catch (error: any) {
@@ -31,15 +34,16 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
     const { tab, page, limit, search } = req.query;
 
     // Admin-only flags: only honor if user is authenticated as admin
-    const isAdmin = !!(req as any).userId && (req as any).isAdmin;
+    const isAdmin = !!(req as AuthRequest).userId && (req as AuthRequest).userRole === 'admin';
     const showRejected = isAdmin && (req.query.showRejected === "true" || req.query.showRejected === "1");
     const showTendersNews = isAdmin && (req.query.showTendersNews === "true" || req.query.showTendersNews === "1");
 
+    const validatedTab: "news" | "upcoming" | "current" | "all" = isValidFeedTab(tab) ? (tab as "news" | "upcoming" | "current" | "all") : "all";
     const result = await opportunitiesService.getFeed({
-      tab: tab as "news" | "upcoming" | "current" | "all",
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
-      search: search as string,
+      tab: validatedTab,
+      page: safeParsePage(page),
+      limit: safeParseLimit(limit),
+      search: typeof search === 'string' ? search : undefined,
       showRejected,
       showTendersNews,
     });
@@ -73,7 +77,7 @@ export async function getOpportunityById(req: Request, res: Response): Promise<v
 
 export async function getTrending(req: Request, res: Response): Promise<void> {
   try {
-    const hours = req.query.hours ? parseInt(req.query.hours as string) : 24;
+    const hours = Math.min(168, Math.max(1, parseInt(String(req.query.hours), 10) || 24));
     const opportunities = await opportunitiesService.getTrending(hours);
     res.status(200).json(opportunities);
   } catch (error: any) {
@@ -144,7 +148,7 @@ export async function getNewSinceLastVisit(req: AuthRequest, res: Response): Pro
 export async function getExpiringSoon(req: AuthRequest, res: Response): Promise<void> {
   try {
     const userId = req.userId!;
-    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const days = Math.min(365, Math.max(1, parseInt(String(req.query.days), 10) || 30));
     const opportunities = await opportunitiesService.getExpiringSoon(userId, days);
     res.status(200).json(opportunities);
   } catch (error: any) {

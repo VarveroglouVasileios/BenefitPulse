@@ -164,7 +164,7 @@ function formatMessage(content: string): string {
   // Allow only safe tags: br, a, strong, em, and their attributes
   return DOMPurify.sanitize(formatted, {
     ALLOWED_TAGS: ['br', 'a', 'strong', 'em', 'b', 'i', 'p'],
-    ALLOWED_ATTR: ['href', 'style'],
+    ALLOWED_ATTR: ['href'],
     ALLOW_DATA_ATTR: false,
   });
 }

@@ -240,11 +240,19 @@ async function handleNotificationClick() {
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding: 0 1.5rem;
+    gap: 1rem;
+  }
 }
 
 .brand-link {

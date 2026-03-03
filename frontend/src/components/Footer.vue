@@ -79,8 +79,15 @@ function closeContactModal() {
 .footer {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
-  margin-top: 4rem;
-  padding: 3rem 1.5rem 1.5rem;
+  margin-top: 3rem;
+  padding: 2rem 1rem 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .footer {
+    margin-top: 4rem;
+    padding: 3rem 1.5rem 1.5rem;
+  }
 }
 
 .footer-content {
@@ -168,7 +175,15 @@ function closeContactModal() {
   margin: 0 auto;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
   .footer-content {
     grid-template-columns: repeat(2, 1fr);
   }

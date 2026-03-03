@@ -1,7 +1,14 @@
 import { Request, Response } from 'express';
 import { ChatbotService } from './chatbot.service';
+import { escapeHtml } from '../../utils/validation';
 
 const chatbotService = new ChatbotService();
+
+/** Strip HTML and limit length - prevents XSS and prompt injection from client-controlled history */
+function sanitizeConversationMessage(content: unknown, maxLen = 2000): string {
+  if (!content || typeof content !== 'string') return '';
+  return escapeHtml(content.trim()).substring(0, maxLen);
+}
 
 export async function chat(req: Request, res: Response): Promise<void> {
   try {
@@ -17,13 +24,19 @@ export async function chat(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Build conversation messages
+    // Build conversation messages - sanitize client-provided history to prevent XSS/prompt injection
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    
-    // Add conversation history if provided (last 10 messages to avoid token limits)
+
     if (Array.isArray(conversation)) {
       const recentConversation = conversation.slice(-10);
-      messages.push(...recentConversation);
+      for (const m of recentConversation) {
+        if (m && (m.role === 'user' || m.role === 'assistant') && m.content) {
+          messages.push({
+            role: m.role,
+            content: sanitizeConversationMessage(m.content),
+          });
+        }
+      }
     }
     
     // Add current message

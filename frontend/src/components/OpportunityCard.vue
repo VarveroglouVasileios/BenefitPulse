@@ -1,5 +1,12 @@
 <template>
-  <div class="opportunity-card">
+  <div
+    class="opportunity-card"
+    role="button"
+    tabindex="0"
+    @click="goToDetail"
+    @keydown.enter="goToDetail"
+    @keydown.space.prevent="goToDetail"
+  >
     <div class="header">
       <h3>{{ opportunity.title }}</h3>
       <Badge :type="opportunity.type" />
@@ -40,17 +47,14 @@
       <span v-else class="unknown-deadline">Κατάσταση: άγνωστη — έλεγξε στο επίσημο link</span>
     </div>
     <div class="actions">
-      <router-link 
-        :to="`/opportunities/${opportunity._id}`" 
-        class="link"
-        :aria-label="`Δείτε περισσότερα για ${opportunity.title}`"
-      >
+      <span class="link" :aria-label="`Δείτε περισσότερα για ${opportunity.title}`">
         Δείτε περισσότερα →
-      </router-link>
+      </span>
       
       <button 
-        class="share-btn" 
-        @click.prevent="openShareModal"
+        class="share-btn"
+        data-no-nav
+        @click="handleShare"
         aria-label="Κοινοποίηση"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -76,7 +80,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { Opportunity } from "@shared/types";
 // @ts-ignore - Vue SFC default export
 import Badge from "./Badge.vue";
@@ -87,7 +92,15 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const router = useRouter();
 const showShareModal = ref(false);
+const canNativeShare = ref(false);
+
+onMounted(() => {
+  if (typeof navigator !== "undefined" && typeof navigator.share !== "undefined") {
+    canNativeShare.value = true;
+  }
+});
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 
@@ -95,8 +108,32 @@ const shareUrl = computed(() => `${window.location.origin}/opportunities/${props
 const shareTitle = computed(() => `BenefitPulse: ${props.opportunity.title}`);
 const shareText = computed(() => `Δείτε αυτό: ${props.opportunity.title}`);
 
-function openShareModal() {
-  showShareModal.value = true;
+async function handleShare(e: Event) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (canNativeShare.value) {
+    try {
+      await navigator.share({
+        title: shareTitle.value,
+        text: shareText.value,
+        url: shareUrl.value,
+      });
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") {
+        showShareModal.value = true;
+      }
+    }
+  } else {
+    showShareModal.value = true;
+  }
+}
+
+function goToDetail(e?: Event) {
+  if (e) {
+    const target = e.target as HTMLElement;
+    if (target.closest(".share-btn") || target.closest("[data-no-nav]")) return;
+  }
+  router.push(`/opportunities/${props.opportunity._id}`);
 }
 
 const isNew = computed(() => {
@@ -220,15 +257,22 @@ function formatDate(date: string | Date): string {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  padding: 1.5rem;
+  padding: 1rem;
   transition: box-shadow 0.2s, border-color 0.2s;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
+  min-width: 0;
 }
 
 .opportunity-card:hover {
   box-shadow: var(--shadow-md);
   border-color: var(--border-hover);
+}
+
+.opportunity-card:focus {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .header {
@@ -271,6 +315,17 @@ function formatDate(date: string | Date): string {
 .header h3 {
   flex: 1;
   margin-right: 1rem;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+@media (min-width: 640px) {
+  .opportunity-card {
+    padding: 1.5rem;
+  }
+  .header h3 {
+    font-size: 1.1rem;
+  }
 }
 
 .summary {

@@ -150,18 +150,36 @@ useHead({
 .opportunity-detail {
   max-width: 800px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1rem;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+@media (min-width: 640px) {
+  .opportunity-detail {
+    padding: 2rem;
+  }
 }
 
 .header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: start;
+  gap: 0.75rem;
   margin-bottom: 1rem;
 }
 
 .header h1 {
   color: var(--text-primary);
+  font-size: 1.35rem;
+  line-height: 1.3;
+}
+
+@media (min-width: 640px) {
+  .header h1 {
+    font-size: 1.75rem;
+  }
 }
 
 .meta {
@@ -203,8 +221,18 @@ useHead({
 
 .actions {
   display: flex;
-  gap: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin-bottom: 2rem;
+}
+
+@media (max-width: 480px) {
+  .actions .btn {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
 }
 
 .btn {

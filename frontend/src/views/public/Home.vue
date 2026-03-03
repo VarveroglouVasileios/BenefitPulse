@@ -281,7 +281,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
@@ -313,12 +313,15 @@ const animatedStats = ref({
 const lastScanAt = ref<Date | null>(new Date());
 const lastScanLabel = computed(() => {
   if (!lastScanAt.value) return "";
-  const diffMinutes = Math.max(
-    0,
-    Math.round((Date.now() - lastScanAt.value.getTime()) / 60000)
-  );
+  const diffMs = Date.now() - lastScanAt.value.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
   if (diffMinutes <= 1) return "ενημερώθηκε μόλις τώρα";
-  return `ενημερώθηκε πριν ${diffMinutes} λεπτά`;
+  if (diffMinutes < 60) return `ενημερώθηκε πριν ${diffMinutes} λεπτά`;
+  if (diffHours < 24) return `ενημερώθηκε πριν ${diffHours} ${diffHours === 1 ? "ώρα" : "ώρες"}`;
+  if (diffDays <= 31) return `ενημερώθηκε πριν ${diffDays} ${diffDays === 1 ? "ημέρα" : "ημέρες"}`;
+  return "ενημερώθηκε πρόσφατα";
 });
 
 const chips = ref([
@@ -403,12 +406,12 @@ function setupScrollAnimations() {
         }
       });
     },
-    { threshold: 0.1 }
+    { threshold: 0.05, rootMargin: "0px 0px 80px 0px" }
   );
 
   const refs = [statsRef, howItWorksRef, newOpenRef, trendingRef, forYouRef, trustRef, faqRef, examplesRef];
-  refs.forEach((ref) => {
-    if (ref.value) observer.observe(ref.value);
+  refs.forEach((r) => {
+    if (r?.value) observer.observe(r.value);
   });
 }
 
@@ -546,26 +549,52 @@ onMounted(async () => {
     fetchChipCounts(),
   ]);
   
-  setTimeout(() => {
-    setupScrollAnimations();
-  }, 100);
+  await nextTick();
+  setupScrollAnimations();
 });
+
+// Re-run scroll observer when content finishes loading (fixes blank sections)
+watch(
+  () => [loadingNew.value, loadingTrending.value, loadingForYou.value],
+  () => {
+    if (!loadingNew.value && !loadingTrending.value && !loadingForYou.value) {
+      nextTick(() => setupScrollAnimations());
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
 .home {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 3rem 1.5rem 4rem;
+  padding: 1.5rem 1rem 3rem;
+  min-width: 0;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .home {
+    padding: 2.5rem 1.5rem 3.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home {
+    padding: 3rem 1.5rem 4rem;
+  }
 }
 
 /* Hero Section */
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
+  min-width: 0;
   align-items: center;
-  gap: 3rem;
-  padding: 3rem 0;
+  gap: 2rem;
+  padding: 2rem 0;
   opacity: 0;
   transform: translateY(20px);
   animation: fadeInUp 0.6s ease-out forwards;
@@ -577,18 +606,43 @@ onMounted(async () => {
 }
 
 .hero-title {
-  font-size: 3rem;
-  margin-bottom: 1.5rem;
-  line-height: 1.1;
+  font-size: 1.75rem;
+  margin-bottom: 1rem;
+  line-height: 1.2;
   color: var(--text-primary);
   font-weight: 700;
 }
 
+@media (min-width: 640px) {
+  .hero-title {
+    font-size: 2.25rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .hero {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 3rem;
+    padding: 3rem 0;
+  }
+  .hero-title {
+    font-size: 3rem;
+    margin-bottom: 1.5rem;
+  }
+}
+
 .hero-subtitle {
-  font-size: 1.2rem;
+  font-size: 1rem;
   color: var(--text-secondary);
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   line-height: 1.6;
+}
+
+@media (min-width: 640px) {
+  .hero-subtitle {
+    font-size: 1.15rem;
+    margin-bottom: 2rem;
+  }
 }
 
 .hero-chips {
@@ -661,7 +715,15 @@ onMounted(async () => {
 
 .hero-visual {
   position: relative;
-  height: 260px;
+  height: 200px;
+  order: -1;
+}
+
+@media (min-width: 900px) {
+  .hero-visual {
+    height: 260px;
+    order: unset;
+  }
 }
 
 .glow-circle {
@@ -1223,22 +1285,58 @@ onMounted(async () => {
   }
 }
 
-@media (max-width: 900px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-  .hero-visual {
-    order: -1;
-  }
-  .hero-title {
-    font-size: 2rem;
-  }
-  .hero-subtitle {
-    font-size: 1rem;
+@media (max-width: 640px) {
+  .stats-section {
+    margin: 2.5rem 0;
+    padding: 1.5rem 0;
   }
   .stats-grid {
     grid-template-columns: 1fr;
+    gap: 1.25rem;
   }
+  .stat-value {
+    font-size: 2.25rem;
+  }
+  .stat-item {
+    padding: 1rem;
+  }
+  .how-it-works {
+    margin-top: 2.5rem;
+  }
+  .how-it-works h2 {
+    font-size: 1.5rem;
+  }
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  .featured-section {
+    margin-top: 2.5rem;
+  }
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .section-header h2 {
+    font-size: 1.4rem;
+  }
+  .opportunities-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .safety h2,
+  .examples h2,
+  .faq h2 {
+    font-size: 1.4rem;
+  }
+  .safety-grid,
+  .examples-grid,
+  .faq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
   .stat-value {
     font-size: 2.5rem;
   }

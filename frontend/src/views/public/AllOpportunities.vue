@@ -149,7 +149,16 @@ onMounted(() => {
 .all-opportunities {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1rem;
+  min-width: 0;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .all-opportunities {
+    padding: 2rem;
+  }
 }
 
 .all-opportunities h1 {
@@ -159,21 +168,34 @@ onMounted(() => {
 
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 2rem;
   border-bottom: 2px solid var(--border-color);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.25rem;
 }
 
 .tab-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .tab-button {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+  }
 }
 
 .tab-button:hover {
@@ -234,9 +256,17 @@ onMounted(() => {
 
 .opportunities-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 2rem;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .opportunities-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
 }
 
 .loading {
@@ -247,10 +277,12 @@ onMounted(() => {
 
 .pagination {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-top: 2rem;
+  padding: 0 0.5rem;
 }
 
 .pagination button {
@@ -275,5 +307,12 @@ onMounted(() => {
 
 .pagination span {
   color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 480px) {
+  .all-opportunities h1 {
+    font-size: 1.5rem;
+  }
 }
 </style>
