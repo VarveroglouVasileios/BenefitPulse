@@ -1,0 +1,29 @@
+# Φάση 1: Build
+FROM node:20-alpine as builder
+
+WORKDIR /app
+
+# Αντιγράφουμε τα αρχεία
+COPY frontend ./frontend
+
+
+# Μπαίνουμε στο frontend
+WORKDIR /app/frontend
+
+# Εγκατάσταση εξαρτήσεων
+RUN npm install
+
+# Build
+RUN npm run build
+
+# Φάση 2: Serve με Nginx
+FROM nginx:alpine
+
+# Αντιγραφή των αρχείων από το dist (που έφτιαξε το vite build)
+COPY --from=builder /app/frontend/dist /usr/share/nginx/html
+
+# Ρύθμιση Nginx για React/Vue Router (για να μην βγάζει 404 στα refresh)
+RUN echo 'server { listen 80; root /usr/share/nginx/html; index index.html; location / { try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

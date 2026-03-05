@@ -1,0 +1,180 @@
+{
+  "generatedAt": "2026-02-18T00:00:00.000Z",
+  "description": "Snapshot of current public feed opportunities (tab=all, limit=500) and configured ingestion sources from seed.ts.",
+  "feedAll": {
+    "opportunities": [
+      {
+        "_id": "6994af7055b16959e2bfe59c",
+        "type": "voucher",
+        "kind": "voucher_pass",
+        "title": "Κοινωνικός Τουρισμός - ΔΗΜΟΣΙΑ ΥΠΗΡΕΣΙΑ ΑΠΑΣΧΟΛΗΣΗΣ",
+        "officialUrl": "https://dypa.gov.gr/koinonikos-toyrismos",
+        "source": "ΔΥΠΑ - Κοινωνικός Τουρισμός",
+        "applicationStatus": "upcoming",
+        "status": "published"
+      }
+    ],
+    "total": 21,
+    "page": 1,
+    "limit": 500
+  },
+  "sourcesSeed": [
+    {
+      "name": "ΔΥΠΑ - Ανοικτά Προγράμματα",
+      "url": "https://www.dypa.gov.gr/proghrammata-anoikhta",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ - Προγράμματα Απασχόλησης (επίσημη λίστα)",
+      "url": "https://www.dypa.gov.gr/proghrammata-apaskholisis-11",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)",
+      "url": "https://www.dypa.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ RSS",
+      "url": "https://prosvasis.dypa.gov.gr/el/feed",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης",
+      "url": "https://prosvasis.dypa.gov.gr/active-employment-policies",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη",
+      "url": "https://prosvasis.dypa.gov.gr/erghaleiothiki-erghodoti",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "Ελάχιστο Εγγυημένο Εισόδημα",
+      "url": "https://keaprogram.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "Stegasi Catalog",
+      "url": "https://stegasi.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "Φοιτητικό Στεγαστικό",
+      "url": "https://portal.stegastiko.minedu.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΕΦΚΑ Επιδόματα (efka.gov.gr)",
+      "url": "https://www.efka.gov.gr/",
+      "type": "html_catalog",
+      "enabled": true
+    },
+    {
+      "name": "MITOS - EMDD API (Services)",
+      "url": "https://api.digigov.grnet.gr/v1/services",
+      "type": "api",
+      "enabled": true
+    },
+    {
+      "name": "OPEKA - Ανακοινώσεις / Δελτία Τύπου (discovery)",
+      "url": "https://opeka.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ΔΥΠΑ - Κοινωνικός Τουρισμός",
+      "url": "https://www.dypa.gov.gr/koinonikos-toyrismos",
+      "type": "single_page",
+      "enabled": true
+    },
+    {
+      "name": "AADE - myΘέρμανση (EL)",
+      "url": "https://www.aade.gr/mythermansi",
+      "type": "single_page",
+      "enabled": true
+    },
+    {
+      "name": "Vouchers Gov",
+      "url": "https://vouchers.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "ESPA Antagonistikotita",
+      "url": "http://epan2.antagonistikotita.gr/uploads/rss.xml",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "TaxHeaven News",
+      "url": "https://www.taxheaven.gr/rss",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "ASEP Announcements",
+      "url": "https://www.asep.gr/rss/news",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "Dentist Pass",
+      "url": "https://vouchers.gov.gr/dentistpass",
+      "type": "single_page",
+      "enabled": true
+    },
+    {
+      "name": "ESPA Proclamations",
+      "url": "https://www.espa.gr/el/Pages/Rss.aspx?FeedType=Proclamations",
+      "type": "rss",
+      "enabled": true
+    },
+    {
+      "name": "ESPA Fisheries",
+      "url": "https://alieia.mc.gov.gr/metra-eniksis-tis-alieias/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "Greece 2.0 (Recovery Fund)",
+      "url": "https://greece20.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "MinAgric (Rural Development)",
+      "url": "https://www.minagric.gr/rural-development-programs",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "YPEN (Energy & Environment)",
+      "url": "https://ypen.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "Culture Portal (Grants)",
+      "url": "https://portal.culture.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    },
+    {
+      "name": "EPA (National Development)",
+      "url": "https://epa.gov.gr/",
+      "type": "html_listing",
+      "enabled": true
+    }
+  ]
+}
+
