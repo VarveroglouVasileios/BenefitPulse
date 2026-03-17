@@ -13,7 +13,11 @@ RUN npm install
 COPY backend/ .
 
 # 3. Build
-RUN npm run build
+# Coolify can kill long-running steps with no output; keep a small heartbeat while tsc runs
+RUN (while true; do echo "[build] tsc running..."; sleep 15; done) & \
+  HEARTBEAT_PID=$! && \
+  npm run build && \
+  kill $HEARTBEAT_PID
 
 # 4. Εκκίνηση
 EXPOSE 3001
