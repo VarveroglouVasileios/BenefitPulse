@@ -28,7 +28,7 @@ export default defineComponent({
         program: "Πρόγραμμα",
         public_call: "Προκήρυξη",
         asep_competition: "ΑΣΕΠ",
-        manual: "Ανακοίνωση",
+        manual: "Αποτελέσματα / Νέα",
         decision: "Απόφαση",
       };
       return props.type ? labels[props.type] : "";

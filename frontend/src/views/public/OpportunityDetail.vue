@@ -7,12 +7,20 @@
         <Badge :type="opportunity.type" />
       </div>
       <div class="meta">
-        <span>Πηγή: {{ opportunity.source }}</span>
-        <span>Δημοσιεύτηκε: {{ formatDate(opportunity.publishedAt) }}</span>
-        <span v-if="opportunity.deadlineAt">
-          Προθεσμία: {{ formatDate(opportunity.deadlineAt) }}
+        <span v-if="opportunity.region && opportunity.region !== 'nationwide'">📍 Περιοχή: {{ formatRegion(opportunity.region) }}</span>
+        <span>🔗 Πηγή: {{ opportunity.source }}</span>
+        <span>📅 Δημοσιεύτηκε: {{ formatDate(opportunity.publishedAt) }}</span>
+        <span v-if="opportunity.deadlineAt" class="deadline">
+          ⏳ Προθεσμία: {{ formatDate(opportunity.deadlineAt) }}
         </span>
       </div>
+      
+      <div v-if="opportunity.tags && opportunity.tags.length" class="tags">
+        <span v-for="tag in opportunity.tags" :key="tag" class="tag-chip">
+          #{{ tag }}
+        </span>
+      </div>
+
       <div class="summary">
         <h2>Περίληψη</h2>
         <p>{{ opportunity.summary }}</p>
@@ -68,6 +76,26 @@ const loading = ref(true);
 const isBookmarked = ref(false);
 
 const isAuthenticated = computed(() => authStore.isAuthenticated);
+
+function formatRegion(region: string): string {
+  const regions: Record<string, string> = {
+    attiki: "Αττική",
+    central_macedonia: "Κεντρική Μακεδονία",
+    western_macedonia: "Δυτική Μακεδονία",
+    eastern_macedonia_thrace: "Ανατ. Μακεδονία & Θράκη",
+    epirus: "Ήπειρος",
+    thessaly: "Θεσσαλία",
+    ionian_islands: "Νησιά Ιονίου",
+    western_greece: "Δυτική Ελλάδα",
+    central_greece: "Στερεά Ελλάδα",
+    peloponnese: "Πελοπόννησος",
+    north_aegean: "Βόρειο Αιγαίο",
+    south_aegean: "Νότιο Αιγαίο",
+    crete: "Κρήτη",
+    nationwide: "Πανελλαδικά",
+  };
+  return regions[region] || region;
+}
 
 function formatDate(date: string | Date): string {
   if (!date) return '';
@@ -182,12 +210,32 @@ useHead({
   }
 }
 
-.meta {
+.meta span {
   display: flex;
-  gap: 1rem;
-  color: var(--text-secondary);
-  margin-bottom: 2rem;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.deadline {
+  color: #e53e3e; /* Red color for deadlines to make them stand out */
+  font-weight: 600;
+}
+
+.tags {
+  display: flex;
   flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.tag-chip {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
 }
 
 .summary {
