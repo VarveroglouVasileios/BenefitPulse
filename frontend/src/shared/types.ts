@@ -7,7 +7,7 @@ export type StatusFlag =
   | 'retired'
   | 'self_employed'
   | 'parent';
-export type Region = 'attiki' | 'thessaloniki' | 'crete' | 'peloponnese' | 'macedonia' | 'thrace' | 'epirus' | 'thessaly' | 'central_greece' | 'western_greece' | 'aegean_islands' | 'ionian_islands' | 'other';
+export type Region = 'attiki' | 'thessaloniki' | 'crete' | 'peloponnese' | 'macedonia' | 'thrace' | 'epirus' | 'thessaly' | 'central_greece' | 'western_greece' | 'aegean_islands' | 'ionian_islands' | 'nationwide' | 'other';
 export type EducationLevel = 'primary' | 'secondary' | 'tertiary' | 'postgraduate' | 'none';
 
 // ASEP Qualifications types

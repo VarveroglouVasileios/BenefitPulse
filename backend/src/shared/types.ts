@@ -7,21 +7,20 @@ export type StatusFlag =
   | 'retired'
   | 'self_employed'
   | 'parent';
-export type Region = 
-  | 'attiki' 
-  | 'central_macedonia' 
-  | 'western_macedonia' 
-  | 'eastern_macedonia_thrace' 
-  | 'epirus' 
-  | 'thessaly' 
-  | 'ionian_islands' 
-  | 'western_greece' 
-  | 'central_greece' 
-  | 'peloponnese' 
-  | 'north_aegean' 
-  | 'south_aegean' 
-  | 'crete' 
-  | 'nationwide' 
+export type Region =
+  | 'attiki'
+  | 'thessaloniki'
+  | 'macedonia'
+  | 'thrace'
+  | 'epirus'
+  | 'thessaly'
+  | 'ionian_islands'
+  | 'western_greece'
+  | 'central_greece'
+  | 'peloponnese'
+  | 'aegean_islands'
+  | 'crete'
+  | 'nationwide'
   | 'other';
 export type EducationLevel = 'primary' | 'secondary' | 'tertiary' | 'postgraduate' | 'none';
 
