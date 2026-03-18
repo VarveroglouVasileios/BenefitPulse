@@ -27,14 +27,24 @@ const rssParser = new Parser({
 
 const DEFAULT_HEADERS = {
   "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Connection": "keep-alive",
+  "Cache-Control": "max-age=0",
 };
 
 // Headers per source type
-function getHeadersForSourceType(sourceType: string): Record<string, string> {
+function getHeadersForSourceType(sourceType: string, url?: string): Record<string, string> {
   const baseHeaders = {
-    "User-Agent": DEFAULT_HEADERS["User-Agent"],
+    ...DEFAULT_HEADERS,
   };
+
+  if (url) {
+    try {
+      const u = new URL(url);
+      baseHeaders["Referer"] = `${u.protocol}//${u.hostname}/`;
+    } catch { /* ignore */ }
+  }
 
   if (sourceType === "rss") {
     return {
@@ -44,14 +54,15 @@ function getHeadersForSourceType(sourceType: string): Record<string, string> {
   } else if (sourceType === "api") {
     return {
       ...baseHeaders,
-      Accept: "application/json,*/*;q=0.8",
+      Accept: "application/json, text/plain, */*",
     };
   } else {
     // html_listing, html_catalog, single_page
     return {
       ...baseHeaders,
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "el-GR,el;q=0.9,en;q=0.8",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Upgrade-Insecure-Requests": "1",
     };
   }
 }
