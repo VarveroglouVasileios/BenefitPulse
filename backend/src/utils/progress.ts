@@ -5,6 +5,8 @@
  * logging for long-running worker jobs.
  */
 
+import * as readline from 'readline';
+
 export interface ProgressOptions {
   label: string;
   total: number;
@@ -33,6 +35,50 @@ export class ProgressTracker {
     this.showItems = options.showItems ?? false;
     this.startTime = Date.now();
     this.phaseStartTime = Date.now();
+  }
+
+  /**
+   * Static helper to draw a "sticky" overall progress bar at the bottom
+   */
+  static drawOverallProgress(current: number, total: number, label: string, info?: string): void {
+    if (!process.stdout.isTTY) {
+      // Fallback for non-TTY (like logs or simple terminals)
+      const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+      console.log(`\n  [PROGRESS] ${label}: ${percent}% (${current}/${total})${info ? ` | ${info}` : ""}`);
+      return;
+    }
+
+    const barWidth = 40;
+    const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+    const filled = total > 0 ? Math.round((current / total) * barWidth) : 0;
+    const empty = barWidth - filled;
+
+    // ANSI Colors
+    const BLUE = "\x1b[34m";
+    const GREEN = "\x1b[32m";
+    const GRAY = "\x1b[90m";
+    const BOLD = "\x1b[1m";
+    const RESET = "\x1b[0m";
+
+    const bar = `${GREEN}${"█".repeat(filled)}${GRAY}${"░".repeat(empty)}${RESET}`;
+    const counter = `${BOLD}(${current}/${total})${RESET}`;
+    
+    const line = `  ${BOLD}${label}${RESET} ${bar} ${BOLD}${percent}%${RESET} ${counter}${info ? ` | ${info}` : ""}`;
+
+    // STICKY LOGIC: Save cursor, go to bottom, draw, restore cursor
+    // 1. Save cursor position
+    process.stdout.write("\x1b[s"); 
+    
+    // 2. Move to a safe area at the bottom (2 lines from bottom)
+    const rows = process.stdout.rows || 24;
+    readline.cursorTo(process.stdout, 0, rows - 1);
+    
+    // 3. Clear line and write bar
+    readline.clearLine(process.stdout, 0);
+    process.stdout.write(line);
+
+    // 4. Restore cursor position
+    process.stdout.write("\x1b[u");
   }
 
   /**
@@ -173,32 +219,32 @@ export class ProgressTracker {
     const bar = this.buildBar(this.total, this.total);
 
     console.log(
-      `\n${"─".repeat(70)}`
+      `\n\x1b[32m${"═".repeat(70)}\x1b[0m`
     );
     console.log(
-      `  ✅ ${this.label} — COMPLETED`
+      `  \x1b[32m\x1b[1m✅ ${this.label.toUpperCase()} — COMPLETED SUCCESSFULY\x1b[0m`
     );
     console.log(
       `  ${bar} (${this.total}/${this.total})`
     );
     console.log(
-      `  ⏱️  Total time: ${ProgressTracker.formatDuration(totalMs)}`
+      `  \x1b[1m⏱️  Total duration:\x1b[0m ${ProgressTracker.formatDuration(totalMs)}`
     );
     if (this.total > 0) {
       const avgMs = totalMs / this.total;
       console.log(
-        `  📊 Avg per item: ${ProgressTracker.formatDuration(avgMs)}`
+        `  \x1b[1m📊 Avg per item:\x1b[0m ${ProgressTracker.formatDuration(avgMs)}`
       );
     }
     if (extraStats) {
       for (const [key, value] of Object.entries(extraStats)) {
-        console.log(`  📊 ${key}: ${value}`);
+        console.log(`  \x1b[1m📊 ${key}:\x1b[0m ${value}`);
       }
     }
     console.log(
-      `  🏁 Finished at ${new Date().toLocaleTimeString("el-GR", { hour12: false })}`
+      `  \x1b[1m🏁 Finished at:\x1b[0m ${new Date().toLocaleString("el-GR", { hour12: false })}`
     );
-    console.log(`${"─".repeat(70)}\n`);
+    console.log(`\x1b[32m${"═".repeat(70)}\x1b[0m\n`);
   }
 }
 

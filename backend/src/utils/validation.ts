@@ -65,6 +65,19 @@ export function isValidFeedTab(value: unknown): value is string {
   return typeof value === "string" && VALID_FEED_TABS.includes(value as any);
 }
 
+/** Category tags for home chips & URL ?tag= (matches opportunity.tags) */
+export const VALID_CATEGORY_TAGS = [
+  "youth",
+  "family",
+  "unemployment",
+  "housing",
+  "disability",
+] as const;
+
+export function isValidCategoryTag(value: unknown): value is (typeof VALID_CATEGORY_TAGS)[number] {
+  return typeof value === "string" && (VALID_CATEGORY_TAGS as readonly string[]).includes(value);
+}
+
 /** Whitelist for admin status filter */
 export const VALID_ADMIN_STATUSES = ["draft", "published", "archived", "rejected"] as const;
 

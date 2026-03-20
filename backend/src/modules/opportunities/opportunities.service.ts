@@ -13,6 +13,7 @@ export class OpportunitiesService {
     type?: string;
     status?: string;
     search?: string;
+    tag?: string;
     showExpired?: boolean;
     tab?:
       | "active"
@@ -137,6 +138,10 @@ export class OpportunitiesService {
       }
     }
 
+    if (query.tag) {
+      filter.tags = query.tag;
+    }
+
     const opportunities = await Opportunity.find(filter)
       .sort({ publishedAt: -1 })
       .skip(skip)
@@ -156,6 +161,7 @@ export class OpportunitiesService {
     page?: number;
     limit?: number;
     search?: string;
+    tag?: string;
     showRejected?: boolean; // Admin filter: show rejected items
     showTendersNews?: boolean; // Admin filter: show tenders/news
   }): Promise<{
@@ -416,6 +422,10 @@ export class OpportunitiesService {
       if (sanitized) {
         filter.$text = { $search: sanitized };
       }
+    }
+
+    if (query.tag) {
+      filter.tags = query.tag;
     }
 
     // Sort based on tab (if not already set by news tab)

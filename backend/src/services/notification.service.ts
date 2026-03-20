@@ -85,9 +85,10 @@ export class NotificationService {
     return subscription;
   }
 
-  async unsubscribe(endpoint: string): Promise<void> {
+  async unsubscribe(endpoint: string, userId?: string): Promise<void> {
     if (!endpoint) return;
-    await PushSubscription.deleteOne({ endpoint });
+    const query = userId ? { endpoint, userId } : { endpoint };
+    await PushSubscription.deleteOne(query);
   }
 
   async sendToAdmins(payload: any): Promise<void> {

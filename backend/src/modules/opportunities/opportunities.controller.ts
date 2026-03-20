@@ -2,15 +2,16 @@ import { Request, Response } from 'express';
 import { AuthRequest } from '../../middleware/auth.middleware';
 import { OpportunitiesService } from './opportunities.service';
 import { config } from '../../config/env';
-import { safeParsePage, safeParseLimit, isValidOpportunityType, isValidOpportunityTab, isValidFeedTab } from '../../utils/validation';
+import { safeParsePage, safeParseLimit, isValidOpportunityType, isValidOpportunityTab, isValidFeedTab, isValidCategoryTag } from '../../utils/validation';
 
 const opportunitiesService = new OpportunitiesService();
 
 export async function getOpportunities(req: Request, res: Response): Promise<void> {
   try {
-    const { page, limit, type, status, search, tab } = req.query;
+    const { page, limit, type, status, search, tab, tag } = req.query;
     const validatedTab = isValidOpportunityTab(tab) ? (tab as "active" | "results" | "news" | "archived" | "upcoming" | "current" | "all") : undefined;
     const validatedType = isValidOpportunityType(type) ? type : undefined;
+    const validatedTag = isValidCategoryTag(tag) ? tag : undefined;
     const result = await opportunitiesService.getPublicOpportunities({
       page: safeParsePage(page),
       limit: safeParseLimit(limit),
@@ -18,6 +19,7 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
       status: typeof status === 'string' ? status : undefined,
       search: typeof search === 'string' ? search : undefined,
       tab: validatedTab,
+      tag: validatedTag,
     });
     res.status(200).json(result);
   } catch (error: any) {
@@ -31,7 +33,7 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
 
 export async function getFeed(req: Request, res: Response): Promise<void> {
   try {
-    const { tab, page, limit, search } = req.query;
+    const { tab, page, limit, search, tag } = req.query;
 
     // Admin-only flags: only honor if user is authenticated as admin
     const isAdmin = !!(req as AuthRequest).userId && (req as AuthRequest).userRole === 'admin';
@@ -39,11 +41,13 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
     const showTendersNews = isAdmin && (req.query.showTendersNews === "true" || req.query.showTendersNews === "1");
 
     const validatedTab: "news" | "upcoming" | "current" | "all" = isValidFeedTab(tab) ? (tab as "news" | "upcoming" | "current" | "all") : "all";
+    const validatedTag = isValidCategoryTag(tag) ? tag : undefined;
     const result = await opportunitiesService.getFeed({
       tab: validatedTab,
       page: safeParsePage(page),
       limit: safeParseLimit(limit),
       search: typeof search === 'string' ? search : undefined,
+      tag: validatedTag,
       showRejected,
       showTendersNews,
     });

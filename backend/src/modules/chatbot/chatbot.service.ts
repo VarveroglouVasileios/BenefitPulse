@@ -55,7 +55,8 @@ export class ChatbotService {
           headers: { 
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`
-          }
+          },
+          timeout: 15000,
         }
       );
 

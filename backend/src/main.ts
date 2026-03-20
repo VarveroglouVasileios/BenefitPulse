@@ -41,7 +41,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
-import { securityMiddleware, rateLimiter, contactRateLimiter } from "./config/security";
+import { chatbotRateLimiter, contactRateLimiter, eventsRateLimiter, rateLimiter, securityMiddleware } from "./config/security";
 import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from "./middleware/auth.middleware";
 import { validateObjectId, validateObjectIdParam } from "./middleware/validation.middleware";
 import * as Sentry from "@sentry/node";
@@ -243,7 +243,7 @@ app.delete(
 );
 
 // Events route
-app.post("/api/events", eventsController.trackEvent);
+app.post("/api/events", eventsRateLimiter, eventsController.trackEvent);
 
 // Notifications routes
 import { notificationsRoutes } from "./routes/notifications.routes";
@@ -255,7 +255,7 @@ app.post("/api/contact", contactRateLimiter, contactController.submitContact);
 
 // Chatbot route
 import * as chatbotController from "./modules/chatbot/chatbot.controller";
-app.post("/api/chatbot/chat", chatbotController.chat);
+app.post("/api/chatbot/chat", chatbotRateLimiter, chatbotController.chat);
 
 // Admin routes
 app.get(

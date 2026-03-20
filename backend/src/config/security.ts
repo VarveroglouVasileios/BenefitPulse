@@ -36,6 +36,18 @@ export const eventsRateLimiter = rateLimit({
   message: 'Too many event requests, please try again later.',
 });
 
+export const chatbotRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: 'Too many chatbot requests, please try again later.',
+});
+
+export const notificationsRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: 'Too many notification requests, please try again later.',
+});
+
 export const contactRateLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,

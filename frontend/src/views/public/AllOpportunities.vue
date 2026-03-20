@@ -23,14 +23,36 @@
     
     <div v-else>
       <!-- Active Filters Summary -->
-      <div v-if="filters.search || filters.type || filters.source || filters.kind" class="active-filters">
-        <span v-if="filters.search">Αναζήτηση: "<strong>{{ filters.search }}</strong>"</span>
-        <button @click="clearFilters" class="clear-filters-btn">✕ Καθαρισμός Φίλτρων</button>
+      <div v-if="hasActiveFilters" class="active-filters">
+        <div class="active-filters-chips">
+          <span v-if="filters.search" class="filter-chip"
+            >Αναζήτηση: «<strong>{{ filters.search }}</strong>»</span
+          >
+          <span v-if="filters.tag" class="filter-chip"
+            >Κατηγορία: <strong>{{ tagLabel(filters.tag) }}</strong></span
+          >
+          <span v-if="filters.type" class="filter-chip"
+            >Τύπος: <strong>{{ typeLabel(filters.type) }}</strong></span
+          >
+        </div>
+        <button type="button" @click="clearFilters" class="clear-filters-btn">✕ Καθαρισμός Φίλτρων</button>
       </div>
 
-      <div v-if="opportunities.length === 0" class="empty">
-        <p>Δεν βρέθηκαν ευκαιρίες{{ filters.search ? ` για "${filters.search}"` : '' }}</p>
-        <button v-if="filters.search" @click="clearFilters" class="btn-link">Επιστροφή σε όλες</button>
+      <div v-if="opportunities.length === 0" class="empty-state">
+        <div class="empty-icon" aria-hidden="true">🔍</div>
+        <h2 class="empty-title">Δεν βρέθηκαν αποτελέσματα</h2>
+        <p class="empty-text">
+          <template v-if="hasActiveFilters || activeTab !== 'all'">
+            Δοκίμασε να αλλάξεις την καρτέλα ή να αφαιρέσεις τα φίλτρα — έτσι θα εμφανιστούν περισσότερες ευκαιρίες.
+          </template>
+          <template v-else>Αυτή τη στιγμή δεν υπάρχουν δημοσιευμένες εγγραφές που να ταιριάζουν.</template>
+        </p>
+        <div class="empty-actions">
+          <button v-if="hasActiveFilters || activeTab !== 'all'" type="button" class="btn-reset" @click="clearFilters">
+            Επαναφορά φίλτρων
+          </button>
+          <router-link v-else to="/" class="btn-secondary-link">Αρχική σελίδα</router-link>
+        </div>
       </div>
       <div v-else class="opportunities-grid">
         <OpportunityCard
@@ -39,17 +61,17 @@
           :opportunity="opp"
         />
       </div>
-      <div class="pagination">
-        <button @click="prevPage" :disabled="page === 1">Προηγούμενο</button>
+      <div v-if="opportunities.length > 0" class="pagination">
+        <button type="button" @click="prevPage" :disabled="page === 1">Προηγούμενο</button>
         <span>Σελίδα {{ page }} από {{ totalPages }}</span>
-        <button @click="nextPage" :disabled="!hasMore">Επόμενο</button>
+        <button type="button" @click="nextPage" :disabled="!hasMore">Επόμενο</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
 import type { Opportunity } from "@shared/types";
@@ -65,7 +87,36 @@ const page = ref(1);
 const total = ref(0);
 const limit = ref(20);
 const activeTab = ref<"news" | "upcoming" | "current" | "all">("all");
-const filters = ref({ type: "", kind: "", source: "", search: "" });
+const filters = ref({ type: "", kind: "", source: "", search: "", tag: "" });
+
+const TAG_LABELS: Record<string, string> = {
+  youth: "Νέοι",
+  family: "Οικογένεια",
+  unemployment: "Ανεργία",
+  housing: "Στέγαση",
+  disability: "ΑμεΑ",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  subsidy: "Επίδομα",
+  voucher: "Voucher",
+  program: "Πρόγραμμα",
+  public_call: "Προκήρυξη",
+  asep_competition: "ΑΣΕΠ",
+};
+
+function tagLabel(slug: string) {
+  return TAG_LABELS[slug] || slug;
+}
+
+function typeLabel(slug: string) {
+  return TYPE_LABELS[slug] || slug;
+}
+
+const hasActiveFilters = computed(
+  () =>
+    !!(filters.value.search?.trim() || filters.value.type || filters.value.kind || filters.value.source || filters.value.tag),
+);
 
 const tabs = [
   { value: "news" as const, label: "Νέα" },
@@ -108,40 +159,32 @@ function prevPage() {
 }
 
 function clearFilters() {
-  filters.value = { type: "", kind: "", source: "", search: "" };
-  opportunities.value = [];
-  loading.value = true;
-  router.push({ query: {} });
+  activeTab.value = "all";
+  filters.value = { type: "", kind: "", source: "", search: "", tag: "" };
+  page.value = 1;
+  router.replace({ query: {} });
 }
+
+function syncFiltersFromRoute() {
+  const q = route.query as Record<string, string | undefined>;
+  const combined = (q.search || q.query || "").trim();
+  filters.value.search = combined;
+  filters.value.tag = typeof q.tag === "string" ? q.tag : "";
+}
+
+watch(() => route.query, syncFiltersFromRoute, { immediate: true });
 
 watch(
   [activeTab, filters],
   () => {
     page.value = 1;
-    // Debounce could be added here if needed, but for now direct fetch is fine
     fetchOpportunities();
   },
-  { deep: true }
-);
-
-// Sync query params with filters
-watch(
-  () => route.query,
-  (newQuery) => {
-    // If search is present updates it, otherwise if undefined (cleared) resets it to empty string
-    filters.value.search = (newQuery.search as string) || "";
-  },
-  { immediate: true }
+  { deep: true },
 );
 
 onMounted(() => {
-  // Initial sync from query is handled by the immediate watch above
-  // just need to trigger initial fetch if not triggered by watch (though watch likely triggers it)
-  // Actually, watch immediate triggers sync, then filters change triggers fetch. 
-  // But let's keep explicit fetch for clarity if no query.
-  if (!route.query.search) {
-    fetchOpportunities();
-  }
+  fetchOpportunities();
 });
 </script>
 
@@ -209,9 +252,90 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.empty {
+.empty-state {
   text-align: center;
-  padding: 4rem 2rem;
+  padding: 3rem 1.5rem 4rem max(2rem, 6vw);
+  max-width: 28rem;
+  margin: 0 auto;
+  color: var(--text-secondary);
+}
+
+.empty-icon {
+  font-size: 2.75rem;
+  line-height: 1;
+  margin-bottom: 1rem;
+  filter: grayscale(0.2);
+}
+
+.empty-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1.35rem;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.empty-text {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.empty-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.btn-reset {
+  appearance: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--accent-primary);
+  color: #fff;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.btn-reset:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.btn-secondary-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.65rem 1.25rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  text-decoration: none;
+  background: var(--bg-secondary);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.btn-secondary-link:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.active-filters-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-chip {
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 

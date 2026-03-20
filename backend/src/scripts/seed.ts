@@ -5,6 +5,7 @@ import { hashPassword } from "../utils/hash";
 import { config } from "../config/env";
 
 export async function seed() {
+  console.log("🔗 Connecting to MongoDB URI:", config.mongodb.uri);
   await connectMongo();
 
   // Create admin user
@@ -25,9 +26,9 @@ export async function seed() {
   // Create default sources
   const sources = [
     {
-      name: "ΑΣΕΠ RSS",
-      url: "https://info.asep.gr/feed.xml",
-      type: "rss" as const,
+      name: "ΑΣΕΠ Ανακοινώσεις (HTML)",
+      url: "https://info.asep.gr/announcements-list",
+      type: "html_listing" as const,
       enabled: true,
     },
     // ΑΣΕΠ Sources (using RSS as primary, HTML listings disabled if 404)
@@ -90,7 +91,7 @@ export async function seed() {
       name: "GovGR Υγεία & Πρόνοια - Επιδόματα",
       url: "https://www.gov.gr/ipiresies/ugeia-kai-pronoia/epidomata",
       type: "html_listing" as const,
-      enabled: false, // Disabled: 403 Forbidden (blocked)
+      enabled: true, // Re-enabled: page should load again
     },
     {
       name: "GovGR Επιδoτήσεις πολιτών",
@@ -191,7 +192,7 @@ export async function seed() {
       name: "e-ΕΦΚΑ Επιδόματα",
       url: "https://www.e-efka.gov.gr/el/epidomata",
       type: "html_listing" as const,
-      enabled: false, // Disabled: 404, needs discovery of actual path
+      enabled: true, // Re-enabled: page now loads again
     },
     {
       name: "ΕΦΚΑ Επιδόματα (efka.gov.gr)",
@@ -247,12 +248,12 @@ export async function seed() {
       type: "single_page" as const,
       enabled: true,
     },
-    // Gov.gr category hub (DISABLED: returns 403 Forbidden)
+    // Gov.gr category hub
     {
       name: "gov.gr - Υγεία & Πρόνοια (category hub)",
       url: "https://www.gov.gr/ipiresies/ugeia-kai-pronoia",
       type: "html_catalog" as const,
-      enabled: false, // Disabled: 403 Forbidden (blocked)
+      enabled: true, // Re-enabled for retry; specific sub-pages are already covered too
     },
     // NEW SOURCES - Expanded data sources
     {
@@ -295,6 +296,36 @@ export async function seed() {
     {
       name: "ESPA Fisheries",
       url: "https://alieia.mc.gov.gr/metra-eniksis-tis-alieias/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ESPA Ανθρώπινο Δυναμικό",
+      url: "https://espa-anthropinodynamiko.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Ανταγωνιστικότητα 2021-2027",
+      url: "https://21-27.antagonistikotita.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Ψηφιακός Μετασχηματισμός",
+      url: "https://www.digitaltransform.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ΟΠΣΚΕ",
+      url: "https://app.opske.gr/",
+      type: "single_page" as const,
+      enabled: true, // Useful for cross-checking application portals
+    },
+    {
+      name: "Diavgeia HTML Search",
+      url: "https://diavgeia.gov.gr/search?query=%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1",
       type: "html_listing" as const,
       enabled: true,
     },
@@ -390,6 +421,34 @@ export async function seed() {
   // Check for duplicates and deduplicate, update broken URLs
   const seenUrls = new Set<string>();
   const duplicates: Array<{ name: string; url: string }> = [];
+  const urlMigrations: Array<{ from: string; to: string; name?: string }> = [
+    {
+      from: "https://vouchers.gov.gr/tourism4all-%F0%9F%9B%A1%EF%B8%8F%202025",
+      to: "https://vouchers.gov.gr/tourism4all-2025",
+      name: "Tourism4All 2025 Page",
+    },
+    {
+      from: "https://vouchers.gov.gr/tourism4all-%F0%9F%9B%A1%EF%B8%8F-2025",
+      to: "https://vouchers.gov.gr/tourism4all-2025",
+      name: "Tourism4All 2025 Page",
+    },
+  ];
+
+  for (const migration of urlMigrations) {
+    const existing = await Source.findOne({
+      url: { $regex: new RegExp(`^${migration.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") }
+    });
+
+    if (existing) {
+      console.log(`⚠️  Migrating broken URL: "${existing.url}" → "${migration.to}"`);
+      existing.url = migration.to;
+      if (migration.name) {
+        existing.name = migration.name;
+      }
+      existing.enabled = true;
+      await existing.save();
+    }
+  }
 
   for (const sourceData of sources) {
     const normalizedUrl = sourceData.url.toLowerCase().trim();

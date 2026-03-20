@@ -18,6 +18,8 @@ import { ProgressTracker } from "../../utils/progress";
 // Key: hash of title+url (or content), Value: AIStatusResult / ExtractedOpportunity
 const aiStatusCache = new Map<string, Awaited<ReturnType<typeof extractApplicationStatus>>>();
 const aiExtractCache = new Map<string, Awaited<ReturnType<typeof extractOpportunity>>>();
+const SOURCE_FETCH_TIMEOUT_MS = config.ingestion.sourceTimeoutMs;
+const AI_THROTTLE_DELAY_MS = config.ingestion.aiThrottleMs;
 
 const rssParser = new Parser({
   customFields: {
@@ -26,12 +28,20 @@ const rssParser = new Parser({
 });
 
 const DEFAULT_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   "Accept-Encoding": "gzip, deflate, br",
   "Connection": "keep-alive",
   "Cache-Control": "max-age=0",
+  "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Upgrade-Insecure-Requests": "1"
 };
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // Headers per source type
 function getHeadersForSourceType(sourceType: string, url?: string): Record<string, string> {
@@ -61,7 +71,6 @@ function getHeadersForSourceType(sourceType: string, url?: string): Record<strin
     return {
       ...baseHeaders,
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
       "Upgrade-Insecure-Requests": "1",
     };
   }
@@ -75,14 +84,17 @@ async function fetchWithRedirects(
   data: any; 
   finalUrl: string; 
   statusCode: number; 
-  is404: boolean;
+  is404: boolean; 
   contentType?: string;
   contentLength?: number;
 }> {
   try {
     const response = await axios.get(url, {
       ...options,
-      maxRedirects: 5,
+      headers: { ...DEFAULT_HEADERS, ...(options.headers || {}) },
+      maxRedirects: 10,
+      maxContentLength: 50 * 1024 * 1024, // 50MB
+      maxBodyLength: 50 * 1024 * 1024,
       validateStatus: (status) => status < 500, // Don't throw on 4xx
     });
 
@@ -97,12 +109,12 @@ async function fetchWithRedirects(
     let is404 = false;
     if (statusCode === 404) {
       is404 = true;
-    } else if (typeof response.data === 'string') {
+    } else if (typeof response.data === 'string' && response.data.length < 10000) {
+      // Only check small pages for "textual 404s" to avoid false positives in large content
       const lowerData = response.data.toLowerCase();
       is404 = lowerData.includes("δεν ήταν δυνατή η εύρεση") ||
-              lowerData.includes("404") ||
-              lowerData.includes("not found") ||
-              lowerData.includes("page not found");
+              lowerData.includes("σελίδα δεν βρέθηκε") ||
+              (lowerData.includes("404") && (lowerData.includes("not found") || lowerData.includes("σφάλμα")));
     }
 
     return {
@@ -215,7 +227,7 @@ export class IngestionService {
       const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
-        timeout: 15000,
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
       });
 
       // Store fetch metadata
@@ -345,7 +357,7 @@ export class IngestionService {
         headers: { ...headers, ...(source.config?.headers || {}) },
         params: source.config?.params || {},
         responseType: "json",
-        timeout: 15000,
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
       });
 
       // Store fetch metadata
@@ -522,7 +534,7 @@ export class IngestionService {
       const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
-        timeout: 15000,
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
       });
 
       // Store fetch metadata
@@ -616,7 +628,7 @@ export class IngestionService {
       const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
-        timeout: 15000,
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
       });
 
       // Store fetch metadata
@@ -683,7 +695,52 @@ export class IngestionService {
       const isMindev = baseHost.includes("mindev.gov.gr");
       const isEpendyseis = baseHost.includes("ependyseis.mindev.gov.gr");
       const isDiavgeiaHtml = baseHost.includes("diavgeia.gov.gr");
-      
+      const isAsep = baseHost.includes("asep.gr");
+
+      // Special handling for ASEP info portal
+      if (isAsep) {
+        $("article, .views-row, .node-announcement, .node-press-release").each((_, el) => {
+          const $el = $(el);
+          const linkEl = $el.find("a").first();
+          const titleEl = $el.find("h2, h3, .title, .field-name-title").first();
+
+          const href = linkEl.attr("href");
+          if (!href) return;
+
+          const title = titleEl.text().trim() || linkEl.text().trim();
+          if (!title || title.length < 5) return;
+
+          const dateEl = $el.find(".date, .created, .field-name-post-date, time").first();
+          const publishedAt = dateEl.length ? parseDate(dateEl.text()).date || new Date() : new Date();
+
+          items.push({
+            title,
+            url: href.startsWith("http") ? href : `https://info.asep.gr${href.startsWith("/") ? "" : "/"}${href}`,
+            content: $el.text().trim().substring(0, 1000),
+            publishedAt,
+          });
+        });
+      }
+
+      // Special handling for Diavgeia HTML listings
+      if (isDiavgeiaHtml) {
+        $(".decision-row, .result-item, tr.decision").each((_, el) => {
+          const $el = $(el);
+          const linkEl = $el.find("a[href*='decision'], a[href*='ada']").first();
+          if (!linkEl.length) return;
+
+          const title = $el.find(".subject, .title, td:nth-child(2)").text().trim();
+          if (!title) return;
+
+          items.push({
+            title,
+            url: linkEl.attr("href"),
+            content: $el.text().trim(),
+            publishedAt: new Date(),
+          });
+        });
+      }
+
       // Special handling for dypa.gov.gr/proghrammata-anoikhta and proghrammata-apaskholisis-11
       if (source.url.includes("dypa.gov.gr/proghrammata-anoikhta") || 
           source.url.includes("dypa.gov.gr/proghrammata-apaskholisis-11")) {
@@ -981,7 +1038,7 @@ export class IngestionService {
       const { data, finalUrl, statusCode, contentType, contentLength, is404 } = await fetchWithRetry(source.url, {
         headers: { ...headers, ...(source.config?.headers || {}) },
         responseType: "text",
-        timeout: 15000,
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
       });
 
       // Store fetch metadata
@@ -1052,11 +1109,11 @@ export class IngestionService {
       }
 
       // Small delay to be polite
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await sleep(500);
 
       const response = await axios.get(url, {
         headers: { ...headers, "User-Agent": DEFAULT_HEADERS["User-Agent"] },
-        timeout: 15000, // Increased to 15s (was 10s)
+        timeout: SOURCE_FETCH_TIMEOUT_MS,
         maxContentLength: 5 * 1024 * 1024, // Max 5MB
       });
 
@@ -1272,16 +1329,12 @@ export class IngestionService {
 
     const isGenericTitle = (title: string): boolean => {
       const t = title.trim().toLowerCase();
-      if (!t || t.length < 5) return true;
+      if (!t || t.length < 3) return true;
       const genericTitles = [
-        "gov.gr",
-        "υπουργείο",
-        "υπουργειο",
-        "αρχική",
         "home",
         "welcome",
       ];
-      return genericTitles.some((g) => t === g || t.startsWith(g + " "));
+      return genericTitles.some((g) => t === g);
     };
 
     const isBlockedBySourceHeuristics = (source: any, item: any): { blocked: boolean; reason?: string } => {
@@ -1825,10 +1878,9 @@ export class IngestionService {
         if (cleaned.applicationStatus === "unknown" && cleaned.status !== "rejected" && hasAiKey) {
           console.log("   🤖 AI Status Check: Cleaner returned 'unknown', calling AI (Groq)...");
           
-          // Throttle to avoid rate limits
-          // Groq Free limit: Strict TPM caps
-          // We use 20s delay to be absolutely safe (~3 req/min)
-          await new Promise(resolve => setTimeout(resolve, 20000));
+          // Throttle AI requests to reduce 429s on shared/free limits.
+          console.log(`   ⏳ Throttling AI status request (${AI_THROTTLE_DELAY_MS}ms)...`);
+          await sleep(AI_THROTTLE_DELAY_MS);
           
           try {
             const statusKey = `${(item.url || canonical) || ""}::${(item.title || "").substring(0, 120)}`;
@@ -1875,12 +1927,12 @@ export class IngestionService {
         }
 
         // Extract eligibility rules + high-quality summary using AI extractor
-        // THROTTLING: Wait a few seconds to respect limits
+        // Throttle AI extraction requests to reduce 429s on shared/free limits.
         // OPTIMIZATION: Skip eligibility extraction if item is rejected
         let extracted: any = { confidence: 0, criteriaRulesJson: {}, criteriaJson: {}, summary: "" }; // Initialize extracted with safe defaults
         if (config.groq.apiKey && cleaned.status !== "rejected") {
-          console.log("   ⏳ Throttling AI request (Groq 20s)...");
-          await new Promise(resolve => setTimeout(resolve, 20000)); // Using 20s for safe TPM
+          console.log(`   ⏳ Throttling AI extraction request (${AI_THROTTLE_DELAY_MS}ms)...`);
+          await sleep(AI_THROTTLE_DELAY_MS);
           
           try {
             const extractKey = `${(item.url || canonical) || ""}::${(item.title || "").substring(0, 120)}`;

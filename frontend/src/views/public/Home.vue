@@ -112,9 +112,8 @@
           Δες όλα &rarr;
         </router-link>
       </div>
-      <div v-if="loadingNew" class="loading">
-        <div class="skeleton-line"></div>
-        <div class="skeleton-line short"></div>
+      <div v-if="loadingNew" class="opportunities-grid skeleton-featured-grid">
+        <SkeletonOpportunityCard v-for="n in 6" :key="'new-' + n" />
       </div>
       <div v-else-if="newOpen.length === 0" class="fallback-list">
         <h4>Top κατηγορίες</h4>
@@ -141,9 +140,8 @@
           Δες όλα &rarr;
         </router-link>
       </div>
-      <div v-if="loadingTrending" class="loading">
-        <div class="skeleton-line"></div>
-        <div class="skeleton-line short"></div>
+      <div v-if="loadingTrending" class="opportunities-grid skeleton-featured-grid">
+        <SkeletonOpportunityCard v-for="n in 6" :key="'tr-' + n" />
       </div>
       <div v-else-if="trending.length === 0" class="fallback-list">
         <h4>Πιο πρόσφατα ενημερωμένα</h4>
@@ -170,7 +168,9 @@
           Δες όλα &rarr;
         </router-link>
       </div>
-      <div v-if="loadingForYou" class="loading">Φόρτωση...</div>
+      <div v-if="loadingForYou" class="opportunities-grid skeleton-featured-grid">
+        <SkeletonOpportunityCard v-for="n in 4" :key="'fy-' + n" />
+      </div>
       <div v-else-if="forYou.length === 0" class="empty-state">
         <p>Δημιούργησε προφίλ για να δεις προσωποποιημένες ευκαιρίες.</p>
         <router-link to="/profile/wizard" class="btn btn-primary" style="margin-top: 1rem; display: inline-block;">
@@ -286,6 +286,7 @@ import { useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
 import OpportunityCard from "../../components/OpportunityCard.vue";
+import SkeletonOpportunityCard from "../../components/SkeletonOpportunityCard.vue";
 
 const authStore = useAuthStore();
 const isAuthenticated = computed(() => authStore.isAuthenticated);
@@ -999,6 +1000,10 @@ watch(
 
 .skeleton-line.short {
   width: 60%;
+}
+
+.skeleton-featured-grid {
+  margin-top: 0.5rem;
 }
 
 .fallback-list {

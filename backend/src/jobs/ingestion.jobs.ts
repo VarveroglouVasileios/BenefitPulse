@@ -132,12 +132,20 @@ export async function processSourceJob(job: Job): Promise<void> {
     }
   } catch { /* ignore redis errors */ }
 
+  // Color constants
+  const BLUE = "\x1b[34m";
+  const GREEN = "\x1b[32m";
+  const YELLOW = "\x1b[33m";
+  const RED = "\x1b[31m";
+  const RESET = "\x1b[0m";
+  const BOLD = "\x1b[1m";
+
   // Build a top-level progress bar for overall pipeline
   const overallPct = Math.round((sourceIndex / totalSources) * 100);
-  const barWidth = 30;
+  const barWidth = 25;
   const filled = Math.round((sourceIndex / totalSources) * barWidth);
   const empty = barWidth - filled;
-  const overallBar = `[${"█".repeat(filled)}${"░".repeat(empty)}]`;
+  const overallBar = `${BLUE}[${"█".repeat(filled)}${"░".repeat(empty)}]${RESET}`;
 
   // Calculate pipeline ETA based on elapsed time
   const elapsedMs = Date.now() - pipelineStartTime;
@@ -147,29 +155,72 @@ export async function processSourceJob(job: Job): Promise<void> {
   const etaStr = sourceIndex > 0 ? ProgressTracker.formatDuration(etaMs) : "calculating...";
   const elapsedStr = ProgressTracker.formatDuration(elapsedMs);
 
-  console.log(`\n${"━".repeat(70)}`);
-  console.log(`  📦 SOURCE ${sourceNum}/${totalSources}: ${sourceName}`);
-  console.log(`  ${overallBar} ${overallPct}% | ⏱️ ${elapsedStr} | ETA: ${etaStr}`);
-  console.log(`${"━".repeat(70)}`);
+  // Use the new centralized progress drawing
+  const info = `⏱️ ${elapsedStr} | ETA: ${YELLOW}${etaStr}${RESET}`;
+  
+  // Draw once immediately
+  ProgressTracker.drawOverallProgress(
+    sourceIndex, 
+    totalSources, 
+    `OVERALL INGESTION PROGRESS`,
+    info
+  );
+
+  // Set up a temporary refresh interval for this source job to keep the bar sticky
+  const refreshInterval = setInterval(() => {
+    const currentElapsed = ProgressTracker.formatDuration(Date.now() - pipelineStartTime);
+    const currentEtaMs = avgPerSource * (totalSources - sourceIndex);
+    const currentEtaStr = sourceIndex > 0 ? ProgressTracker.formatDuration(currentEtaMs) : "calculating...";
+    
+    ProgressTracker.drawOverallProgress(
+      sourceIndex, 
+      totalSources, 
+      `OVERALL INGESTION PROGRESS`,
+      `⏱️ ${currentElapsed} | ETA: ${YELLOW}${currentEtaStr}${RESET}`
+    );
+  }, 2000);
+
+  console.log(`${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
+  console.log(`  ${BOLD}📦 SOURCE ${sourceNum}/${totalSources}:${RESET} ${BOLD}${sourceName}${RESET}`);
+  console.log(`${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
 
   const sourceStart = Date.now();
-  const result = await ingestionService.processSource(sourceId);
-  const sourceDuration = Date.now() - sourceStart;
+  let result;
+  try {
+    result = await ingestionService.processSource(sourceId);
+    clearInterval(refreshInterval); // Clean up after source is done
+    const sourceDuration = Date.now() - sourceStart;
+    
+    // Status color based on findings
+    const statusColor = result.processedCount > 0 ? GREEN : RESET;
+    const skipCount = Object.values(result.skipReasons as Record<string, number>).reduce(
+      (total, count) => total + count,
+      0,
+    );
 
-  console.log(
-    `  ✅ Source done: ${result.processedCount} published | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`
-  );
+    console.log(
+      `  ${statusColor}✅ Done:${RESET} ${BOLD}${result.processedCount}${RESET} opportunities | ${skipCount} skipped | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`
+    );
+  } catch (error: any) {
+    clearInterval(refreshInterval); // Clean up on error
+    const sourceDuration = Date.now() - sourceStart;
+    console.error(`  ${RED}❌ Failed:${RESET} ${error.message} | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`);
+    throw error;
+  }
 
   // If this is the last source, show completion
   if (sourceNum === totalSources) {
     const totalElapsed = Date.now() - pipelineStartTime;
-    console.log(`\n${"═".repeat(70)}`);
-    console.log(`  ✅ ALL ${totalSources} SOURCES PROCESSED`);
-    console.log(`  ⏱️  Total ingestion time: ${ProgressTracker.formatDuration(totalElapsed)}`);
-    console.log(`  🏁 Finished at ${new Date().toLocaleTimeString("el-GR", { hour12: false })}`);
-    console.log(`  🔍 Verification will start in ~15 min`);
-    console.log(`  🗄️  Archive will start in ~30 min`);
-    console.log(`${"═".repeat(70)}\n`);
+    const finalTracker = new ProgressTracker({ 
+      label: "Ingestion Pipeline", 
+      total: totalSources 
+    });
+    // Use the tracker's finish method for the final big message
+    finalTracker.finish({
+      "Total Sources": totalSources,
+      "Total Time": ProgressTracker.formatDuration(totalElapsed),
+      "Next Phase": "Verification (15m) / Archive (30m)"
+    });
 
     // Clean up Redis progress
     try { await redis.del(PROGRESS_KEY); } catch { /* ignore */ }

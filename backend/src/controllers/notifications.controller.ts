@@ -1,20 +1,18 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { notificationService } from '../services/notification.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 export class NotificationsController {
   
   // POST /api/notifications/subscribe
-  async subscribe(req: Request, res: Response) {
+  async subscribe(req: AuthRequest, res: Response) {
     try {
       const subscription = req.body;
-      // Use AuthRequest type and get userId from optional auth middleware
-      // If optionalAuthMiddleware is applied, userId will be set if token is present
-      const userId = (req as AuthRequest).userId;
+      const userId = req.userId;
 
-      console.log('Received subscription request:', { 
-        endpoint: subscription?.endpoint, 
-        userId 
+      console.log('Received subscription request', {
+        hasEndpoint: !!subscription?.endpoint,
+        userId,
       });
 
       const savedSubscription = await notificationService.subscribe(subscription, userId);
@@ -32,10 +30,20 @@ export class NotificationsController {
   }
 
   // POST /api/notifications/unsubscribe
-  async unsubscribe(req: Request, res: Response) {
+  async unsubscribe(req: AuthRequest, res: Response) {
     try {
       const { endpoint } = req.body;
-      await notificationService.unsubscribe(endpoint);
+      if (!endpoint || typeof endpoint !== 'string') {
+        res.status(400).json({ message: 'Endpoint is required' });
+        return;
+      }
+
+      if (!req.userId) {
+        res.status(401).json({ message: 'Unauthorized' });
+        return;
+      }
+
+      await notificationService.unsubscribe(endpoint, req.userId);
       res.status(200).json({ message: 'Unsubscribed successfully' });
     } catch (error) {
       console.error('Unsubscribe error:', error);
@@ -43,15 +51,23 @@ export class NotificationsController {
     }
   }
 
-  // POST /api/notifications/test (Admin only ideally)
-  async sendTest(req: Request, res: Response) {
+  // POST /api/notifications/test (Admin only)
+  async sendTest(req: AuthRequest, res: Response) {
     try {
       const { message, url } = req.body;
+      const body =
+        typeof message === 'string' && message.trim()
+          ? message.trim().substring(0, 200)
+          : 'This is a test notification';
+      const targetUrl =
+        typeof url === 'string' && url.startsWith('/') && !url.startsWith('//')
+          ? url
+          : '/opportunities';
       
       await notificationService.broadcast({
         title: 'BenefitPulse Test',
-        body: message || 'This is a test notification',
-        url: url || '/opportunities',
+        body,
+        url: targetUrl,
         icon: '/pwa-192x192.png'
       });
 

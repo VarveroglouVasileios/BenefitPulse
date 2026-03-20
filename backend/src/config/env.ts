@@ -1,9 +1,15 @@
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 
+const nodeEnv = process.env.NODE_ENV || 'development';
+const envPath = path.resolve(process.cwd(), `.env.${nodeEnv}`);
+
+dotenv.config({ path: envPath });
+// Fallback to default .env if specific one doesn't exist
 dotenv.config();
 
 export const config = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: parseInt(process.env.PORT || '3001', 10),
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5174',
   
@@ -68,6 +74,8 @@ export const config = {
   
   ingestion: {
     debug: process.env.INGESTION_DEBUG === 'true',
+    sourceTimeoutMs: parseInt(process.env.INGESTION_SOURCE_TIMEOUT_MS || '25000', 10),
+    aiThrottleMs: parseInt(process.env.INGESTION_AI_THROTTLE_MS || '25000', 10),
   },
   
   analytics: {

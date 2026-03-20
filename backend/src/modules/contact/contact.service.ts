@@ -60,10 +60,10 @@ export class ContactService {
 
     console.log("Contact form submission:", {
       type: data.type,
-      name: data.name,
-      email: data.email,
-      subject: data.subject,
-      message: data.message,
+      nameLength: data.name.length,
+      emailDomain: data.email.includes("@") ? data.email.split("@")[1] : "invalid",
+      subjectLength: data.subject.length,
+      messageLength: data.message.length,
     });
   }
 }
