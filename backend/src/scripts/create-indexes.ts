@@ -1,7 +1,7 @@
 import { Opportunity } from '../models/opportunity.model';
 import { connectMongo } from '../db/mongo';
 
-async function createIndexes() {
+export async function createIndexes() {
   try {
     await connectMongo();
     console.log('Connected to MongoDB');
@@ -18,11 +18,14 @@ async function createIndexes() {
     await Opportunity.ensureIndexes();
     
     console.log('Indexes created successfully');
-    process.exit(0);
+    // Don't process.exit(0) here because it kills the CLI runner
   } catch (error) {
     console.error('Error creating indexes:', error);
-    process.exit(1);
+    throw error;
   }
 }
 
-createIndexes();
+// Support running directly or via CLI runner
+if (require.main === module) {
+  createIndexes().then(() => process.exit(0)).catch(() => process.exit(1));
+}

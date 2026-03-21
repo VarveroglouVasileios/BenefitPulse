@@ -22,4 +22,4 @@ RUN (while true; do echo "[build] tsc running..."; sleep 15; done) & \
 # 4. Εκκίνηση
 EXPOSE 3001
 # ΠΡΟΣΟΧΗ: Το σωστό path είναι dist/main.js
-CMD ["node", "dist/main.js"]
+CMD ["sh", "-c", "node dist/cli.js seed && node dist/cli.js create:indexes && node dist/main.js"]

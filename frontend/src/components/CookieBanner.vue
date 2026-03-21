@@ -81,12 +81,12 @@ function rejectCookies() {
 }
 
 .cookie-text strong {
-  color: var(--accent-primary);
+  color: var(--link-color);
   font-weight: 600;
 }
 
 .cookie-text a {
-  color: var(--accent-primary);
+  color: var(--link-color);
   text-decoration: underline;
 }
 

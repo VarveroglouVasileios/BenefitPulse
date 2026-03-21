@@ -164,7 +164,7 @@ function closeContactModal() {
 
 .footer-link-prominent {
   font-weight: 700 !important;
-  color: var(--accent-primary) !important;
+  color: var(--link-color) !important;
 }
 
 

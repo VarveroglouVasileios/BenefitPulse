@@ -79,6 +79,14 @@ async function runCommand() {
         break;
       }
 
+      case "create:indexes": {
+        console.log("⚡ Creating database indexes...");
+        const indexesModule = await import("./scripts/create-indexes");
+        await indexesModule.createIndexes();
+        process.exit(0);
+        break;
+      }
+
       case "migrate:recompute-status": {
         const dryRun = process.argv.includes("--dry-run");
         console.log("🔄 Recomputing status for all opportunities...");

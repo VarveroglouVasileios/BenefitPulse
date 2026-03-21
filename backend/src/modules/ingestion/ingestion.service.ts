@@ -1112,7 +1112,7 @@ export class IngestionService {
       await sleep(500);
 
       const response = await axios.get(url, {
-        headers: { ...headers, "User-Agent": DEFAULT_HEADERS["User-Agent"] },
+        headers: { ...DEFAULT_HEADERS, ...headers },
         timeout: SOURCE_FETCH_TIMEOUT_MS,
         maxContentLength: 5 * 1024 * 1024, // Max 5MB
       });

@@ -166,20 +166,6 @@ export async function processSourceJob(job: Job): Promise<void> {
     info
   );
 
-  // Set up a temporary refresh interval for this source job to keep the bar sticky
-  const refreshInterval = setInterval(() => {
-    const currentElapsed = ProgressTracker.formatDuration(Date.now() - pipelineStartTime);
-    const currentEtaMs = avgPerSource * (totalSources - sourceIndex);
-    const currentEtaStr = sourceIndex > 0 ? ProgressTracker.formatDuration(currentEtaMs) : "calculating...";
-    
-    ProgressTracker.drawOverallProgress(
-      sourceIndex, 
-      totalSources, 
-      `OVERALL INGESTION PROGRESS`,
-      `⏱️ ${currentElapsed} | ETA: ${YELLOW}${currentEtaStr}${RESET}`
-    );
-  }, 2000);
-
   console.log(`${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
   console.log(`  ${BOLD}📦 SOURCE ${sourceNum}/${totalSources}:${RESET} ${BOLD}${sourceName}${RESET}`);
   console.log(`${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
@@ -188,7 +174,6 @@ export async function processSourceJob(job: Job): Promise<void> {
   let result;
   try {
     result = await ingestionService.processSource(sourceId);
-    clearInterval(refreshInterval); // Clean up after source is done
     const sourceDuration = Date.now() - sourceStart;
     
     // Status color based on findings
@@ -202,7 +187,6 @@ export async function processSourceJob(job: Job): Promise<void> {
       `  ${statusColor}✅ Done:${RESET} ${BOLD}${result.processedCount}${RESET} opportunities | ${skipCount} skipped | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`
     );
   } catch (error: any) {
-    clearInterval(refreshInterval); // Clean up on error
     const sourceDuration = Date.now() - sourceStart;
     console.error(`  ${RED}❌ Failed:${RESET} ${error.message} | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`);
     throw error;
