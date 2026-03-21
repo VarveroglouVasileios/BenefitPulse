@@ -162,6 +162,9 @@ export class OpportunitiesService {
     limit?: number;
     search?: string;
     tag?: string;
+    type?: string;
+    source?: string;
+    kind?: string;
     showRejected?: boolean; // Admin filter: show rejected items
     showTendersNews?: boolean; // Admin filter: show tenders/news
   }): Promise<{
@@ -182,11 +185,13 @@ export class OpportunitiesService {
       exclusionReasons: Record<string, number>;
     };
   }> {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const skip = (page - 1) * limit;
-    const now = new Date();
-    const tab = query.tab || "all";
+    const cacheKey = `feed_${JSON.stringify(query)}`;
+    return getOrCache(cacheKey, async () => {
+      const page = query.page || 1;
+      const limit = query.limit || 20;
+      const skip = (page - 1) * limit;
+      const now = new Date();
+      const tab = query.tab || "all";
     const showRejected = query.showRejected === true;
     const showTendersNews = query.showTendersNews === true;
 
@@ -428,6 +433,18 @@ export class OpportunitiesService {
       filter.tags = query.tag;
     }
 
+    if (query.type) {
+      filter.type = query.type;
+    }
+
+    if (query.source) {
+      filter.source = { $regex: new RegExp(query.source, "i") };
+    }
+
+    if (query.kind) {
+      filter.kind = query.kind;
+    }
+
     // Sort based on tab (if not already set by news tab)
     if (!sort || Object.keys(sort).length === 0) {
       if (tab === "upcoming") {
@@ -480,6 +497,7 @@ export class OpportunitiesService {
         exclusionReasons,
       },
     };
+    }, 300); // Cache for 5 minutes
   }
 
   async getOpportunityById(id: string): Promise<IOpportunity | null> {

@@ -275,6 +275,18 @@ export async function seed() {
       enabled: true, // RSS feed for competitiveness programs
     },
     {
+      name: "ΑΣΕΠ - Νέα",
+      url: "https://www.asep.gr/guide/news.xml",
+      type: "rss" as const,
+      enabled: true,
+    },
+    {
+      name: "ΔΥΠΑ - Δελτία Τύπου",
+      url: "https://www.dypa.gov.gr/deltia-typou?format=feed&type=rss",
+      type: "rss" as const,
+      enabled: true,
+    },
+    {
       name: "TaxHeaven News",
       url: "https://www.taxheaven.gr/rss",
       type: "rss" as const,

@@ -1166,6 +1166,7 @@ function cleanTitle(rawTitle: string): string {
   // Remove navigation/menu artifacts
   cleaned = cleaned.replace(/^Δείτε περισσότερα\s*[→>]\s*/i, "");
   cleaned = cleaned.replace(/\s*[→>]\s*Δείτε περισσότερα$/i, "");
+  cleaned = cleaned.replace(/\s+σύνδεσμος$/i, ""); // Remove "σύνδεσμος" at the end
   cleaned = cleaned.replace(/^\.\.\.\s*/, "");
   cleaned = cleaned.replace(/\s*\.\.\.$/, "");
 
