@@ -5,6 +5,7 @@ import { Event } from "../../models/event.model";
 import { evaluateMatch } from "../../rules/evaluate";
 import { CriteriaRules } from "../../shared/rulesTypes";
 import { sanitizeSearchQuery } from "../../utils/validation";
+import { getOrCache } from "../../utils/cache";
 
 export class OpportunitiesService {
   async getPublicOpportunities(query: {
