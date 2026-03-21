@@ -31,6 +31,12 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
+    {
+      name: "ΑΣΕΠ RSS",
+      url: "https://info.asep.gr/feed.xml",
+      type: "rss" as const,
+      enabled: true,
+    },
     // ΑΣΕΠ Sources (using RSS as primary, HTML listings disabled if 404)
     {
       name: "ΑΣΕΠ - Διαγωνισμοί",
