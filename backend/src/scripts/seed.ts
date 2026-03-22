@@ -76,9 +76,9 @@ export async function seed() {
     },
     {
       name: "Διαύγεια API (opendata search)",
-      url: "https://opendata.diavgeia.gov.gr/luminapi/api/search/export?q=subject%3A%28%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1+OR+%CE%B5%CF%80%CE%B9%CE%B4%CF%8C%CF%84%CE%B7%CF%83%CE%B7+OR+voucher+OR+pass+OR+youth+pass+OR+tourism4all+OR+north+evia+pass+OR+thessaly-evros+pass%29&wt=json&rows=50&start=0",
+      url: 'https://diavgeia.gov.gr/luminapi/opendata/search?q=subject:(επίδομα OR επιδότηση OR voucher OR pass OR "youth pass" OR "tourism4all" OR "north evia pass")&wt=json',
       type: "api" as const,
-      enabled: true, // Using opendata search/export with subject field filter and proper Solr syntax
+      enabled: true, // Using opendata search with proper Solr syntax
     },
     {
       name: "Διαύγεια Search RSS (fallback)",
