@@ -142,66 +142,85 @@ ${content.substring(0, 2000)}
 
 Αν δεν είσαι σίγουρος, βάλε χαμηλό confidence.`;
 
-    const model = config.groq.model || "llama-3.1-8b-instant";
-    // No response_format for safety
+    const fallbackModels = [
+      config.groq.model || "llama-3.1-8b-instant",
+      "llama-3.3-70b-versatile",
+      "gemma2-9b-it",
+      "mixtral-8x7b-32768"
+    ];
 
-    const response = await axios.post(
-      apiUrl,
-      {
-        model,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 10000,
-      },
-    );
+    let lastError: any;
 
-    if (response.data?.choices?.[0]?.message?.content) {
-      let rawText = response.data.choices[0].message.content;
+    for (const model of fallbackModels) {
+      try {
+        const response = await axios.post(
+          apiUrl,
+          {
+            model,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            timeout: 10000,
+          },
+        );
 
-      // Use helper to extract ONLY the JSON block
-      const jsonText = extractJsonBlock(rawText);
+        if (response.data?.choices?.[0]?.message?.content) {
+          let rawText = response.data.choices[0].message.content;
 
-      const parsed = JSON.parse(jsonText);
+          // Use helper to extract ONLY the JSON block
+          const jsonText = extractJsonBlock(rawText);
 
-      // Validate and map status to schema enums
-      // Schema accepts: "upcoming", "open", "closed", "unknown"
-      let status: AIStatusResult["status"] = "unknown";
-      const rawStatus = (parsed.status || "").toLowerCase();
+          const parsed = JSON.parse(jsonText);
 
-      if (["open", "active"].includes(rawStatus)) {
-        status = "open";
-      } else if (
-        ["closed", "expired", "completed", "results", "ended"].includes(
-          rawStatus,
-        )
-      ) {
-        status = "closed"; // Schema only supports 'closed', not 'expired'
-      } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
-        status = "upcoming";
+          // Validate and map status to schema enums
+          let status: AIStatusResult["status"] = "unknown";
+          const rawStatus = (parsed.status || "").toLowerCase();
+
+          if (["open", "active"].includes(rawStatus)) {
+            status = "open";
+          } else if (
+            ["closed", "expired", "completed", "results", "ended"].includes(
+              rawStatus,
+            )
+          ) {
+            status = "closed"; 
+          } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
+            status = "upcoming";
+          }
+
+          console.log(
+            `   🤖 AI Status (Groq ${model}): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%)`,
+          );
+
+          return {
+            status,
+            confidence:
+              typeof parsed.confidence === "number" ? parsed.confidence : 0,
+            deadlineAt: parsed.deadlineAt,
+            startAt: parsed.startAt,
+            reasoning: parsed.reasoning || "AI determined status",
+          };
+        }
+        throw new Error("Empty response from Groq");
+      } catch (error: any) {
+        lastError = error;
+        // If it's a 429 Rate Limit, log and try the next model
+        if (error.response && error.response.status === 429) {
+          console.warn(`   ⚠️ Groq 429 Rate Limit hit for model ${model}. Switching to fallback...`);
+          continue;
+        }
+        // If it's another error, break the loop and fail fast
+        break;
       }
-
-      console.log(
-        `   🤖 AI Status (Groq): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%) - ${parsed.reasoning?.substring(0, 60) || "No reasoning"}`,
-      );
-
-      return {
-        status,
-        confidence:
-          typeof parsed.confidence === "number" ? parsed.confidence : 0,
-        deadlineAt: parsed.deadlineAt,
-        startAt: parsed.startAt,
-        reasoning: parsed.reasoning || "AI determined status",
-      };
     }
-
-    throw new Error("Empty response from Groq");
+    
+    throw lastError || new Error("All Groq models failed");
   } catch (error: any) {
     // Don't log full error to reduce noise - just note the failure
     console.log(
@@ -289,34 +308,44 @@ OUTPUT JSON SCHEMA ONLY:
   "confidence": number (0.0 to 1.0)
 }`;
 
-    const model = config.groq.model || "llama-3.1-8b-instant";
-    const requestBody: any = {
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: "Text to analyze:\n" + content.substring(0, 3000),
-        },
-      ],
-      temperature: 0.1,
-    };
+    const fallbackModels = [
+      config.groq.model || "llama-3.1-8b-instant",
+      "llama-3.3-70b-versatile",
+      "gemma2-9b-it",
+      "mixtral-8x7b-32768"
+    ];
 
-    const response = await axios.post(apiUrl, requestBody, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      timeout: 30000,
-    });
+    let lastError: any;
 
-    if (response.data?.choices?.[0]?.message?.content) {
-      let rawText = response.data.choices[0].message.content;
-      const jsonText = extractJsonBlock(rawText);
-      const parsed = JSON.parse(jsonText);
+    for (const model of fallbackModels) {
+      try {
+        const requestBody: any = {
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            {
+              role: "user",
+              content: "Text to analyze:\n" + content.substring(0, 3000),
+            },
+          ],
+          temperature: 0.1,
+        };
 
-      let type: OpportunityType = "manual";
-      const aiType = parsed.type || "news";
+        const response = await axios.post(apiUrl, requestBody, {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        });
+
+        if (response.data?.choices?.[0]?.message?.content) {
+          let rawText = response.data.choices[0].message.content;
+          const jsonText = extractJsonBlock(rawText);
+          const parsed = JSON.parse(jsonText);
+
+          let type: OpportunityType = "manual";
+          const aiType = parsed.type || "news";
 
       switch (aiType) {
         case "subsidy":
@@ -370,7 +399,18 @@ OUTPUT JSON SCHEMA ONLY:
       };
     }
 
-    throw new Error("Empty response from Groq");
+        throw new Error("Empty response from Groq");
+      } catch (error: any) {
+        lastError = error;
+        if (error.response && error.response.status === 429) {
+          console.warn(`   ⚠️ Groq 429 Rate Limit hit for model ${model}. Switching to fallback...`);
+          continue;
+        }
+        break;
+      }
+    }
+    
+    throw lastError || new Error("All Groq models failed");
   } catch (error: any) {
     console.error("❌ Groq Extractor failed:", error.message);
     return fallbackStubExtractor(content);

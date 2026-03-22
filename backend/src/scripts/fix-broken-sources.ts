@@ -18,6 +18,18 @@ interface SourceUpdate {
 const URL_FIXES: SourceUpdate[] = [
   // ΑΣΕΠ fixes
   {
+    name: "ΑΣΕΠ - Νέα",
+    oldUrl: "https://www.asep.gr/guide/news.xml",
+    newUrl: "https://info.asep.gr/feed.xml",
+    enabled: true,
+  },
+  {
+    name: "ASEP Announcements",
+    oldUrl: "https://www.asep.gr/rss/news",
+    newUrl: "https://info.asep.gr/feed.xml",
+    enabled: true,
+  },
+  {
     name: "ΑΣΕΠ - Αρχείο Ανακοινώσεων ΣΟΧ & ΣΜΕ",
     oldUrl: "https://info.asep.gr/archive/announcements/sox-sme",
     newUrl: "https://info.asep.gr/arheio-anakoinoseon-soh-sme",
@@ -29,6 +41,13 @@ const URL_FIXES: SourceUpdate[] = [
     newUrl: "https://info.asep.gr/archive/announcements",
     enabled: true,
   },
+  // ΔΥΠΑ fixes
+  {
+    name: "ΔΥΠΑ - Δελτία Τύπου",
+    oldUrl: "https://www.dypa.gov.gr/deltia-typou?format=feed&type=rss",
+    newUrl: "https://www.dypa.gov.gr/feed-pr",
+    enabled: true,
+  },
   // ΑΑΔΕ fixes
   {
     name: "myΘέρμανση (EN - broken)",
@@ -36,7 +55,26 @@ const URL_FIXES: SourceUpdate[] = [
     newUrl: "https://www.aade.gr/mythermansi",
     enabled: false, // Disable broken EN version (we have Greek version)
   },
+  // ESPA fixes
+  {
+    name: "ESPA Antagonistikotita",
+    oldUrl: "http://epan2.antagonistikotita.gr/uploads/rss.xml",
+    newUrl: "https://www.antagonistikotita.gr/feed/",
+    enabled: true,
+  },
+  {
+    name: "ESPA Fisheries",
+    oldUrl: "https://alieia.mc.gov.gr/metra-eniksis-tis-alieias/",
+    newUrl: "https://ospa.minagric.gr/metra-eniksis-tis-alieias/",
+    enabled: true,
+  },
   // OPEKA fixes
+  {
+    name: "Oikogeneia - Οικογενειακά Επιδόματα",
+    oldUrl: "https://www.oikogeneia.gov.gr/",
+    newUrl: "https://opeka.gr/oikogeneia/epidoma-paidiou-a21/",
+    enabled: true,
+  },
   {
     name: "OPEKA - Ανακοινώσεις",
     oldUrl: "https://opeka.gr/",

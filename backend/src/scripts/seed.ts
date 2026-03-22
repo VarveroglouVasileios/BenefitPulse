@@ -270,19 +270,25 @@ export async function seed() {
     },
     {
       name: "ESPA Antagonistikotita",
-      url: "http://epan2.antagonistikotita.gr/uploads/rss.xml",
+      url: "https://www.antagonistikotita.gr/feed/",
       type: "rss" as const,
       enabled: true, // RSS feed for competitiveness programs
     },
     {
+      name: "Oikogeneia - Οικογενειακά Επιδόματα",
+      url: "https://opeka.gr/oikogeneia/epidoma-paidiou-a21/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
       name: "ΑΣΕΠ - Νέα",
-      url: "https://www.asep.gr/guide/news.xml",
+      url: "https://info.asep.gr/feed.xml",
       type: "rss" as const,
       enabled: true,
     },
     {
       name: "ΔΥΠΑ - Δελτία Τύπου",
-      url: "https://www.dypa.gov.gr/deltia-typou?format=feed&type=rss",
+      url: "https://www.dypa.gov.gr/feed-pr",
       type: "rss" as const,
       enabled: true,
     },
@@ -294,7 +300,7 @@ export async function seed() {
     },
     {
       name: "ASEP Announcements",
-      url: "https://www.asep.gr/rss/news",
+      url: "https://info.asep.gr/feed.xml",
       type: "rss" as const,
       enabled: true, // RSS feed for ASEP job announcements (more reliable than HTML)
     },
@@ -313,7 +319,7 @@ export async function seed() {
     },
     {
       name: "ESPA Fisheries",
-      url: "https://alieia.mc.gov.gr/metra-eniksis-tis-alieias/",
+      url: "https://ospa.minagric.gr/metra-eniksis-tis-alieias/",
       type: "html_listing" as const,
       enabled: true,
     },
