@@ -13,6 +13,7 @@ import { checkSourceHealth, fixEndpointUrl } from "./source-health-check";
 import { IngestionReporter } from "./ingestion-reporter";
 import { parseDate, normalizeDate } from "../../utils/date-parser";
 import { ProgressTracker } from "../../utils/progress";
+import { extractDiavgeiaText } from "./diavgeia";
 
 // Simple in-memory caches for AI results (per worker process)
 // Key: hash of title+url (or content), Value: AIStatusResult / ExtractedOpportunity
@@ -1720,6 +1721,23 @@ export class IngestionService {
          } catch (err: any) {
             console.warn(`   ⚠️ Deep Fetch Error: ${err.message}`);
          }
+      } else if (isDiavgeiaCheck && item.metadata?.ada) {
+         // DIAVGEIA TIER 1: Fetch PDF text directly using ADA
+         if (!existingRawItem || (existingRawItem.content && existingRawItem.content.length < 500)) {
+           console.log(`   🏛️ Diavgeia Deep Fetching: Extracting PDF text for ADA ${item.metadata.ada}...`);
+           const pdfText = await extractDiavgeiaText(item.metadata.ada);
+           if (pdfText && pdfText.length > 50) {
+             console.log(`   ✅ Diavgeia PDF Success: Extracted ${pdfText.length} chars`);
+             // Combine metadata summary and PDF text
+             const fullContent = `${content}\n\n[PDF ΠΕΡΙΕΧΟΜΕΝΟ]:\n${pdfText}`;
+             item.content = fullContent;
+             content = fullContent;
+           }
+         } else if (existingRawItem && existingRawItem.content) {
+           item.content = existingRawItem.content;
+           content = existingRawItem.content;
+           console.log(`   ℹ️  Preserving existing Diavgeia PDF content (${content.length} chars)`);
+         }
       } else if (existingRawItem && existingRawItem.content && existingRawItem.content.length > content.length) {
          // Keep existing longer content if we are just updating metadata
          item.content = existingRawItem.content;
@@ -1855,6 +1873,9 @@ export class IngestionService {
 
         const cleaned = cleanAndValidate(cleanerInput);
 
+        // Determine current source priority (1=API, 2=RSS, 3=HTML)
+        const currentSourcePriority = source.type === "api" ? 1 : source.type === "rss" ? 2 : 3;
+
         // DEDUPLICATION OPTIMIZATION: Check if opportunity already exists BEFORE AI calls
         const alreadyExists = await Opportunity.findOne({
           officialUrl: cleaned.officialUrl,
@@ -1862,12 +1883,19 @@ export class IngestionService {
         });
 
         if (alreadyExists) {
-           console.log(`   ⏭️  SKIP: Opportunity already exists (skipping AI) - ${cleaned.officialUrl}`);
-           // Mark raw item as processed since we found the opportunity
-           rawItem.processed = true;
-           rawItem.updatedAt = new Date();
-           await rawItem.save();
-           continue; 
+           const existingPriority = alreadyExists.sourcePriority || 3;
+           
+           if (currentSourcePriority >= existingPriority) {
+             console.log(`   ⏭️  SKIP: Opportunity already exists (skipping AI) - Priority: ${existingPriority} vs Current: ${currentSourcePriority} - ${cleaned.officialUrl}`);
+             // Mark raw item as processed since we found the opportunity
+             rawItem.processed = true;
+             rawItem.updatedAt = new Date();
+             await rawItem.save();
+             continue; 
+           } else {
+             console.log(`   ⭐ UPGRADE: Found better source priority (${currentSourcePriority} < ${existingPriority}) for ${cleaned.officialUrl}. Updating...`);
+             // We don't continue; we let it process and later we will UPDATE alreadyExists instead of creating a new one.
+           }
         }
 
         // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status, try AI
@@ -2138,6 +2166,13 @@ export class IngestionService {
 
         if (existingOpp) {
           // Update existing opportunity (don't create duplicate)
+          // Always upgrade priority if the current source is better or equal
+          if (currentSourcePriority <= (existingOpp.sourcePriority || 3)) {
+             existingOpp.sourceType = source.type;
+             existingOpp.sourcePriority = currentSourcePriority;
+             existingOpp.source = cleaned.source;
+          }
+          
           existingOpp.title = cleaned.title;
           existingOpp.summary = finalSummary;
           existingOpp.kind = finalKind;
@@ -2166,6 +2201,8 @@ export class IngestionService {
           summary: finalSummary,
           officialUrl: cleaned.officialUrl,
           source: cleaned.source,
+          sourceType: source.type,
+          sourcePriority: currentSourcePriority,
           publishedAt: item.publishedAt,
           deadlineAt,
           startAt,
