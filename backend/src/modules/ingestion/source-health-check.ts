@@ -9,6 +9,23 @@ export interface HealthCheckResult {
   reason?: string;
 }
 
+// Shared browser-like headers
+const BROWSER_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Cache-Control": "no-cache",
+  "Pragma": "no-cache",
+  "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+  "Sec-Ch-Ua-Mobile": "?0",
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": "none",
+  "Sec-Fetch-User": "?1",
+  "Upgrade-Insecure-Requests": "1"
+};
+
 /**
  * Source Health Check with auto-rewrite rules
  * Checks if source URL is accessible and applies rewrite rules if needed
@@ -18,19 +35,43 @@ export async function checkSourceHealth(
   sourceType: string
 ): Promise<HealthCheckResult> {
   try {
-    // First, try original URL
-    const response = await axios.head(url, {
+    // IMPORTANT: Use GET instead of HEAD because many gov.gr sites block HEAD
+    // Use a small timeout and limited range if possible to avoid downloading huge pages
+    const response = await axios.get(url, {
+      headers: {
+        ...BROWSER_HEADERS,
+        "Range": "bytes=0-10000" // Try to get just the beginning
+      },
       maxRedirects: 5,
       validateStatus: (status) => status < 500,
-      timeout: 10000,
+      timeout: 15000,
     });
 
-    if (response.status === 200) {
+    if (response.status === 200 || response.status === 206) {
       return {
         healthy: true,
         finalUrl: response.request?.responseURL || url,
-        statusCode: 200,
+        statusCode: response.status,
       };
+    }
+
+    // If 403 or 405 (Method Not Allowed), it might be blocking our range request or specific headers
+    // Try a "clean" GET without range
+    if (response.status === 403 || response.status === 405) {
+      const retryResponse = await axios.get(url, {
+        headers: BROWSER_HEADERS,
+        maxRedirects: 5,
+        validateStatus: (status) => status < 500,
+        timeout: 15000,
+      });
+
+      if (retryResponse.status === 200) {
+        return {
+          healthy: true,
+          finalUrl: retryResponse.request?.responseURL || url,
+          statusCode: 200,
+        };
+      }
     }
 
     // If 404, try rewrite rules
@@ -74,6 +115,21 @@ async function tryRewriteRules(
     const hostname = urlObj.hostname.toLowerCase();
     const pathname = urlObj.pathname;
 
+    // Helper for testing rewrite
+    const testUrl = async (targetUrl: string) => {
+      try {
+        const res = await axios.get(targetUrl, {
+          headers: BROWSER_HEADERS,
+          maxRedirects: 5,
+          validateStatus: (status) => status === 200,
+          timeout: 10000,
+        });
+        return res.status === 200;
+      } catch {
+        return false;
+      }
+    };
+
     // Rule 1: Prosvasis /el/ removal
     if (
       hostname.includes("prosvasis.dypa.gov.gr") &&
@@ -82,24 +138,13 @@ async function tryRewriteRules(
       const newPath = pathname.replace("/el/", "/");
       const newUrl = `${urlObj.protocol}//${hostname}${newPath}${urlObj.search}`;
 
-      try {
-        const testResponse = await axios.head(newUrl, {
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500,
-          timeout: 10000,
-        });
-
-        if (testResponse.status === 200) {
-          return {
-            healthy: true,
-            finalUrl: testResponse.request?.responseURL || newUrl,
-            statusCode: 200,
-            replacementUrl: newUrl,
-            reason: "Removed /el/ prefix",
-          };
-        }
-      } catch {
-        // Continue to next rule
+      if (await testUrl(newUrl)) {
+        return {
+          healthy: true,
+          statusCode: 200,
+          replacementUrl: newUrl,
+          reason: "Removed /el/ prefix",
+        };
       }
     }
 
@@ -115,24 +160,13 @@ async function tryRewriteRules(
           const newPath = pathname.replace(fix.from, fix.to);
           const newUrl = `${urlObj.protocol}//${hostname}${newPath}${urlObj.search}`;
 
-          try {
-            const testResponse = await axios.head(newUrl, {
-              maxRedirects: 5,
-              validateStatus: (status) => status < 500,
-              timeout: 10000,
-            });
-
-            if (testResponse.status === 200) {
-              return {
-                healthy: true,
-                finalUrl: testResponse.request?.responseURL || newUrl,
-                statusCode: 200,
-                replacementUrl: newUrl,
-                reason: `Fixed transliteration: ${fix.from} -> ${fix.to}`,
-              };
-            }
-          } catch {
-            // Continue to next fix
+          if (await testUrl(newUrl)) {
+            return {
+              healthy: true,
+              statusCode: 200,
+              replacementUrl: newUrl,
+              reason: `Fixed transliteration: ${fix.from} -> ${fix.to}`,
+            };
           }
         }
       }
@@ -143,24 +177,13 @@ async function tryRewriteRules(
       const newPath = pathname.replace("/en/mythermansi", "/mythermansi");
       const newUrl = `${urlObj.protocol}//${hostname}${newPath}${urlObj.search}`;
 
-      try {
-        const testResponse = await axios.head(newUrl, {
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500,
-          timeout: 10000,
-        });
-
-        if (testResponse.status === 200) {
-          return {
-            healthy: true,
-            finalUrl: testResponse.request?.responseURL || newUrl,
-            statusCode: 200,
-            replacementUrl: newUrl,
-            reason: "Changed from /en/ to Greek path",
-          };
-        }
-      } catch {
-        // Continue
+      if (await testUrl(newUrl)) {
+        return {
+          healthy: true,
+          statusCode: 200,
+          replacementUrl: newUrl,
+          reason: "Changed from /en/ to Greek path",
+        };
       }
     }
 
@@ -169,24 +192,13 @@ async function tryRewriteRules(
       const newHostname = "www.efka.gov.gr";
       const newUrl = `${urlObj.protocol}//${newHostname}${pathname}${urlObj.search}`;
 
-      try {
-        const testResponse = await axios.head(newUrl, {
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500,
-          timeout: 10000,
-        });
-
-        if (testResponse.status === 200) {
-          return {
-            healthy: true,
-            finalUrl: testResponse.request?.responseURL || newUrl,
-            statusCode: 200,
-            replacementUrl: newUrl,
-            reason: "Changed from e-efka.gov.gr to efka.gov.gr",
-          };
-        }
-      } catch {
-        // Continue
+      if (await testUrl(newUrl)) {
+        return {
+          healthy: true,
+          statusCode: 200,
+          replacementUrl: newUrl,
+          reason: "Changed from e-efka.gov.gr to efka.gov.gr",
+        };
       }
     }
 
@@ -195,24 +207,13 @@ async function tryRewriteRules(
       const newHostname = "www.opeka.gr";
       const newUrl = `${urlObj.protocol}//${newHostname}${pathname}${urlObj.search}`;
 
-      try {
-        const testResponse = await axios.head(newUrl, {
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500,
-          timeout: 10000,
-        });
-
-        if (testResponse.status === 200) {
-          return {
-            healthy: true,
-            finalUrl: testResponse.request?.responseURL || newUrl,
-            statusCode: 200,
-            replacementUrl: newUrl,
-            reason: "Changed from opeka.gr to www.opeka.gr",
-          };
-        }
-      } catch {
-        // Continue
+      if (await testUrl(newUrl)) {
+        return {
+          healthy: true,
+          statusCode: 200,
+          replacementUrl: newUrl,
+          reason: "Changed from opeka.gr to www.opeka.gr",
+        };
       }
     }
 
@@ -224,24 +225,13 @@ async function tryRewriteRules(
       const newPath = pathname.replace("/index", "/");
       const newUrl = `${urlObj.protocol}//${hostname}${newPath}${urlObj.search}`;
 
-      try {
-        const testResponse = await axios.head(newUrl, {
-          maxRedirects: 5,
-          validateStatus: (status) => status < 500,
-          timeout: 10000,
-        });
-
-        if (testResponse.status === 200) {
-          return {
-            healthy: true,
-            finalUrl: testResponse.request?.responseURL || newUrl,
-            statusCode: 200,
-            replacementUrl: newUrl,
-            reason: "Removed /index suffix",
-          };
-        }
-      } catch {
-        // Continue
+      if (await testUrl(newUrl)) {
+        return {
+          healthy: true,
+          statusCode: 200,
+          replacementUrl: newUrl,
+          reason: "Removed /index suffix",
+        };
       }
     }
 

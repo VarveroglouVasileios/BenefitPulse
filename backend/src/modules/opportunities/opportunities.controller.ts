@@ -33,7 +33,7 @@ export async function getOpportunities(req: Request, res: Response): Promise<voi
 
 export async function getFeed(req: Request, res: Response): Promise<void> {
   try {
-    const { tab, page, limit, search, tag } = req.query;
+    const { tab, page, limit, search, tag, type, source, kind } = req.query;
 
     // Admin-only flags: only honor if user is authenticated as admin
     const isAdmin = !!(req as AuthRequest).userId && (req as AuthRequest).userRole === 'admin';
@@ -48,6 +48,9 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
       limit: safeParseLimit(limit),
       search: typeof search === 'string' ? search : undefined,
       tag: validatedTag,
+      type: typeof type === 'string' ? type : undefined,
+      source: typeof source === 'string' ? source : undefined,
+      kind: typeof kind === 'string' ? kind : undefined,
       showRejected,
       showTendersNews,
     });
