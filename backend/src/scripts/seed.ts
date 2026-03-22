@@ -37,54 +37,53 @@ export async function seed() {
       type: "rss" as const,
       enabled: true,
     },
-    // ΑΣΕΠ Sources (using RSS as primary, HTML listings disabled if 404)
     {
       name: "ΑΣΕΠ - Διαγωνισμοί",
       url: "https://info.asep.gr/search/contest",
       type: "html_listing" as const,
-      enabled: false, // Disabled: may return 404, using RSS feed instead
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Θέσεις Εργασίας",
       url: "https://info.asep.gr/positions",
       type: "html_listing" as const,
-      enabled: false, // Disabled: may return 404, using RSS feed instead
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Αρχείο Δελτίων Τύπου",
       url: "https://info.asep.gr/archive/announcements",
       type: "html_listing" as const,
-      enabled: true, // Fixed: correct URL
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Ειδικές Ανακοινώσεις",
       url: "https://info.asep.gr/archive/special-announcements",
       type: "html_listing" as const,
-      enabled: false, // Disabled: may return 404, using RSS feed instead
+      enabled: false, // Integrated into info.asep.gr/feed.xml
     },
     {
       name: "ΑΣΕΠ - Αρχείο Ανακοινώσεων ΣΟΧ & ΣΜΕ",
       url: "https://info.asep.gr/arheio-anakoinoseon-soh-sme",
       type: "html_listing" as const,
-      enabled: true, // Fixed: correct URL
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Announcements List (FIXED)",
       url: "https://info.asep.gr/announcements-list/",
       type: "html_listing" as const,
-      enabled: true, // Fixed: using stable listing page
+      enabled: true,
     },
     {
       name: "Διαύγεια API (opendata search)",
       url: 'https://diavgeia.gov.gr/luminapi/opendata/search?q=subject:(επίδομα OR επιδότηση OR voucher OR pass OR "youth pass" OR "tourism4all" OR "north evia pass")&wt=json',
       type: "api" as const,
-      enabled: true, // Using opendata search with proper Solr syntax
+      enabled: true,
     },
     {
       name: "Διαύγεια Search RSS (fallback)",
-      url: "https://diavgeia.gov.gr/luminapi/api/feed/rss?q=(%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1%20OR%20voucher%20OR%20pass)",
+      url: "https://diavgeia.gov.gr/luminapi/api/feed/rss?q=subject:%22%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1%22",
       type: "rss" as const,
-      enabled: true, // Fallback: RSS feed if API fails
+      enabled: true,
     },
     {
       name: "Vouchers Catalog",
@@ -92,20 +91,18 @@ export async function seed() {
       type: "html_catalog" as const,
       enabled: true,
     },
-    // GOV.GR catalogs (DISABLED: returns 403 Forbidden)
     {
       name: "GovGR Υγεία & Πρόνοια - Επιδόματα",
       url: "https://www.gov.gr/ipiresies/ugeia-kai-pronoia/epidomata",
       type: "html_listing" as const,
-      enabled: true, // Re-enabled: page should load again
+      enabled: true,
     },
     {
       name: "GovGR Επιδoτήσεις πολιτών",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon",
       type: "html_listing" as const,
-      enabled: false, // Disabled: 403 Forbidden (blocked)
+      enabled: false, // 403
     },
-    // Vouchers / Pass specific pages
     {
       name: "Youth Pass Page",
       url: "https://vouchers.gov.gr/youthpass",
@@ -118,21 +115,12 @@ export async function seed() {
       type: "single_page" as const,
       enabled: true,
     },
-    // ΟΠΕΚΑ
     {
       name: "OPEKA Επιδόματα",
       url: "https://opeka.gr/epidomata/",
       type: "html_listing" as const,
       enabled: true,
     },
-    // ΔΥΠΑ (Legacy)
-    {
-      name: "ΔΥΠΑ Επιδόματα/Βοηθήματα",
-      url: "https://www.dypa.gov.gr/epidomata-boithimata",
-      type: "html_listing" as const,
-      enabled: false, // Disabled: hub page with navigation, needs specific parser
-    },
-    // ΔΥΠΑ Sources (Canonical URLs)
     {
       name: "ΔΥΠΑ - Ανοικτά Προγράμματα",
       url: "https://www.dypa.gov.gr/proghrammata-anoikhta",
@@ -157,124 +145,102 @@ export async function seed() {
       type: "rss" as const,
       enabled: true,
     },
-    // Prosvasis sections (FIXED URLs - removed broken more-* pages)
     {
       name: "ΔΥΠΑ Prosvasis - Προγράμματα Απασχόλησης",
       url: "https://prosvasis.dypa.gov.gr/active-employment-policies",
       type: "html_listing" as const,
-      enabled: true, // Fixed: using correct listing page
+      enabled: true,
     },
-    // Removed broken more-* pages (404) - using RSS feed instead
     {
       name: "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη",
       url: "https://prosvasis.dypa.gov.gr/erghaleiothiki-erghodoti",
       type: "html_listing" as const,
-      enabled: true, // Fixed: correct URL without /el/ and correct spelling
+      enabled: true,
     },
-    // ΑΑΔΕ / myΘέρμανση (FIXED: removed broken EN version)
-    // Ελάχιστο Εγγυημένο Εισόδημα
     {
       name: "Ελάχιστο Εγγυημένο Εισόδημα",
       url: "https://keaprogram.gr/",
       type: "html_listing" as const,
       enabled: true,
     },
-    // Στέγαση
     {
       name: "Stegasi Catalog",
       url: "https://stegasi.gov.gr/",
       type: "html_listing" as const,
       enabled: true,
     },
-    // Φοιτητικό στεγαστικό
     {
       name: "Φοιτητικό Στεγαστικό",
       url: "https://portal.stegastiko.minedu.gov.gr/",
       type: "html_listing" as const,
-      enabled: true, // Fixed: removed /index
+      enabled: true,
     },
-    // e-ΕΦΚΑ (DISABLED: broken URL, needs discovery)
     {
       name: "e-ΕΦΚΑ Επιδόματα",
       url: "https://www.e-efka.gov.gr/el/epidomata",
       type: "html_listing" as const,
-      enabled: true, // Re-enabled: page now loads again
+      enabled: true,
     },
     {
       name: "ΕΦΚΑ Επιδόματα (efka.gov.gr)",
       url: "https://www.efka.gov.gr/",
       type: "html_catalog" as const,
-      enabled: true, // Using efka.gov.gr and discovery
+      enabled: true,
     },
-    // NEW SOURCES
-    // MITOS / ΕΜΔΔ (DISABLED: needs API key and specific endpoints)
     {
       name: "MITOS - EMDD API",
-      url: "https://api.digigov.grnet.gr/v1",
+      url: "https://api.mitos.gov.gr/v1",
       type: "api" as const,
-      enabled: false, // Disabled: needs API key and specific endpoints (e.g., /services)
+      enabled: false, // 404
     },
     {
       name: "MITOS - EMDD API (Services)",
-      url: "https://api.digigov.grnet.gr/v1/services",
+      url: "https://api.mitos.gov.gr/v1/services",
       type: "api" as const,
-      enabled: true, // Enabled: uses /v1/services endpoint with pagination
-      config: {
-        params: {
-          page: 1,
-          limit: 100, // Fetch first 100 services per page
-        },
-      },
+      enabled: false, // 404
     },
-    // OPEKA Announcements (discovery)
     {
       name: "OPEKA - Ανακοινώσεις / Δελτία Τύπου (discovery)",
       url: "https://opeka.gr/",
       type: "html_listing" as const,
       enabled: true,
     },
-    // ΔΥΠΑ Announcements (discovery)
     {
       name: "ΔΥΠΑ - Νέα/Ανακοινώσεις (discovery)",
       url: "https://www.dypa.gov.gr/",
       type: "html_listing" as const,
       enabled: true,
     },
-    // ΔΥΠΑ Κοινωνικός Τουρισμός (single page program description)
     {
       name: "ΔΥΠΑ - Κοινωνικός Τουρισμός",
       url: "https://www.dypa.gov.gr/koinonikos-toyrismos",
       type: "single_page" as const,
       enabled: true,
     },
-    // AADE myΘέρμανση (Greek page)
     {
       name: "AADE - myΘέρμανση (EL)",
       url: "https://www.aade.gr/mythermansi",
       type: "single_page" as const,
       enabled: true,
     },
-    // Gov.gr category hub
     {
       name: "gov.gr - Υγεία & Πρόνοια (category hub)",
       url: "https://www.gov.gr/ipiresies/ugeia-kai-pronoia",
       type: "html_catalog" as const,
-      enabled: true, // Re-enabled for retry; specific sub-pages are already covered too
+      enabled: true,
     },
-    // NEW SOURCES - Expanded data sources
     {
       name: "Vouchers Gov",
       url: "https://vouchers.gov.gr/",
       type: "html_listing" as const,
-      enabled: true, // Target generic listing cards
+      enabled: true,
     },
     {
       name: "ESPA Antagonistikotita",
-      url: "https://www.antagonistikotita.gr/feed/",
+      url: "https://www.antagonistikotita.gr/category/nea/feed/",
       type: "rss" as const,
-      enabled: true, // RSS feed for competitiveness programs
-    },
-    {
+      enabled: false, // Timeout
+    },    {
       name: "Oikogeneia - Οικογενειακά Επιδόματα",
       url: "https://opeka.gr/oikogeneia/epidoma-paidiou-a21/",
       type: "html_listing" as const,
@@ -296,21 +262,20 @@ export async function seed() {
       name: "TaxHeaven News",
       url: "https://www.taxheaven.gr/rss",
       type: "rss" as const,
-      enabled: true, // RSS feed for tax-related announcements (catches "Spiti Mou" etc.)
+      enabled: true,
     },
     {
       name: "ASEP Announcements",
       url: "https://info.asep.gr/feed.xml",
       type: "rss" as const,
-      enabled: true, // RSS feed for ASEP job announcements (more reliable than HTML)
+      enabled: true,
     },
     {
       name: "Dentist Pass",
       url: "https://vouchers.gov.gr/dentistpass",
       type: "single_page" as const,
-      enabled: true, // Dentist Pass specific page
+      enabled: true,
     },
-    // ESPA Extended
     {
       name: "ESPA Proclamations",
       url: "https://www.espa.gr/el/Pages/Rss.aspx?FeedType=Proclamations",
@@ -319,9 +284,9 @@ export async function seed() {
     },
     {
       name: "ESPA Fisheries",
-      url: "https://ospa.minagric.gr/metra-eniksis-tis-alieias/",
+      url: "https://alieia.minagric.gr/",
       type: "html_listing" as const,
-      enabled: true,
+      enabled: false, // Error
     },
     {
       name: "ESPA Ανθρώπινο Δυναμικό",
@@ -345,7 +310,7 @@ export async function seed() {
       name: "ΟΠΣΚΕ",
       url: "https://app.opske.gr/",
       type: "single_page" as const,
-      enabled: true, // Useful for cross-checking application portals
+      enabled: true,
     },
     {
       name: "Diavgeia HTML Search",
@@ -353,7 +318,6 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
-    // --- NEW SOURCES (User Request Jan 2026) ---
     {
       name: "Greece 2.0 (Recovery Fund)",
       url: "https://greece20.gov.gr/",
@@ -376,7 +340,12 @@ export async function seed() {
       name: "Culture Portal (Grants)",
       url: "https://portal.culture.gov.gr/",
       type: "html_listing" as const,
-      enabled: true,
+      enabled: false, // Error
+      config: {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        }
+      }
     },
     {
       name: "EPA (National Development)",
@@ -384,7 +353,6 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
-    // --- NEW SOURCES (User Request Feb 2026) ---
     {
       name: "Gov.gr - Επιδοτήσεις Πολιτών (κεντρική)",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon",
@@ -427,7 +395,6 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
-    // Optional / high-coverage sources
     {
       name: "Diavgeia - Επιχορηγήσεις & Επιδόσεις",
       url: "https://diavgeia.gov.gr/",
@@ -435,104 +402,20 @@ export async function seed() {
       enabled: true,
     },
     {
-      name: "Oikogeneia - Οικογενειακά Επιδόματα",
+      name: "Oikogeneia - Οικογενειακά Επιδόματα (Canonical)",
       url: "https://www.oikogeneia.gov.gr/",
       type: "html_listing" as const,
-      enabled: true,
+      enabled: false, // Error
     },
   ];
-
-  // Check for duplicates and deduplicate, update broken URLs
-  const seenUrls = new Set<string>();
-  const duplicates: Array<{ name: string; url: string }> = [];
-  const urlMigrations: Array<{ from: string; to: string; name?: string }> = [
-    {
-      from: "https://vouchers.gov.gr/tourism4all-%F0%9F%9B%A1%EF%B8%8F%202025",
-      to: "https://vouchers.gov.gr/tourism4all-2025",
-      name: "Tourism4All 2025 Page",
-    },
-    {
-      from: "https://vouchers.gov.gr/tourism4all-%F0%9F%9B%A1%EF%B8%8F-2025",
-      to: "https://vouchers.gov.gr/tourism4all-2025",
-      name: "Tourism4All 2025 Page",
-    },
-  ];
-
-  for (const migration of urlMigrations) {
-    const existing = await Source.findOne({
-      url: { $regex: new RegExp(`^${migration.from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") }
-    });
-
-    if (existing) {
-      console.log(`⚠️  Migrating broken URL: "${existing.url}" → "${migration.to}"`);
-      existing.url = migration.to;
-      if (migration.name) {
-        existing.name = migration.name;
-      }
-      existing.enabled = true;
-      await existing.save();
-    }
-  }
 
   for (const sourceData of sources) {
-    const normalizedUrl = sourceData.url.toLowerCase().trim();
-    
-    // Check if exact URL already exists (case-insensitive)
-    const exists = await Source.findOne({ 
-      url: { $regex: new RegExp(`^${normalizedUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-    });
-    
-    if (exists) {
-      // Exact URL match - update if needed
-      if (exists.name !== sourceData.name) {
-        console.log(`⚠️  Updating source name: "${exists.name}" → "${sourceData.name}"`);
-        exists.name = sourceData.name;
-      }
-      if (!exists.enabled) {
-        exists.enabled = true;
-        console.log(`✅ Source enabled: ${sourceData.name}`);
-      }
-      await exists.save();
-    } else {
-      // Check for broken URLs that need updating (prosvasis without /el/)
-      if (sourceData.url.includes("prosvasis.dypa.gov.gr") && sourceData.url.includes("/el/")) {
-        // Check if there's an old version without /el/ (exact path match)
-        const urlPath = new URL(sourceData.url).pathname;
-        const oldPath = urlPath.replace("/el/", "/");
-        const oldUrl = sourceData.url.replace(urlPath, oldPath);
-        
-        const oldExists = await Source.findOne({
-          url: { $regex: new RegExp(`^${oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
-        });
-        
-        if (oldExists) {
-          console.log(`⚠️  Updating broken URL: "${oldExists.url}" → "${sourceData.url}"`);
-          oldExists.url = sourceData.url;
-          oldExists.name = sourceData.name;
-          oldExists.enabled = true;
-          await oldExists.save();
-          console.log(`✅ Source updated: ${sourceData.name}`);
-          seenUrls.add(normalizedUrl);
-          continue;
-        }
-      }
-      
-      // Check for duplicates in current batch
-      if (seenUrls.has(normalizedUrl)) {
-        // Duplicate in current batch
-        duplicates.push({ name: sourceData.name, url: sourceData.url });
-        console.log(`⚠️  Duplicate URL in batch: ${sourceData.name} (${sourceData.url})`);
-      } else {
-        // New source
-        await Source.create(sourceData);
-        seenUrls.add(normalizedUrl);
-        console.log(`✅ Source created: ${sourceData.name}`);
-      }
-    }
-  }
-
-  if (duplicates.length > 0) {
-    console.log(`⚠️  Found ${duplicates.length} duplicate URLs (kept first occurrence)`);
+    await Source.findOneAndUpdate(
+      { name: sourceData.name },
+      { $set: sourceData },
+      { upsert: true, new: true }
+    );
+    console.log(`✅ Source ensured: ${sourceData.name} (${sourceData.enabled ? 'Enabled' : 'Disabled'})`);
   }
 
   console.log("✅ Seeding completed");
