@@ -32,7 +32,7 @@ export interface AIStatusResult {
 
 // Helper to extract the first valid JSON object by balancing braces
 function extractJsonBlock(text: string): string {
-  const start = text.indexOf('{');
+  const start = text.indexOf("{");
   if (start === -1) return text;
 
   let balance = 0;
@@ -42,13 +42,13 @@ function extractJsonBlock(text: string): string {
 
   for (let i = start; i < text.length; i++) {
     const char = text[i];
-    
+
     if (escape) {
       escape = false;
       continue;
     }
 
-    if (char === '\\') {
+    if (char === "\\") {
       escape = true;
       continue;
     }
@@ -59,9 +59,9 @@ function extractJsonBlock(text: string): string {
     }
 
     if (!inString) {
-      if (char === '{') {
+      if (char === "{") {
         balance++;
-      } else if (char === '}') {
+      } else if (char === "}") {
         balance--;
         if (balance === 0) {
           end = i;
@@ -74,23 +74,23 @@ function extractJsonBlock(text: string): string {
   if (end !== -1) {
     return text.substring(start, end + 1);
   }
-  
+
   return text.substring(start); // Fallback to rest of string matches logic
 }
 
 /**
  * Extract application status using Gemini AI
- * 
+ *
  * Call this when keyword-based rules return "unknown" to get AI-assisted determination.
  * Uses a focused prompt specifically for status detection.
  */
 export async function extractApplicationStatus(
   title: string,
   content: string,
-  sourceUrl?: string
+  sourceUrl?: string,
 ): Promise<AIStatusResult> {
   const apiKey = config.groq.apiKey;
-  
+
   // If no API key, return unknown immediately
   if (!apiKey) {
     return {
@@ -101,10 +101,10 @@ export async function extractApplicationStatus(
   }
 
   try {
-    const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = now.toISOString().split("T")[0];
     const currentYear = now.getFullYear();
 
     const prompt = `Είσαι ειδικός αναλυτής για ελληνικές ευκαιρίες επιδομάτων/προγραμμάτων. Σήμερα είναι: ${today}
@@ -118,7 +118,7 @@ export async function extractApplicationStatus(
 - Αν βλέπεις "μέχρι εξαντλήσεως προϋπολογισμού" ή "ανοικτό", είναι OPEN.
 
 ΤΙΤΛΟΣ: ${title}
-URL: ${sourceUrl || 'N/A'}
+URL: ${sourceUrl || "N/A"}
 
 ΚΕΙΜΕΝΟ:
 ${content.substring(0, 2000)}
@@ -142,36 +142,34 @@ ${content.substring(0, 2000)}
 
 Αν δεν είσαι σίγουρος, βάλε χαμηλό confidence.`;
 
-    const model = config.groq.model || 'llama-3.1-8b-instant';
+    const model = config.groq.model || "llama-3.1-8b-instant";
     // No response_format for safety
-    
+
     const response = await axios.post(
       apiUrl,
       {
         model,
-        messages: [
-          { role: "user", content: prompt }
-        ],
+        messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
-        temperature: 0.1
+        temperature: 0.1,
       },
       {
-        headers: { 
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json' 
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
         },
-        timeout: 10000 
-      }
+        timeout: 10000,
+      },
     );
 
     if (response.data?.choices?.[0]?.message?.content) {
       let rawText = response.data.choices[0].message.content;
-      
+
       // Use helper to extract ONLY the JSON block
       const jsonText = extractJsonBlock(rawText);
-      
+
       const parsed = JSON.parse(jsonText);
-      
+
       // Validate and map status to schema enums
       // Schema accepts: "upcoming", "open", "closed", "unknown"
       let status: AIStatusResult["status"] = "unknown";
@@ -179,29 +177,37 @@ ${content.substring(0, 2000)}
 
       if (["open", "active"].includes(rawStatus)) {
         status = "open";
-      } else if (["closed", "expired", "completed", "results", "ended"].includes(rawStatus)) {
+      } else if (
+        ["closed", "expired", "completed", "results", "ended"].includes(
+          rawStatus,
+        )
+      ) {
         status = "closed"; // Schema only supports 'closed', not 'expired'
       } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
         status = "upcoming";
       }
-      
-      console.log(`   🤖 AI Status (Groq): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%) - ${parsed.reasoning?.substring(0, 60) || 'No reasoning'}`);
-      
+
+      console.log(
+        `   🤖 AI Status (Groq): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%) - ${parsed.reasoning?.substring(0, 60) || "No reasoning"}`,
+      );
+
       return {
         status,
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0,
+        confidence:
+          typeof parsed.confidence === "number" ? parsed.confidence : 0,
         deadlineAt: parsed.deadlineAt,
         startAt: parsed.startAt,
-        reasoning: parsed.reasoning || "AI determined status"
+        reasoning: parsed.reasoning || "AI determined status",
       };
     }
-    
-    throw new Error("Empty response from Groq");
 
+    throw new Error("Empty response from Groq");
   } catch (error: any) {
     // Don't log full error to reduce noise - just note the failure
-    console.log(`   ⚠️ AI Status extraction failed: ${error.message?.substring(0, 50) || 'Unknown error'}`);
-    
+    console.log(
+      `   ⚠️ AI Status extraction failed: ${error.message?.substring(0, 50) || "Unknown error"}`,
+    );
+
     return {
       status: "unknown",
       confidence: 0,
@@ -214,18 +220,20 @@ ${content.substring(0, 2000)}
  * AI Extractor using Groq
  */
 export async function extractOpportunity(
-  content: string
+  content: string,
 ): Promise<ExtractedOpportunity> {
   const apiKey = config.groq.apiKey;
   if (!apiKey) {
-    console.warn("⚠️  No GROQ_API_KEY found, using fallback keyword extractor.");
+    console.warn(
+      "⚠️  No GROQ_API_KEY found, using fallback keyword extractor.",
+    );
     return fallbackStubExtractor(content);
   }
 
   try {
-    const apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = now.toISOString().split("T")[0];
     const currentYear = now.getFullYear();
 
     const systemPrompt = `Είσαι το "BenefitPulse AI", μια εξειδικευμένη μηχανή εξαγωγής δεδομένων για ελληνικές κρατικές προκηρύξεις, επιδόματα και θέσεις εργασίας.
@@ -258,6 +266,7 @@ export async function extractOpportunity(
      - Αν υπάρχουν πολλές ημερομηνίες (π.χ. υποβολή ενστάσεων vs υποβολή αιτήσεων), διάλεξε αυτή που αφορά την ΚΥΡΙΑ ΕΝΕΡΓΕΙΑ.
      - Αν λέει "εντός 10 ημερών από την ανάρτηση (δηλ. από ${today})", υπολόγισε την ημερομηνία.
      - Αν είναι "ανοικτό μέχρι εξαντλήσεως προϋπολογισμού", βάλε null.
+     - ΠΡΟΣΟΧΗ: Αν το κείμενο αναφέρει λήξη "3 Μαρτίου" αλλά αφορά δράση παλαιότερου έτους (πριν το ${currentYear}), ΠΡΕΠΕΙ ΝΑ ΒΑΛΕΙΣ ΤΟ ΣΩΣΤΟ ΠΑΡΕΛΘΟΝΤΙΚΟ ΕΤΟΣ. ΜΗΝ υποθέτεις το τρέχον έτος (${currentYear}) αν πρόκειται για παλιά ανακοίνωση. Αν η ανακοίνωση είναι εμφανώς ληγμένη, βάλε τη λήξη στο παρελθόν.
    - "status": 
      - "open": Οι αιτήσεις γίνονται ΤΩΡΑ.
      - "closed": Η ημερομηνία λήξης πέρασε (πριν από ${today}).
@@ -280,44 +289,56 @@ OUTPUT JSON SCHEMA ONLY:
   "confidence": number (0.0 to 1.0)
 }`;
 
-    const model = config.groq.model || 'llama-3.1-8b-instant';
+    const model = config.groq.model || "llama-3.1-8b-instant";
     const requestBody: any = {
       model,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: "Text to analyze:\n" + content.substring(0, 3000) }
+        {
+          role: "user",
+          content: "Text to analyze:\n" + content.substring(0, 3000),
+        },
       ],
-      temperature: 0.1
+      temperature: 0.1,
     };
 
-    const response = await axios.post(
-      apiUrl,
-      requestBody,
-      {
-        headers: { 
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json' 
-        },
-        timeout: 30000 
-      }
-    );
+    const response = await axios.post(apiUrl, requestBody, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 30000,
+    });
 
     if (response.data?.choices?.[0]?.message?.content) {
       let rawText = response.data.choices[0].message.content;
       const jsonText = extractJsonBlock(rawText);
       const parsed = JSON.parse(jsonText);
-      
+
       let type: OpportunityType = "manual";
       const aiType = parsed.type || "news";
-      
+
       switch (aiType) {
-        case "subsidy": type = "subsidy"; break;
-        case "job": type = "public_call"; break;
-        case "program": type = "program"; break;
-        case "contest": type = "asep_competition"; break;
-        case "news": type = "manual"; break;
-        case "irrelevant": type = "manual"; break;
-        default: type = "manual";
+        case "subsidy":
+          type = "subsidy";
+          break;
+        case "job":
+          type = "public_call";
+          break;
+        case "program":
+          type = "program";
+          break;
+        case "contest":
+          type = "asep_competition";
+          break;
+        case "news":
+          type = "manual";
+          break;
+        case "irrelevant":
+          type = "manual";
+          break;
+        default:
+          type = "manual";
       }
 
       const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
@@ -326,9 +347,12 @@ OUTPUT JSON SCHEMA ONLY:
       if (tags.includes("unemployed")) mappedStatusFlags.push("unemployed");
       if (tags.includes("parent")) mappedStatusFlags.push("parent");
       if (tags.includes("pensioners")) mappedStatusFlags.push("retired");
-      
+
       const criteriaRulesJson: CriteriaRules = {
-        statusFlags: mappedStatusFlags.length > 0 ? { required: mappedStatusFlags } : undefined,
+        statusFlags:
+          mappedStatusFlags.length > 0
+            ? { required: mappedStatusFlags }
+            : undefined,
       };
 
       return {
@@ -337,16 +361,16 @@ OUTPUT JSON SCHEMA ONLY:
         summary: parsed.summary || "",
         deadlineAt: parsed.deadlineAt ? new Date(parsed.deadlineAt) : undefined,
         tags,
-        criteriaJson: {}, 
+        criteriaJson: {},
         criteriaRulesJson,
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+        confidence:
+          typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
         status: parsed.status,
-        isIrrelevant: aiType === "irrelevant"
+        isIrrelevant: aiType === "irrelevant",
       };
     }
-    
-    throw new Error("Empty response from Groq");
 
+    throw new Error("Empty response from Groq");
   } catch (error: any) {
     console.error("❌ Groq Extractor failed:", error.message);
     return fallbackStubExtractor(content);
@@ -363,6 +387,6 @@ function fallbackStubExtractor(content: string): ExtractedOpportunity {
     criteriaJson: {},
     criteriaRulesJson: {},
     confidence: 0.1,
-    status: "unknown"
+    status: "unknown",
   };
 }
