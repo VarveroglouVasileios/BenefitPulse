@@ -49,3 +49,30 @@ export async function extractDiavgeiaText(ada: string): Promise<string> {
     return ""; // Return empty string on failure instead of throwing, so ingestion can gracefully degrade
   }
 }
+export async function searchDiavgeia(queryText: string): Promise<{ text: string, url: string } | null> {
+  try {
+    const query = encodeURIComponent(queryText);
+    const url = `https://diavgeia.gov.gr/luminapi/api/search?q=${query}&sort=recent&size=1`;
+    const response = await axios.get(url, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+      timeout: 30000,
+    });
+    
+    if (response.data && response.data.decisions && response.data.decisions.length > 0) {
+      const ada = response.data.decisions[0].ada;
+      const pdfText = await extractDiavgeiaText(ada);
+      return { text: pdfText, url: `https://diavgeia.gov.gr/doc/${ada}` };
+    }
+  } catch (err: any) {
+    console.error(`⚠️ Diavgeia search failed for "${queryText}":`, err.message);
+  }
+  return null;
+}
+
+export async function crossReferenceAsepWithDiavgeia(title: string): Promise<{ text: string, url: string } | null> {
+  const asepMatch = title.match(/(\d+[ΚΓΒΠΔ]\/\d{4})/i);
+  if (!asepMatch) return null;
+
+  const contestCode = asepMatch[1];
+  return searchDiavgeia(`subject:"ΠΡΟΚΗΡΥΞΗ ${contestCode}"`);
+}

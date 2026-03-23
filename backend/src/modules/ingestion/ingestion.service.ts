@@ -13,7 +13,7 @@ import { checkSourceHealth, fixEndpointUrl } from "./source-health-check";
 import { IngestionReporter } from "./ingestion-reporter";
 import { parseDate, normalizeDate } from "../../utils/date-parser";
 import { ProgressTracker } from "../../utils/progress";
-import { extractDiavgeiaText } from "./diavgeia";
+import { extractDiavgeiaText, crossReferenceAsepWithDiavgeia, searchDiavgeia } from "./diavgeia";
 
 // Simple in-memory caches for AI results (per worker process)
 // Key: hash of title+url (or content), Value: AIStatusResult / ExtractedOpportunity
@@ -1721,7 +1721,55 @@ export class IngestionService {
          } catch (err: any) {
             console.warn(`   ⚠️ Deep Fetch Error: ${err.message}`);
          }
-      } else if (isDiavgeiaCheck && item.metadata?.ada) {
+      } 
+      
+      // --- CROSS-REFERENCE WITH DIAVGEIA ---
+      const sourceLower = source.name?.toLowerCase() || "";
+      const titleLower = item.title?.toLowerCase() || "";
+      const isAsepSource = sourceLower.includes("asep") || sourceLower.includes("ασεπ");
+      const isDypaSource = sourceLower.includes("δυνα") || sourceLower.includes("dypa") || sourceLower.includes("oaed") || sourceLower.includes("οαεδ");
+      
+      const asepCodeMatch = item.title?.match(/(\d+[ΚΓΒΠΔ]\/\d{4})/i);
+      
+      if (isAsepSource && asepCodeMatch) {
+         console.log(`   🔎 Cross-referencing ASEP ${asepCodeMatch[1]} with Diavgeia...`);
+         const diavgeiaData = await crossReferenceAsepWithDiavgeia(item.title);
+         if (diavgeiaData) {
+            console.log(`   ✅ Diavgeia cross-reference success for ASEP ${asepCodeMatch[1]}`);
+            const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
+            item.content = combinedContent;
+            content = combinedContent;
+         }
+      } else if (isDypaSource && (titleLower.includes("πρόγραμμα") || titleLower.includes("προγραμμα"))) {
+         // Generic DYPA cross-reference for programs
+         // Try searching for the first 50 chars of the title as a "Public Invitation" (Δημόσια Πρόσκληση)
+         const searchTitle = item.title.replace(/[«»"]/g, '').substring(0, 100).trim();
+         console.log(`   🔎 Cross-referencing DYPA program with Diavgeia: "${searchTitle}"...`);
+         
+         const diavgeiaData = await searchDiavgeia(`subject:"Πρόσκληση" AND subject:"ΔΥΠΑ" AND subject:"${searchTitle.substring(0, 40)}"`);
+         if (diavgeiaData) {
+            console.log(`   ✅ Diavgeia cross-reference success for DYPA program`);
+            const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
+            item.content = combinedContent;
+            content = combinedContent;
+         }
+      } else if (item.title && item.title.length > 20) {
+         // FINAL FALLBACK: For any source, try to find a decision in Diavgeia if title is specific enough
+         const searchTitle = item.title.replace(/[«»"]/g, '').substring(0, 60).trim();
+         if (searchTitle.length > 30) {
+            console.log(`   🔎 Generic cross-referencing with Diavgeia: "${searchTitle}"...`);
+            const diavgeiaData = await searchDiavgeia(`subject:"${searchTitle}"`);
+            if (diavgeiaData) {
+               console.log(`   ✅ Generic Diavgeia cross-reference success for: ${searchTitle}`);
+               const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
+               item.content = combinedContent;
+               content = combinedContent;
+            }
+         }
+      }
+      // --- END CROSS-REFERENCE ---
+      
+      if (isDiavgeiaCheck && item.metadata?.ada) {
          // DIAVGEIA TIER 1: Fetch PDF text directly using ADA
          if (!existingRawItem || (existingRawItem.content && existingRawItem.content.length < 500)) {
            console.log(`   🏛️ Diavgeia Deep Fetching: Extracting PDF text for ADA ${item.metadata.ada}...`);
@@ -2098,12 +2146,19 @@ export class IngestionService {
         }
 
         // Parse dates from cleaned output using unified parser (never Invalid Date)
-        const deadlineAt = cleaned.deadlineAt
-          ? normalizeDate(parseDate(cleaned.deadlineAt).date) || undefined
-          : undefined;
-        const startAt = cleaned.startAt
-          ? normalizeDate(parseDate(cleaned.startAt).date) || undefined
-          : undefined;
+        // FALLBACK: Use AI extracted dates if regex cleaner failed
+        const parsedCleanedDeadline = cleaned.deadlineAt ? parseDate(cleaned.deadlineAt).date : null;
+        const fallbackDeadline = extracted.deadlineAt ? new Date(extracted.deadlineAt) : undefined;
+        const deadlineAt = parsedCleanedDeadline
+          ? normalizeDate(parsedCleanedDeadline) || fallbackDeadline
+          : fallbackDeadline;
+
+        const parsedCleanedStart = cleaned.startAt ? parseDate(cleaned.startAt).date : null;
+        const fallbackStart = extracted.startAt ? new Date(extracted.startAt) : undefined;
+        const startAt = parsedCleanedStart
+          ? normalizeDate(parsedCleanedStart) || fallbackStart
+          : fallbackStart;
+
         const announcedAt = cleaned.announcedAt
           ? normalizeDate(parseDate(cleaned.announcedAt).date) || new Date()
           : new Date(); // Use current time if not provided
