@@ -6,26 +6,71 @@
         <ul>
           <li><router-link to="/">Αρχική</router-link></li>
           <li><router-link to="/opportunities">Όλες</router-link></li>
-          <li><router-link to="/opportunities?status=open">Πηγές</router-link></li>
+          <li>
+            <router-link to="/opportunities?status=open">Πηγές</router-link>
+          </li>
         </ul>
       </div>
-      
+
       <div class="footer-column">
         <h3>Πηγές</h3>
         <ul>
-          <li><a href="https://www.gov.gr" target="_blank" rel="noopener noreferrer">gov.gr</a></li>
-          <li><a href="https://vouchers.gov.gr" target="_blank" rel="noopener noreferrer">vouchers.gov.gr</a></li>
-          <li><a href="https://opeka.gr" target="_blank" rel="noopener noreferrer">ΟΠΕΚΑ</a></li>
-          <li><a href="https://www.dypa.gov.gr" target="_blank" rel="noopener noreferrer">ΔΥΠΑ</a></li>
+          <li>
+            <a
+              href="https://www.gov.gr"
+              target="_blank"
+              rel="noopener noreferrer"
+              >gov.gr</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://vouchers.gov.gr"
+              target="_blank"
+              rel="noopener noreferrer"
+              >vouchers.gov.gr</a
+            >
+          </li>
+          <li>
+            <a href="https://opeka.gr" target="_blank" rel="noopener noreferrer"
+              >ΟΠΕΚΑ</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://www.dypa.gov.gr"
+              target="_blank"
+              rel="noopener noreferrer"
+              >ΔΥΠΑ</a
+            >
+          </li>
         </ul>
       </div>
-      
+
       <div class="footer-column">
         <h3>Support / Legal</h3>
         <ul>
-          <li><a href="#" @click.prevent="openContactModal('error')" class="footer-link-prominent">⚠️ Αναφορά λάθους</a></li>
-          <li><a href="#" @click.prevent="openContactModal('source')" class="footer-link-prominent">💡 Πρότεινε πηγή</a></li>
-          <li><a href="#" @click.prevent="openContactModal('general')">Επικοινωνία</a></li>
+          <li>
+            <a
+              href="#"
+              @click.prevent="openContactModal('error')"
+              class="footer-link-prominent"
+              >⚠️ Αναφορά λάθους</a
+            >
+          </li>
+          <li>
+            <a
+              href="#"
+              @click.prevent="openContactModal('source')"
+              class="footer-link-prominent"
+              >💡 Πρότεινε πηγή</a
+            >
+          </li>
+          <li>
+            <a href="#" @click.prevent="openContactModal('general')"
+              >Επικοινωνία</a
+            >
+          </li>
           <li><router-link to="/terms">Όροι Χρήσης</router-link></li>
           <li><router-link to="/privacy">Πολιτική Απορρήτου</router-link></li>
           <li><router-link to="/cookies">Πολιτική Cookies</router-link></li>
@@ -33,18 +78,19 @@
         </ul>
       </div>
     </div>
-    
+
     <div class="footer-bottom">
       <div class="footer-status">
         <span class="status-badge">🟢 System status: Operational</span>
-        <span class="status-text">Last scan: κάθε 2 ώρες</span>
+        <span class="status-text">Last scan: κάθε 24 ώρες</span>
       </div>
       <p>&copy; {{ currentYear }} BenefitPulse</p>
       <p class="disclaimer-text">
-        Δεν είμαστε επίσημος φορέας. Το BenefitPulse είναι aggregator που συλλέγει πληροφορίες από επίσημες πηγές.
+        Δεν είμαστε επίσημος φορέας. Το BenefitPulse είναι aggregator που
+        συλλέγει πληροφορίες από επίσημες πηγές.
       </p>
     </div>
-    
+
     <ContactModal
       :is-open="contactModalOpen"
       :type="contactModalType"
@@ -167,7 +213,6 @@ function closeContactModal() {
   color: var(--link-color) !important;
 }
 
-
 .disclaimer-text {
   font-size: 0.8rem;
   color: var(--text-tertiary);
@@ -189,4 +234,3 @@ function closeContactModal() {
   }
 }
 </style>
-
