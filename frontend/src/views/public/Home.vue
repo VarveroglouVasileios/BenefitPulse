@@ -281,7 +281,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick, watch } from "vue";
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
@@ -388,27 +388,31 @@ const faqRef = ref<HTMLElement>();
 const examplesRef = ref<HTMLElement>();
 
 
-// Intersection Observer for scroll animations
+let scrollSectionObserver: IntersectionObserver | null = null;
+
+/** Attach observer for stat counter animation; sections stay visible without waiting for this. */
 function setupScrollAnimations() {
+  scrollSectionObserver?.disconnect();
+  scrollSectionObserver = null;
+
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("visible");
-          
-          // Animate stats when stats section is visible
-          if (entry.target === statsRef.value && !entry.target.classList.contains("animated")) {
-            entry.target.classList.add("animated");
-            animateStat(animatedStats, "sources", 0, stats.value.sources, 1000);
-            setTimeout(() => {
-              animateStat(animatedStats, "opportunities", 0, stats.value.opportunities, 1000);
-            }, 200);
-          }
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("visible");
+
+        if (entry.target === statsRef.value && !entry.target.classList.contains("animated")) {
+          entry.target.classList.add("animated");
+          animateStat(animatedStats, "sources", 0, stats.value.sources, 1000);
+          setTimeout(() => {
+            animateStat(animatedStats, "opportunities", 0, stats.value.opportunities, 1000);
+          }, 200);
         }
       });
     },
-    { threshold: 0.05, rootMargin: "0px 0px 80px 0px" }
+    { threshold: 0.05, rootMargin: "0px 0px 80px 0px" },
   );
+  scrollSectionObserver = observer;
 
   const refs = [statsRef, howItWorksRef, newOpenRef, trendingRef, forYouRef, trustRef, faqRef, examplesRef];
   refs.forEach((r) => {
@@ -421,8 +425,8 @@ function goToTag(query: string) {
 }
 
 async function fetchChipCounts() {
-  // Fetch counts for each chip tag
-  for (const chip of chips.value) {
+  // Fetch counts for all chips in parallel to save time
+  await Promise.all(chips.value.map(async (chip) => {
     try {
       const response = await api.opportunities.list({
         limit: 1,
@@ -432,7 +436,7 @@ async function fetchChipCounts() {
     } catch (error) {
       // Ignore errors
     }
-  }
+  }));
 }
 
 function goToQuery(q: string) {
@@ -541,20 +545,31 @@ async function fetchStats() {
   }
 }
 
-onMounted(async () => {
-  await Promise.all([
-    fetchNewOpen(),
-    fetchTrending(),
-    fetchForYou(),
-    fetchStats(),
-    fetchChipCounts(),
-  ]);
-  
-  await nextTick();
-  setupScrollAnimations();
+onMounted(() => {
+  nextTick(() => {
+    setupScrollAnimations();
+  });
+
+  // Critical path: lists + stats (no chip-count storm on first paint)
+  Promise.all([fetchNewOpen(), fetchTrending(), fetchForYou(), fetchStats()]).catch((err) =>
+    console.error("Initial fetch failed:", err),
+  );
+
+  // Defer chip totals — 5 extra API calls; not needed for first contentful sections
+  const runChips = () => {
+    fetchChipCounts().catch(() => {});
+  };
+  if (typeof requestIdleCallback !== "undefined") {
+    requestIdleCallback(runChips, { timeout: 3000 });
+  } else {
+    setTimeout(runChips, 200);
+  }
+
+  if (heroRef.value) {
+    heroRef.value.classList.add("visible");
+  }
 });
 
-// Re-run scroll observer when content finishes loading (fixes blank sections)
 watch(
   () => [loadingNew.value, loadingTrending.value, loadingForYou.value],
   () => {
@@ -562,8 +577,13 @@ watch(
       nextTick(() => setupScrollAnimations());
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
+
+onBeforeUnmount(() => {
+  scrollSectionObserver?.disconnect();
+  scrollSectionObserver = null;
+});
 </script>
 
 <style scoped>
@@ -604,6 +624,15 @@ watch(
 .hero-content {
   opacity: 0;
   animation: fadeInUp 0.6s ease-out 0.2s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero,
+  .hero-content {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
 }
 
 .hero-title {
@@ -770,13 +799,12 @@ watch(
   animation: float 9s ease-in-out infinite 0.4s;
 }
 
-/* Stats Section */
+/* Stats Section — visible immediately (no blank page waiting for observer/APIs) */
 .stats-section {
   margin: 4rem 0;
   padding: 2rem 0;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .stats-section.visible {
@@ -843,9 +871,8 @@ watch(
 /* How it works */
 .how-it-works {
   margin-top: 4rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .how-it-works.visible {
@@ -943,9 +970,8 @@ watch(
 /* Featured Sections */
 .featured-section {
   margin-top: 4rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .featured-section.visible {
@@ -1045,9 +1071,8 @@ watch(
 /* Safety/Trust Section */
 .safety {
   margin-top: 4rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .safety.visible {
@@ -1125,9 +1150,8 @@ watch(
 /* Examples */
 .examples {
   margin-top: 4rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .examples.visible {
@@ -1208,9 +1232,8 @@ watch(
 /* FAQ Section */
 .faq {
   margin-top: 4rem;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .faq.visible {
