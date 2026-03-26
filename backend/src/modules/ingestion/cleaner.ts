@@ -32,6 +32,9 @@ const OFFICIAL_DOMAINS = new Set([
   "www.stegastiko.minedu.gov.gr",
   "aade.gr",
   "www.aade.gr",
+  "asep.gr",
+  "www.asep.gr",
+  "info.asep.gr",
 ]);
 
 // Service info / menu / landing page keywords (reject these)
@@ -748,6 +751,51 @@ export function determineApplicationStatus(
       if (currentMonth >= 6) { // July onwards
         statusSignals.push(`Pass ${titleYear} with no dates detected after mid-year → expired`);
         return { status: "expired", statusSignals, applicationStartAt: null, applicationEndAt: null };
+      }
+    }
+  }
+
+  // NEW Rule: Detect expired Greek months in title (e.g. "ΦΕΒΡΟΥΑΡΙΟΣ 2026" on March 26)
+  const greekMonths = [
+    "ιανουάριος", "ιανουαριος", "ιανουαρίου", "ιανουαριου",
+    "φεβρουάριος", "φεβρουαριος", "φεβρουαρίου", "φεβρουαριου",
+    "μάρτιος", "μαρτιος", "μαρτίου", "μαρτιου",
+    "απρίλιος", "απριλιος", "απριλίου", "απριλιου",
+    "μάιος", "μαιος", "μαΐου", "μαιου",
+    "ιούνιος", "ιουνιος", "ιουνίου", "ιουνιου",
+    "ιούλιος", "ιουλιος", "ιουλίου", "ιουλιου",
+    "αύγουστος", "αυγουστος", "αυγούστου", "αυγουστου",
+    "σεπτέμβριος", "σεπτεμβριος", "σεπτεμβρίου", "σεπτεμβριου",
+    "οκτώβριος", "οκτωβριος", "οκτωβρίου", "οκτωβριου",
+    "νοέμβριος", "νοεμβριος", "νοεμβρίου", "νοεμβριου",
+    "δεκέμβριος", "δεκεμβριος", "δεκεμβρίου", "δεκεμβριου"
+  ];
+
+  const monthToNum: Record<string, number> = {
+    "ιανου": 0, "ιαν": 0, "φεβρ": 1, "φεβ": 1, "μαρτ": 2, "μαρ": 2,
+    "απρι": 3, "απρ": 3, "μαϊ": 4, "μαι": 4, "μαη": 4, "ιουν": 5,
+    "ιουλ": 6, "αυγο": 7, "αυγ": 7, "σεπτ": 8, "σεπ": 8, "οκτω": 9,
+    "οκτ": 9, "νοεμ": 10, "νοε": 10, "δεκε": 11, "δεκ": 11
+  };
+
+  // Check if title mentions a month and year
+  for (const month of greekMonths) {
+    if (lowerTitle.includes(month)) {
+      const monthPrefix = month.substring(0, 3);
+      const monthIdx = monthToNum[monthPrefix] ?? monthToNum[month.substring(0, 4)];
+      
+      if (monthIdx !== undefined) {
+        const titleYearMatch = lowerTitle.match(/\b(20\d{2})\b/);
+        const titleYear = titleYearMatch ? parseInt(titleYearMatch[1], 10) : now.getFullYear();
+        
+        // If year is past, or same year and month is past
+        const isPastMonth = (titleYear < now.getFullYear()) || 
+                           (titleYear === now.getFullYear() && monthIdx < now.getMonth());
+        
+        if (isPastMonth && !lowerTitle.includes("προσεχώς") && !lowerTitle.includes("upcoming")) {
+          statusSignals.push(`Past month detected in title: ${month} ${titleYear}`);
+          return { status: "expired", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
+        }
       }
     }
   }
