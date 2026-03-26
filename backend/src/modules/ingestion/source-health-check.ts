@@ -268,7 +268,7 @@ export function fixEndpointUrl(url: string, sourceType: string): string {
       if (!query || query.trim() === "" || !query.includes("subject:")) {
         // Use subject field filter for better precision
         query =
-          "subject:(επίδομα OR επιδότηση OR voucher OR pass OR youth pass OR tourism4all OR north evia pass OR thessaly-evros pass)";
+          "subject:(επίδομα OR επιδότηση OR voucher OR pass OR \"youth pass\" OR tourism4all OR \"north evia pass\" OR \"thessaly-evros pass\" OR \"δώρο πάσχα\" OR \"έκτακτη ενίσχυση\" OR \"αναβάθμιση δεξιοτήτων\")";
       }
 
       const page = urlObj.searchParams.get("page") || "1";

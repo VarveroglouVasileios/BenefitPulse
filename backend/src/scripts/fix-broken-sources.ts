@@ -125,6 +125,60 @@ const URL_FIXES: SourceUpdate[] = [
     newUrl: "https://portal.stegastiko.minedu.gov.gr/",
     enabled: true,
   },
+  // Diavgeia API fix
+  {
+    name: "Διαύγεια API (opendata search)",
+    oldUrl: "https://opendata.diavgeia.gov.gr/luminapi/api/search/export?q=subject%3A%28%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1+OR+%CE%B5%CF%80%CE%B9%CE%B4%CF%8C%CF%84%CE%B7%CF%83%CE%B7+OR+voucher+OR+pass+OR+youth+pass+OR+tourism4all+OR+north+evia+pass+OR+thessaly-evros+pass%29&wt=json&rows=50&start=0",
+    newUrl: 'https://diavgeia.gov.gr/luminapi/opendata/search?q=subject:(επίδομα OR επιδότηση OR voucher OR pass OR "youth pass" OR "tourism4all" OR "north evia pass")&wt=json',
+    enabled: true,
+  },
+  // EFKA fix
+  {
+    name: "e-ΕΦΚΑ Επιδόματα",
+    oldUrl: "https://www.e-efka.gov.gr/el/epidomata",
+    newUrl: "https://www.efka.gov.gr/el/epidomata",
+    enabled: true,
+  },
+  // OPEKA fix
+  {
+    name: "OPEKA Επιδόματα",
+    oldUrl: "https://opeka.gr/epidomata/",
+    newUrl: "https://www.opeka.gr/epidomata/",
+    enabled: true,
+  },
+  // Diavgeia Search RSS (fallback) fix
+  {
+    name: "Διαύγεια Search RSS (fallback)",
+    oldUrl: "https://diavgeia.gov.gr/luminapi/api/feed/rss?q=(%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1%20OR%20voucher%20OR%20pass)",
+    newUrl: 'https://diavgeia.gov.gr/luminapi/api/feed/rss?q=q%3A%22%CE%B5%CF%80%CE%AF%CE%B4%CE%BF%CE%BC%CE%B1%22',
+    enabled: true,
+  },
+  // ESPA Fisheries fix
+  {
+    name: "ESPA Fisheries",
+    oldUrl: "https://ospa.minagric.gr/metra-eniksis-tis-alieias/",
+    newUrl: "https://alieia.gr/feed/",
+    enabled: true,
+  },
+  // Disable known problematic sources
+  {
+    name: "ESPA Antagonistikotita",
+    oldUrl: "https://www.antagonistikotita.gr/feed/",
+    newUrl: "https://www.antagonistikotita.gr/feed/",
+    enabled: false, // Timeout
+  },
+  {
+    name: "MITOS - EMDD API",
+    oldUrl: "https://api.digigov.grnet.gr/v1",
+    newUrl: "https://api.digigov.grnet.gr/v1",
+    enabled: false, // Needs API key
+  },
+  {
+    name: "MITOS - EMDD API (Services)",
+    oldUrl: "https://api.digigov.grnet.gr/v1/services",
+    newUrl: "https://api.digigov.grnet.gr/v1/services",
+    enabled: false, // Needs API key
+  },
 ];
 
 async function fixBrokenSources() {
