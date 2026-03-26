@@ -91,9 +91,17 @@ async function fetchWithRedirects(
   contentLength?: number;
 }> {
   try {
+    const fetchHeaders = { ...DEFAULT_HEADERS, ...(options.headers || {}) };
+    if (!fetchHeaders["Referer"]) {
+      try {
+        const u = new URL(url);
+        fetchHeaders["Referer"] = `${u.protocol}//${u.hostname}/`;
+      } catch { /* ignore */ }
+    }
+
     const response = await axios.get(url, {
       ...options,
-      headers: { ...DEFAULT_HEADERS, ...(options.headers || {}) },
+      headers: fetchHeaders,
       maxRedirects: 10,
       maxContentLength: 50 * 1024 * 1024, // 50MB
       maxBodyLength: 50 * 1024 * 1024,
@@ -1257,6 +1265,37 @@ export class IngestionService {
       fetchError = error;
       console.error(`❌ Error fetching source ${source.name} (${source.url}):`, error.message);
       
+      // FALLBACK: Try Diavgeia Search if source is critical and fails
+      const isCritical = source.name.toUpperCase().includes("ESPA") || 
+                         source.name.toUpperCase().includes("ΕΣΠΑ") ||
+                         source.name.toUpperCase().includes("ALIEIA") ||
+                         source.name.toLowerCase().includes("ανταγωνιστικότητα");
+
+      if (isCritical && !items.length) {
+        console.log(`   🔦 [Fallback] Attempting Diavgeia search for critical source: ${source.name}...`);
+        try {
+          // Use searchDiavgeia to find recent decisions (we need more than 1, so let's try 3)
+          // Note: we might need to modify searchDiavgeia to return multiple items
+          const searchTerm = source.name.toLowerCase().includes("espa") || source.name.toLowerCase().includes("εσπα") 
+            ? "subject:\"ΠΡΟΚΗΡΥΞΗ ΕΣΠΑ\"" 
+            : `subject:\"ΠΡΟΚΗΡΥΞΗ ${source.name.substring(0, 20)}\"`;
+          
+          const fallbackData = await searchDiavgeia(searchTerm);
+          if (fallbackData) {
+            console.log(`   ✅ [Fallback] Found match in Diavgeia for ${source.name}: ${fallbackData.url}`);
+            items.push({
+              title: `[DIAVGEIA FALLBACK] ${source.name} - Πρόσφατη Απόφαση`,
+              url: fallbackData.url,
+              content: fallbackData.text,
+              pubDate: new Date().toISOString(),
+              sourceName: `${source.name} (via Diavgeia)`,
+            });
+          }
+        } catch (fallbackErr) {
+          console.error(`   ❌ [Fallback] Diavgeia search failed:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+        }
+      }
+
       // Track consecutive failures
       source.consecutiveFailures = (source.consecutiveFailures || 0) + 1;
       source.lastError = error.message || String(error);

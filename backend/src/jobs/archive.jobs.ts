@@ -54,10 +54,15 @@ async function fetchFullPageContent(url: string): Promise<string | null> {
   try {
     const response = await axios.get(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "max-age=0",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Referer": url.includes("asep.gr") ? "https://info.asep.gr/" : url
       },
-      timeout: 10000,
+      timeout: 15000,
     });
     const $ = cheerio.load(response.data);
     $("script, style").remove();
@@ -125,12 +130,30 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       }
     }
 
-    // Check 3: Summary/title contains expired keywords
+    // Check 3: Summary/title contains expired keywords OR past month
     if (!shouldArchive) {
       const combinedText = `${opp.title} ${opp.summary}`;
       if (hasExpiredKeywords(combinedText)) {
         shouldArchive = true;
         summaryExpiredCount++;
+      } else {
+        // Run cleaner's title logic directly on Opportunity title
+        const nowIso = now.toISOString();
+        const titleOnlyCheck = cleanAndValidate({
+          nowIso,
+          source: opp.source,
+          sourceUrl: opp.officialUrl,
+          itemUrl: opp.officialUrl,
+          rawTitle: opp.title,
+          rawContent: "minimal content for title check", // only title matters for month check
+          rawFetchedAtIso: nowIso,
+        });
+
+        if (titleOnlyCheck.applicationStatus === "expired" || titleOnlyCheck.status === "archived") {
+          shouldArchive = true;
+          cleanerExpiredCount++;
+          console.log(`   📅 Month-based expiry detected in title: ${opp.title}`);
+        }
       }
     }
 

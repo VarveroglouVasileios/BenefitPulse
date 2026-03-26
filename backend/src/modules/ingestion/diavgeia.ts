@@ -16,8 +16,9 @@ export async function extractDiavgeiaText(ada: string): Promise<string> {
     const response = await axios.get(pdfUrl, {
       responseType: 'arraybuffer',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         'Accept': 'application/pdf',
+        'Referer': 'https://diavgeia.gov.gr/',
       },
       timeout: 30000, // 30 seconds
     });
