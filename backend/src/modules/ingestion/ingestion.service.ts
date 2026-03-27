@@ -29,16 +29,16 @@ const rssParser = new Parser({
 });
 
 const DEFAULT_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
   "Accept-Encoding": "gzip, deflate, br",
-  "Connection": "keep-alive",
-  "Cache-Control": "max-age=0",
   "Accept-Language": "el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7",
-  "Sec-Ch-Ua": '"Chromium";v="123", "Not:A-Brand";v="8", "Google Chrome";v="123"',
+  "Cache-Control": "max-age=0",
+  "Sec-Ch-Ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
   "Sec-Ch-Ua-Mobile": "?0",
-  "Sec-Ch-Ua-Platform": '"macOS"',
-  "Upgrade-Insecure-Requests": "1"
+  "Sec-Ch-Ua-Platform": '"Windows"',
+  "Upgrade-Insecure-Requests": "1",
+  "Referer": "https://www.google.com/",
 };
 
 async function sleep(ms: number): Promise<void> {
@@ -433,6 +433,17 @@ export class IngestionService {
           /προμηθειες\s+σχολειου/i,
           /προμήθειες/i,
           /διαγωνισμός\s+προμηθειών/i,
+          /ανάληψη\s+υποχρέωσης/i,
+          /δέσμευση\s+πίστωσης/i,
+          /έγκριση\s+δαπάνης/i,
+          /εντολή\s+πληρωμής/i,
+          /εκκαθάριση\s+δαπάνης/i,
+          /μισθοδοσία/i,
+          /απόδοση\s+κρατήσεων/i,
+          /πληρωμή\s+λογαριασμού/i,
+          /δαπάνη\s+για\s+υλικά/i,
+          /επισκευή\s+οχήματος/i,
+          /απόφαση\s+δημάρχου/i, // Usually internal admin
         ];
         
         filteredItems = items.filter((item: any) => {
@@ -1145,6 +1156,23 @@ export class IngestionService {
 
       let fetchUrl = url;
       let response = await axios.get(fetchUrl, fetchOpts);
+
+      // --- NEW FALLBACK LOGIC ---
+      if (response.status === 403 || response.status >= 400 || (response.data && response.data.length < 200)) {
+        console.log(`   ⚠️ Deep fetch issues for ${fetchUrl} (Status: ${response.status}). Trying Diavgeia fallback...`);
+        
+        // Try to extract a contest code like "1ΓΒ/2026" from the URL or title
+        const asepMatch = fetchUrl.match(/(\d+[ΚΓΒΠΔ]\/\d{4})/i);
+        if (asepMatch) {
+          const { crossReferenceAsepWithDiavgeia } = require('./diavgeia');
+          const diavgeiaResult = await crossReferenceAsepWithDiavgeia(asepMatch[1]);
+          if (diavgeiaResult && diavgeiaResult.text) {
+            console.log(`   ✅ Successfully fell back to Diavgeia for ${asepMatch[1]}`);
+            return diavgeiaResult.text;
+          }
+        }
+      }
+      // --------------------------
 
       if (response.status === 403) {
         const alt = alternateGovGrUrlIfEnglish(fetchUrl);
