@@ -45,6 +45,20 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** gov.gr often returns 403 on /en/... for datacenter IPs; Greek path may work. */
+function alternateGovGrUrlIfEnglish(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (host !== "www.gov.gr" && host !== "gov.gr") return null;
+    if (!u.pathname.startsWith("/en/")) return null;
+    u.pathname = u.pathname.replace(/^\/en\//, "/");
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Headers per source type
 function getHeadersForSourceType(sourceType: string, url?: string): Record<string, string> {
   const baseHeaders = {
@@ -1121,11 +1135,31 @@ export class IngestionService {
       // Small delay to be polite
       await sleep(500);
 
-      const response = await axios.get(url, {
+      const fetchOpts = {
         headers: { ...DEFAULT_HEADERS, ...headers },
         timeout: SOURCE_FETCH_TIMEOUT_MS,
-        maxContentLength: 5 * 1024 * 1024, // Max 5MB
-      });
+        maxContentLength: 15 * 1024 * 1024,
+        maxBodyLength: 15 * 1024 * 1024,
+        validateStatus: (s: number) => s >= 200 && s < 600,
+      };
+
+      let fetchUrl = url;
+      let response = await axios.get(fetchUrl, fetchOpts);
+
+      if (response.status === 403) {
+        const alt = alternateGovGrUrlIfEnglish(fetchUrl);
+        if (alt) {
+          const second = await axios.get(alt, fetchOpts);
+          if (second.status < 400) {
+            response = second;
+            fetchUrl = alt;
+          }
+        }
+      }
+
+      if (response.status >= 400) {
+        throw new Error(`Request failed with status code ${response.status}`);
+      }
 
       // 2. Skip based on Content-Type header (Reliable Check)
       const contentType = response.headers['content-type'] || '';
@@ -1264,8 +1298,10 @@ export class IngestionService {
     } catch (error: any) {
       fetchError = error;
       console.error(`❌ Error fetching source ${source.name} (${source.url}):`, error.message);
-      
-      // FALLBACK: Try Diavgeia Search if source is critical and fails
+
+      // Diavgeia fallback only runs here when the *whole source fetch* throws (e.g. HTTP error
+      // on the listing). It does not run for per-item "deep fetch" 403s (ASEP nodes) — those
+      // are handled separately; the standalone "Διαύγεια API / RSS" sources are the main feed.
       const isCritical = source.name.toUpperCase().includes("ESPA") || 
                          source.name.toUpperCase().includes("ΕΣΠΑ") ||
                          source.name.toUpperCase().includes("ALIEIA") ||

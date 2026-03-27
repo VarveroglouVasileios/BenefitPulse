@@ -30,8 +30,68 @@ function getProgressRedis(): Redis {
 
 const PROGRESS_KEY = "worker:ingestion:progress";
 
+function batchTotalKey(batchId: string): string {
+  return `ingestion:batch:${batchId}:total`;
+}
+
+function batchFinishedKey(batchId: string): string {
+  return `ingestion:batch:${batchId}:finished`;
+}
+
+function batchChainedKey(batchId: string): string {
+  return `ingestion:batch:${batchId}:chained`;
+}
+
+/** After every process-source job (success or fail), maybe enqueue archive + verification once. */
+async function onIngestionBatchSourceFinished(batchId: string | undefined): Promise<void> {
+  if (!batchId) return;
+
+  try {
+    const redis = getProgressRedis();
+    const totalStr = await redis.get(batchTotalKey(batchId));
+    const total = parseInt(totalStr || "0", 10);
+    if (total <= 0) return;
+
+    const finished = await redis.incr(batchFinishedKey(batchId));
+    await redis.expire(batchFinishedKey(batchId), 172800);
+
+    console.log(
+      `  📊 Ingestion batch ${batchId}: source finished ${finished}/${total}`,
+    );
+
+    if (finished < total) return;
+
+    const locked = await redis.set(batchChainedKey(batchId), "1", "EX", 7200, "NX");
+    if (locked !== "OK") {
+      console.log(
+        `  ⏭️  Batch ${batchId}: follow-up (archive/verification) already scheduled — skipping duplicate`,
+      );
+      return;
+    }
+
+    const archiveDelayMs = parseInt(
+      process.env.ARCHIVE_AFTER_INGESTION_DELAY_MS || "120000",
+      10,
+    );
+    const verificationDelayMs = parseInt(
+      process.env.VERIFICATION_AFTER_INGESTION_DELAY_MS || String(15 * 60 * 1000),
+      10,
+    );
+
+    await aggregationQueue.add("archive-expired-opportunities", {}, { delay: archiveDelayMs });
+    await verificationQueue.add("verify-all-published", {}, { delay: verificationDelayMs });
+
+    console.log(
+      `\n  📬 Batch ${batchId} ALL ${total} sources done → queued archive (+${archiveDelayMs / 1000}s) & verification (+${verificationDelayMs / 1000}s)\n`,
+    );
+  } catch (e) {
+    console.warn("  ⚠️  Ingestion batch completion hook failed:", e);
+  }
+}
+
 export async function processAllSourcesJob(job: Job): Promise<any> {
   const start = Date.now();
+  const batchId = String(start);
 
   logPhaseStart("INGESTION DISPATCH", "🚀");
 
@@ -64,11 +124,28 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
   });
   console.log();
 
+  // Redis: expected source job count for post-batch archive / verification
+  if (sources.length > 0) {
+    try {
+      const redis = getProgressRedis();
+      await redis.set(batchTotalKey(batchId), String(sources.length), "EX", 172800);
+      console.log(
+        `  🆔 Ingestion batchId=${batchId} | expect ${sources.length} process-source completions (Redis batch counter)`,
+      );
+    } catch {
+      /* if Redis fails, per-source jobs skip batch hook */
+      console.warn(
+        `  ⚠️  Could not set Redis batch total for ${batchId} — archive-after-batch may not run`,
+      );
+    }
+  }
+
   // 2. Create bulk jobs — pass index + total so each source job can show progress
   const jobs = sources.map((source, index) => ({
     name: "process-source",
     data: {
       sourceId: source._id.toString(),
+      batchId,
       sourceIndex: index,
       totalSources: sources.length,
       sourceName: source.name,
@@ -93,15 +170,6 @@ export async function processAllSourcesJob(job: Job): Promise<any> {
     console.log(`  ⚠️  No sources to queue\n`);
   }
 
-  // Schedule follow-up jobs
-  const verificationDelayMs = 15 * 60 * 1000;
-  await verificationQueue.add("verify-all-published", {}, { delay: verificationDelayMs });
-  console.log(`  🔍 Verification scheduled (in 15 min)`);
-
-  const archiveDelayMs = 30 * 60 * 1000;
-  await aggregationQueue.add("archive-expired-opportunities", {}, { delay: archiveDelayMs });
-  console.log(`  🗄️  Archive scheduled (in 30 min)\n`);
-
   const durationSec = (Date.now() - start) / 1000;
   console.log(`  🏁 Dispatch done in ${durationSec.toFixed(1)}s — processing starts now\n`);
 
@@ -113,6 +181,9 @@ export async function processSourceJob(job: Job): Promise<void> {
   if (!sourceId || typeof sourceId !== "string") {
     throw new Error("processSourceJob: sourceId is required");
   }
+
+  const batchId: string | undefined =
+    typeof job.data?.batchId === "string" ? job.data.batchId : undefined;
 
   const sourceIndex: number = job.data?.sourceIndex ?? 0;
   const totalSources: number = job.data?.totalSources ?? 1;
@@ -175,7 +246,7 @@ export async function processSourceJob(job: Job): Promise<void> {
   try {
     result = await ingestionService.processSource(sourceId);
     const sourceDuration = Date.now() - sourceStart;
-    
+
     // Status color based on findings
     const statusColor = result.processedCount > 0 ? GREEN : RESET;
     const skipCount = Object.values(result.skipReasons as Record<string, number>).reduce(
@@ -184,12 +255,16 @@ export async function processSourceJob(job: Job): Promise<void> {
     );
 
     console.log(
-      `  ${statusColor}✅ Done:${RESET} ${BOLD}${result.processedCount}${RESET} opportunities | ${skipCount} skipped | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`
+      `  ${statusColor}✅ Done:${RESET} ${BOLD}${result.processedCount}${RESET} opportunities | ${skipCount} skipped | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`,
     );
   } catch (error: any) {
     const sourceDuration = Date.now() - sourceStart;
-    console.error(`  ${RED}❌ Failed:${RESET} ${error.message} | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`);
+    console.error(
+      `  ${RED}❌ Failed:${RESET} ${error.message} | ⏱️ ${ProgressTracker.formatDuration(sourceDuration)}`,
+    );
     throw error;
+  } finally {
+    await onIngestionBatchSourceFinished(batchId);
   }
 
   // If this is the last source, show completion
@@ -203,7 +278,7 @@ export async function processSourceJob(job: Job): Promise<void> {
     finalTracker.finish({
       "Total Sources": totalSources,
       "Total Time": ProgressTracker.formatDuration(totalElapsed),
-      "Next Phase": "Verification (15m) / Archive (30m)"
+      "Next Phase": "Archive + verification (from batch end; see env delays)",
     });
 
     // Clean up Redis progress

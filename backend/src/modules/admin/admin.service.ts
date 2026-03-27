@@ -9,6 +9,7 @@ import { IngestionService } from "../ingestion/ingestion.service";
 import { cleanAndValidate, CleanerInput } from "../ingestion/cleaner";
 import axios from "axios";
 import * as cheerio from "cheerio";
+import { logArchivedOpportunity } from "../../jobs/archive.jobs";
 import { sendEmail, generateContactReplyEmail } from "../../utils/email";
 
 export class AdminService {
@@ -568,14 +569,20 @@ export class AdminService {
       }
     }
 
+    console.log(
+      `[admin archive_expired] scanning ${published.length} published opportunities (manual/admin run)`,
+    );
+
     for (const opp of published) {
       checkedCount++;
       let shouldArchive = false;
+      let archiveReason = "";
 
       // Check 1: deadlineAt < today
       if (opp.deadlineAt && opp.deadlineAt < now) {
         shouldArchive = true;
         deadlineExpiredCount++;
+        archiveReason = `deadline_passed | deadlineAt=${opp.deadlineAt.toISOString()}`;
       }
 
       // Check 2: Summary/title contains expired keywords OR title has past year OR explicit text expiration date
@@ -589,12 +596,15 @@ export class AdminService {
         if (textExpiration && textExpiration < now) {
            shouldArchive = true;
            deadlineExpiredCount++; // Count as deadline expired since we found a date
+           archiveReason = `text_deadline_expired | parsed=${textExpiration.toISOString()}`;
         } else if (hasPastYearInTitle(opp.title)) {
              shouldArchive = true;
              summaryExpiredCount++; 
+             archiveReason = "past_year_in_title";
         } else if (hasExpiredKeywords(combinedText)) {
              shouldArchive = true;
              summaryExpiredCount++;
+             archiveReason = "expired_keywords_in_title_or_summary";
         }
       }
 
@@ -641,9 +651,11 @@ export class AdminService {
             if (contentExpiration && contentExpiration < now) {
                shouldArchive = true;
                deadlineExpiredCount++;
+               archiveReason = `raw_text_deadline_expired | parsed=${contentExpiration.toISOString()}`;
             } else if (hasExpiredKeywords(contentToCheck)) {
               shouldArchive = true;
               summaryExpiredCount++;
+              archiveReason = "expired_keywords_in_raw_or_fetched_page";
             } else {
               const nowIso = new Date().toISOString();
               const cleanerInput: CleanerInput = {
@@ -666,6 +678,7 @@ export class AdminService {
               ) {
                 shouldArchive = true;
                 cleanerExpiredCount++;
+                archiveReason = `raw_cleaner | status=${cleaned.status} applicationStatus=${cleaned.applicationStatus}`;
               }
             }
           } else {
@@ -682,6 +695,11 @@ export class AdminService {
           { $set: { status: "archived" } }
         );
         archivedCount++;
+        logArchivedOpportunity(
+          opp,
+          `[admin] ${archiveReason || "unknown_rule"}`,
+          opp.source ? `source=${opp.source}` : undefined,
+        );
       }
     }
 

@@ -6,6 +6,25 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { ProgressTracker, logPhaseStart } from "../utils/progress";
 
+export function truncateOneLine(s: string, maxLen: number): string {
+  const t = (s || "").replace(/\s+/g, " ").trim();
+  return t.length <= maxLen ? t : `${t.slice(0, maxLen - 1)}…`;
+}
+
+export function logArchivedOpportunity(
+  opp: { _id: unknown; title?: string; officialUrl?: string },
+  reason: string,
+  extra?: string,
+): void {
+  const id = String(opp._id);
+  const title = truncateOneLine(opp.title || "", 90);
+  const url = opp.officialUrl ? truncateOneLine(opp.officialUrl, 80) : "";
+  const extraPart = extra ? ` | ${extra}` : "";
+  console.log(
+    `  📦 ARCHIVED | ${reason}${extraPart} | id=${id}${url ? ` | url=${url}` : ""} | title="${title}"`,
+  );
+}
+
 /**
  * Canonicalize URL for matching
  */
@@ -87,6 +106,10 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     deletedAt: null,
   });
 
+  console.log(
+    `  🗄️  archive-expired-opportunities | jobId=${job.id} | published=${published.length} | runAt=${now.toISOString()}`,
+  );
+
   let archivedCount = 0;
   let checkedCount = 0;
   let noRawItemCount = 0;
@@ -105,6 +128,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
   for (const opp of published) {
     checkedCount++;
     let shouldArchive = false;
+    let archiveReason = "";
 
     // Check 1: deadlineAt or applicationEndAt < today
     if (
@@ -113,8 +137,16 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     ) {
       shouldArchive = true;
       deadlineExpiredCount++;
+      const parts: string[] = [];
+      if (opp.deadlineAt && opp.deadlineAt < now) {
+        parts.push(`deadlineAt=${opp.deadlineAt.toISOString()}`);
+      }
+      if (opp.applicationEndAt && opp.applicationEndAt < now) {
+        parts.push(`applicationEndAt=${opp.applicationEndAt.toISOString()}`);
+      }
+      archiveReason = `deadline_passed | ${parts.join(", ")}`;
     }
-    
+
     // Check 2: ASEP results older than 3 weeks should auto-archive
     if (!shouldArchive) {
       const isAsepSource = opp.source?.toLowerCase().includes("ασεπ") || 
@@ -126,7 +158,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       if (isAsepSource && isResults && publishedDate && publishedDate < threeWeeksAgo) {
         shouldArchive = true;
         summaryExpiredCount++; // Reusing counter for simplicity
-        console.log(`   📦 ASEP Results expired (>3 weeks): ${opp.title.substring(0, 50)}...`);
+        archiveReason = `asep_results_stale | publishedAt=${publishedDate.toISOString()} (>21d)`;
       }
     }
 
@@ -136,6 +168,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       if (hasExpiredKeywords(combinedText)) {
         shouldArchive = true;
         summaryExpiredCount++;
+        archiveReason = "expired_keywords_in_title_or_summary";
       } else {
         // Run cleaner's title logic directly on Opportunity title
         const nowIso = now.toISOString();
@@ -152,7 +185,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
         if (titleOnlyCheck.applicationStatus === "expired" || titleOnlyCheck.status === "archived") {
           shouldArchive = true;
           cleanerExpiredCount++;
-          console.log(`   📅 Month-based expiry detected in title: ${opp.title}`);
+          archiveReason = `title_cleaner | status=${titleOnlyCheck.status} applicationStatus=${titleOnlyCheck.applicationStatus}`;
         }
       }
     }
@@ -201,6 +234,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
           if (hasExpiredKeywords(contentToCheck)) {
             shouldArchive = true;
             summaryExpiredCount++;
+            archiveReason = "expired_keywords_in_raw_or_fetched_page";
           } else {
             const nowIso = new Date().toISOString();
             const cleanerInput: CleanerInput = {
@@ -224,6 +258,7 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
             ) {
               shouldArchive = true;
               cleanerExpiredCount++;
+              archiveReason = `raw_cleaner | status=${cleaned.status} applicationStatus=${cleaned.applicationStatus}`;
             }
           }
         } else {
@@ -244,9 +279,22 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
         { $set: { status: "archived" } }
       );
       archivedCount++;
+      logArchivedOpportunity(
+        opp,
+        archiveReason || "unknown_rule",
+        opp.source ? `source=${truncateOneLine(opp.source, 60)}` : undefined,
+      );
     }
 
     progress.tick();
+  }
+
+  if (archivedCount === 0) {
+    console.log(`  ℹ️  Archive run: no opportunities moved to archived (checked ${checkedCount})`);
+  } else {
+    console.log(
+      `  ✅ Archive run: ${archivedCount} opportunity/opportunities archived (checked ${checkedCount})`,
+    );
   }
 
   progress.finish({
