@@ -44,7 +44,7 @@
       <span v-if="opportunity.deadlineAt">
         Προθεσμία: {{ formatDate(opportunity.deadlineAt) }}
       </span>
-      <span v-else class="unknown-deadline">Κατάσταση: άγνωστη — έλεγξε στο επίσημο link</span>
+      <span v-else class="unknown-deadline">Προθεσμία: Δεν έχει ανακοινωθεί</span>
     </div>
     <div class="actions">
       <span class="link" :aria-label="`Δείτε περισσότερα για ${opportunity.title}`">

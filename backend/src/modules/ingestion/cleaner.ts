@@ -646,7 +646,7 @@ export function extractDates(
       const hasTime = match[2] && match[3] && /^\d{1,2}:\d{2}$/.test(`${match[2]}:${match[3]}`);
       
       // Last capture group is usually the date (or second-to-last if time is present)
-      const dateStr = hasTime ? match[1] : (match[match.length - 1] || match[0]);
+      const dateStr = hasTime ? match[1] : (match.slice(1).filter(Boolean).pop() || match[0]);
       const { date, matchedText } = parseDate(dateStr, now);
       
       if (date) {
@@ -654,10 +654,10 @@ export function extractDates(
         if (hasTime) {
           const hours = parseInt(match[2], 10);
           const minutes = parseInt(match[3], 10);
-          date.setHours(hours, minutes, 59, 999);
+          date.setUTCHours(hours, minutes, 59, 999);
         } else {
           // Default to end of day if no time specified
-          date.setHours(23, 59, 59, 999);
+          date.setUTCHours(23, 59, 59, 999);
         }
         
         if (pattern.source.includes("έναρξη") && match.length > 2 && !startAt) {

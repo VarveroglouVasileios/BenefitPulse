@@ -40,16 +40,17 @@
     <section class="stats-section" ref="statsRef">
       <div class="stats-grid">
         <div class="stat-item">
-          <div class="stat-value" v-if="stats.sources > 0">{{ animatedStats.sources || stats.sources }}</div>
-          <div class="stat-value" v-else>—</div>
-          <div class="stat-label">Πηγές</div>
+          <div class="stat-value" v-if="!statsLoaded">—</div>
+          <div class="stat-value" v-else>{{ stats.sources }}</div>
+          <div class="stat-label">Ενεργές πηγές</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value" v-if="stats.opportunities > 0">
-            {{ animatedStats.opportunities || stats.opportunities }}
-          </div>
-          <div class="stat-value" v-else>—</div>
-          <div class="stat-label">Ανοικτές Ευκαιρίες</div>
+          <div class="stat-value" v-if="!statsLoaded">—</div>
+          <div class="stat-value" v-else>{{ stats.openCount }}</div>
+          <div class="stat-label">Ανοικτές τώρα</div>
+          <p v-if="statsLoaded && stats.opportunities > 0" class="stat-total-caption">
+            {{ stats.opportunities }} συνολικά στη βάση (επιδόματα, προγράμματα, vouchers)
+          </p>
         </div>
         <div class="stat-item">
           <div class="live-badge" v-if="lastScanLabel">🟢 {{ lastScanLabel }}</div>
@@ -57,7 +58,10 @@
           <div class="stat-label">Τελευταίο scan</div>
         </div>
       </div>
-      <p v-if="stats.opportunities === 0" class="sync-note">
+      <p
+        v-if="statsLoaded && stats.opportunities === 0 && stats.openCount === 0"
+        class="sync-note"
+      >
         Γίνεται συγχρονισμός… δες όλες τις καταχωρίσεις ενώ ενημερώνουμε τα νέα.
       </p>
     </section>
@@ -299,16 +303,13 @@ const loadingNew = ref(true);
 const loadingTrending = ref(true);
 const loadingForYou = ref(true);
 
+const statsLoaded = ref(false);
+
 const stats = ref({
-  sources: 15,
+  sources: 0,
   opportunities: 0,
   openCount: 0,
   lastScan: "πριν λίγα λεπτά",
-});
-
-const animatedStats = ref({
-  sources: 0,
-  opportunities: 0,
 });
 
 const lastScanAt = ref<Date | null>(new Date());
@@ -362,20 +363,6 @@ const examples = [
   },
 ];
 
-// Helper function for count animation
-function animateStat(target: any, property: "sources" | "opportunities", start: number, end: number, duration: number) {
-  let startTimestamp: number | null = null;
-  const step = (timestamp: number) => {
-    if (!startTimestamp) startTimestamp = timestamp;
-    const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-    target[property] = Math.floor(progress * (end - start) + start);
-    if (progress < 1) {
-      window.requestAnimationFrame(step);
-    }
-  };
-  window.requestAnimationFrame(step);
-}
-
 // Refs for scroll animations
 const heroRef = ref<HTMLElement>();
 const statsRef = ref<HTMLElement>();
@@ -401,13 +388,6 @@ function setupScrollAnimations() {
         if (!entry.isIntersecting) return;
         entry.target.classList.add("visible");
 
-        if (entry.target === statsRef.value && !entry.target.classList.contains("animated")) {
-          entry.target.classList.add("animated");
-          animateStat(animatedStats, "sources", 0, stats.value.sources, 1000);
-          setTimeout(() => {
-            animateStat(animatedStats, "opportunities", 0, stats.value.opportunities, 1000);
-          }, 200);
-        }
       });
     },
     { threshold: 0.05, rootMargin: "0px 0px 80px 0px" },
@@ -536,12 +516,14 @@ async function fetchStats() {
     stats.value.sources = response.data.sources || 0;
     stats.value.opportunities = response.data.opportunities || 0;
     stats.value.openCount = response.data.openCount || 0;
-    
+
     if (response.data.lastScanAt) {
       lastScanAt.value = new Date(response.data.lastScanAt);
     }
   } catch (error) {
     console.error("Failed to fetch stats:", error);
+  } finally {
+    statsLoaded.value = true;
   }
 }
 
@@ -866,6 +848,15 @@ onBeforeUnmount(() => {
   font-size: 1rem;
   color: var(--text-secondary);
   font-weight: 600;
+}
+
+.stat-total-caption {
+  margin: 0.6rem auto 0;
+  max-width: 22rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.35;
 }
 
 /* How it works */

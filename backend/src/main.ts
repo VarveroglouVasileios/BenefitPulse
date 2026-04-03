@@ -41,9 +41,22 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import { connectMongo } from "./db/mongo";
 import { config } from "./config/env";
-import { chatbotRateLimiter, contactRateLimiter, eventsRateLimiter, rateLimiter, securityMiddleware } from "./config/security";
-import { authMiddleware, adminMiddleware, optionalAuthMiddleware } from "./middleware/auth.middleware";
-import { validateObjectId, validateObjectIdParam } from "./middleware/validation.middleware";
+import {
+  chatbotRateLimiter,
+  contactRateLimiter,
+  eventsRateLimiter,
+  rateLimiter,
+  securityMiddleware,
+} from "./config/security";
+import {
+  authMiddleware,
+  adminMiddleware,
+  optionalAuthMiddleware,
+} from "./middleware/auth.middleware";
+import {
+  validateObjectId,
+  validateObjectIdParam,
+} from "./middleware/validation.middleware";
 import * as Sentry from "@sentry/node";
 
 import { Opportunity } from "./models/opportunity.model";
@@ -82,10 +95,12 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cookieParser()); // Parse cookies
-app.use(cors({ 
-  origin: config.frontendUrl,
-  credentials: true, // Allow cookies to be sent
-}));
+app.use(
+  cors({
+    origin: config.frontendUrl,
+    credentials: true, // Allow cookies to be sent
+  }),
+);
 app.use(securityMiddleware);
 
 // Rate limiting - always enabled; protects against brute force and DoS
@@ -98,81 +113,99 @@ app.get("/health", (req, res) => {
 
 // Debug endpoints (dev only) - protected: admin auth required
 if (config.nodeEnv !== "production") {
-  app.get("/api/debug/counts", authMiddleware, adminMiddleware, async (_req, res) => {
-    const [draft, published, archived] = await Promise.all([
-      Opportunity.countDocuments({ status: "draft", deletedAt: null }),
-      Opportunity.countDocuments({ status: "published", deletedAt: null }),
-      Opportunity.countDocuments({ status: "archived", deletedAt: null }),
-    ]);
+  app.get(
+    "/api/debug/counts",
+    authMiddleware,
+    adminMiddleware,
+    async (_req, res) => {
+      const [draft, published, archived] = await Promise.all([
+        Opportunity.countDocuments({ status: "draft", deletedAt: null }),
+        Opportunity.countDocuments({ status: "published", deletedAt: null }),
+        Opportunity.countDocuments({ status: "archived", deletedAt: null }),
+      ]);
 
-    const latest = await Opportunity.find({ deletedAt: null })
-      .sort({ publishedAt: -1 })
-      .limit(10)
-      .select("title status source officialUrl publishedAt");
+      const latest = await Opportunity.find({ deletedAt: null })
+        .sort({ publishedAt: -1 })
+        .limit(10)
+        .select("title status source officialUrl publishedAt");
 
-    res.json({ draft, published, archived, latest });
-  });
+      res.json({ draft, published, archived, latest });
+    },
+  );
 
-  app.get("/api/debug/profile/:userId", authMiddleware, adminMiddleware, async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const profile = await UserProfile.findOne({ userId });
-      if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
+  app.get(
+    "/api/debug/profile/:userId",
+    authMiddleware,
+    adminMiddleware,
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
+        const profile = await UserProfile.findOne({ userId });
+        if (!profile) {
+          res.status(404).json({ error: "Profile not found" });
+          return;
+        }
+        res.json(profile.toObject());
+      } catch (error: any) {
+        res.status(500).json({ error: error.message });
       }
-      res.json(profile.toObject());
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
+    },
+  );
 
-  app.get("/api/debug/matching/:userId", authMiddleware, adminMiddleware, async (req, res) => {
-    try {
-      const { userId } = req.params;
+  app.get(
+    "/api/debug/matching/:userId",
+    authMiddleware,
+    adminMiddleware,
+    async (req, res) => {
+      try {
+        const { userId } = req.params;
 
-      const profile = await UserProfile.findOne({ userId });
-      if (!profile) {
-        res.status(404).json({ error: "Profile not found" });
-        return;
+        const profile = await UserProfile.findOne({ userId });
+        if (!profile) {
+          res.status(404).json({ error: "Profile not found" });
+          return;
+        }
+
+        const now = new Date();
+        const [matchedCount, notMatchedCount, unknownCount, samples] =
+          await Promise.all([
+            UserOpportunity.countDocuments({ userId, matchStatus: "matched" }),
+            UserOpportunity.countDocuments({
+              userId,
+              matchStatus: "not_matched",
+            }),
+            UserOpportunity.countDocuments({ userId, matchStatus: "unknown" }),
+            UserOpportunity.find({ userId })
+              .sort({ updatedAt: -1 })
+              .limit(10)
+              .populate("opportunityId"),
+          ]);
+
+        const sampleDetails = samples.map((uo) => ({
+          opportunityId: (uo.opportunityId as any)?._id,
+          title: (uo.opportunityId as any)?.title,
+          matchStatus: uo.matchStatus,
+          matched: uo.matched,
+          reasons: uo.reasons,
+          missingFields: uo.missingFields,
+          confidence: uo.confidence,
+        }));
+
+        res.json({
+          profile: profile.toObject(),
+          counts: {
+            matched: matchedCount,
+            not_matched: notMatchedCount,
+            unknown: unknownCount,
+          },
+          samples: sampleDetails,
+        });
+      } catch (error: any) {
+        console.error("Debug matching error:", error);
+        res.status(500).json({ error: error.message });
       }
-
-      const now = new Date();
-      const [matchedCount, notMatchedCount, unknownCount, samples] =
-        await Promise.all([
-          UserOpportunity.countDocuments({ userId, matchStatus: "matched" }),
-          UserOpportunity.countDocuments({ userId, matchStatus: "not_matched" }),
-          UserOpportunity.countDocuments({ userId, matchStatus: "unknown" }),
-          UserOpportunity.find({ userId })
-            .sort({ updatedAt: -1 })
-            .limit(10)
-            .populate("opportunityId"),
-        ]);
-
-      const sampleDetails = samples.map((uo) => ({
-        opportunityId: (uo.opportunityId as any)?._id,
-        title: (uo.opportunityId as any)?.title,
-        matchStatus: uo.matchStatus,
-        matched: uo.matched,
-        reasons: uo.reasons,
-        missingFields: uo.missingFields,
-        confidence: uo.confidence,
-      }));
-
-      res.json({
-        profile: profile.toObject(),
-        counts: {
-          matched: matchedCount,
-          not_matched: notMatchedCount,
-          unknown: unknownCount,
-        },
-        samples: sampleDetails,
-      });
-    } catch (error: any) {
-      console.error("Debug matching error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
+    },
+  );
 }
 
 // Auth routes
@@ -191,40 +224,44 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
 app.get("/api/feed", optionalAuthMiddleware, opportunitiesController.getFeed); // Feed with optional admin filters
 app.get("/api/opportunities/trending", opportunitiesController.getTrending);
-app.get("/api/opportunities/:id", validateObjectId, opportunitiesController.getOpportunityById);
+app.get(
+  "/api/opportunities/:id",
+  validateObjectId,
+  opportunitiesController.getOpportunityById,
+);
 app.get("/api/stats", statsController.getStats);
 
 // User opportunities routes
 app.get(
   "/api/me/opportunities/matched",
   authMiddleware,
-  opportunitiesController.getMatchedOpportunities
+  opportunitiesController.getMatchedOpportunities,
 );
 app.get(
   "/api/me/opportunities/for-you",
   authMiddleware,
-  opportunitiesController.getForYouOpportunities
+  opportunitiesController.getForYouOpportunities,
 );
 app.get(
   "/api/me/opportunities/today",
   authMiddleware,
-  opportunitiesController.getTodayOpportunities
+  opportunitiesController.getTodayOpportunities,
 );
 app.get(
   "/api/me/opportunities/new-since-last-visit",
   authMiddleware,
-  opportunitiesController.getNewSinceLastVisit
+  opportunitiesController.getNewSinceLastVisit,
 );
 app.get(
   "/api/me/opportunities/expiring-soon",
   authMiddleware,
-  opportunitiesController.getExpiringSoon
+  opportunitiesController.getExpiringSoon,
 );
 app.get(
   "/api/opportunities/:id/match-reasons",
   authMiddleware,
   validateObjectId,
-  opportunitiesController.getMatchReasons
+  opportunitiesController.getMatchReasons,
 );
 
 // Bookmarks routes
@@ -233,13 +270,13 @@ app.post(
   "/api/me/bookmarks/:opportunityId",
   authMiddleware,
   validateObjectIdParam("opportunityId"),
-  bookmarksController.addBookmark
+  bookmarksController.addBookmark,
 );
 app.delete(
   "/api/me/bookmarks/:opportunityId",
   authMiddleware,
   validateObjectIdParam("opportunityId"),
-  bookmarksController.removeBookmark
+  bookmarksController.removeBookmark,
 );
 
 // Events route
@@ -262,107 +299,107 @@ app.get(
   "/api/admin/opportunities",
   authMiddleware,
   adminMiddleware,
-  adminController.getAdminOpportunities
+  adminController.getAdminOpportunities,
 );
 app.get(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.getAdminOpportunityById
+  adminController.getAdminOpportunityById,
 );
 app.post(
   "/api/admin/opportunities",
   authMiddleware,
   adminMiddleware,
-  adminController.createOpportunity
+  adminController.createOpportunity,
 );
 app.put(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.updateOpportunity
+  adminController.updateOpportunity,
 );
 app.post(
   "/api/admin/opportunities/:id/publish",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.publishOpportunity
+  adminController.publishOpportunity,
 );
 app.post(
   "/api/admin/opportunities/:id/unpublish",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.unpublishOpportunity
+  adminController.unpublishOpportunity,
 );
 app.post(
   "/api/admin/opportunities/:id/archive",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.archiveOpportunity
+  adminController.archiveOpportunity,
 );
 app.delete(
   "/api/admin/opportunities/:id",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.deleteOpportunity
+  adminController.deleteOpportunity,
 );
 app.post(
   "/api/admin/opportunities/:id/restore",
   authMiddleware,
   adminMiddleware,
   validateObjectId,
-  adminController.restoreOpportunity
+  adminController.restoreOpportunity,
 );
 
 app.get(
   "/api/admin/raw-items",
   authMiddleware,
   adminMiddleware,
-  adminController.getRawItems
+  adminController.getRawItems,
 );
 app.get(
   "/api/admin/draft-queue",
   authMiddleware,
   adminMiddleware,
-  adminController.getDraftQueue
+  adminController.getDraftQueue,
 );
 
 app.get(
   "/api/admin/metrics/overview",
   authMiddleware,
   adminMiddleware,
-  adminController.getOverviewMetrics
+  adminController.getOverviewMetrics,
 );
 app.get(
   "/api/admin/metrics/timeseries",
   authMiddleware,
   adminMiddleware,
-  adminController.getTimeseriesMetrics
+  adminController.getTimeseriesMetrics,
 );
 app.get(
   "/api/admin/metrics/top-routes",
   authMiddleware,
   adminMiddleware,
-  adminController.getTopRoutes
+  adminController.getTopRoutes,
 );
 app.get(
   "/api/admin/metrics/top-opportunities",
   authMiddleware,
   adminMiddleware,
-  adminController.getTopOpportunities
+  adminController.getTopOpportunities,
 );
 
 app.get(
   "/api/admin/audit",
   authMiddleware,
   adminMiddleware,
-  adminController.getAuditLog
+  adminController.getAuditLog,
 );
 
 // Admin Actions - Manual Triggers
@@ -370,19 +407,19 @@ app.post(
   "/api/admin/actions/ingest",
   authMiddleware,
   adminMiddleware,
-  adminController.triggerIngestion
+  adminController.triggerIngestion,
 );
 app.post(
   "/api/admin/actions/archive-expired",
   authMiddleware,
   adminMiddleware,
-  adminController.archiveExpired
+  adminController.archiveExpired,
 );
 app.post(
   "/api/admin/actions/reset-bad-data",
   authMiddleware,
   adminMiddleware,
-  adminController.resetBadData
+  adminController.resetBadData,
 );
 
 // Contact Management
@@ -390,13 +427,13 @@ app.get(
   "/api/admin/contact",
   authMiddleware,
   adminMiddleware,
-  adminController.getContactSubmissions
+  adminController.getContactSubmissions,
 );
 app.post(
   "/api/admin/contact/:id/reply",
   authMiddleware,
   adminMiddleware,
-  adminController.replyToContact
+  adminController.replyToContact,
 );
 
 // Sentry error handler must be before any other error middleware

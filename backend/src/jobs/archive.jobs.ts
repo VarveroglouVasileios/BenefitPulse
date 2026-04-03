@@ -1,6 +1,7 @@
 import { Job } from "bullmq";
 import { Opportunity } from "../models/opportunity.model";
 import { RawItem } from "../models/rawItem.model";
+import { searchDiavgeia, crossReferenceAsepWithDiavgeia } from "../modules/ingestion/diavgeia";
 import { cleanAndValidate, CleanerInput } from "../modules/ingestion/cleaner";
 import axios from "axios";
 import * as cheerio from "cheerio";
@@ -129,6 +130,77 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     checkedCount++;
     let shouldArchive = false;
     let archiveReason = "";
+
+    // --- NEW: Diavgeia Cross-referencing ---
+    try {
+      let diavgeiaMatch = null;
+      const titleLower = (opp.title || "").toLowerCase();
+      
+      // Attempt 1: ASEP specific match
+      if (titleLower.includes("ασεπ") || titleLower.includes("asep") || opp.source?.toLowerCase().includes("ασεπ")) {
+        diavgeiaMatch = await crossReferenceAsepWithDiavgeia(opp.title);
+      }
+      
+      // Attempt 2: General match if no ASEP match or not ASEP
+      if (!diavgeiaMatch && opp.title) {
+        // Try searching Diavgeia with the first 40 chars to find related decisions
+        const searchTitle = opp.title.substring(0, 40).replace(/"/g, '');
+        diavgeiaMatch = await searchDiavgeia(`subject:"${searchTitle}"`);
+      }
+
+      // If we found a Diavgeia match, re-run cleaning/extraction to get updated dates
+      if (diavgeiaMatch && diavgeiaMatch.text) {
+        const nowIso = now.toISOString();
+        const cleanerInput: CleanerInput = {
+          nowIso: nowIso,
+          source: opp.source,
+          sourceUrl: opp.officialUrl,
+          itemUrl: diavgeiaMatch.url, // Diavgeia URL
+          rawTitle: opp.title,
+          rawContent: diavgeiaMatch.text,
+          rawFetchedAtIso: nowIso,
+        };
+
+        const diavgeiaCleaned = cleanAndValidate(cleanerInput);
+        
+        let datesUpdated = false;
+        
+        const newDeadlineAt = diavgeiaCleaned.deadlineAt ? new Date(diavgeiaCleaned.deadlineAt) : null;
+        const newAppEndAt = diavgeiaCleaned.applicationEndAt ? new Date(diavgeiaCleaned.applicationEndAt) : null;
+        const newAppStartAt = diavgeiaCleaned.applicationStartAt ? new Date(diavgeiaCleaned.applicationStartAt) : null;
+
+        // Update dates if Diavgeia provided new ones
+        if (newDeadlineAt && (!opp.deadlineAt || newDeadlineAt.getTime() !== opp.deadlineAt.getTime())) {
+          opp.deadlineAt = newDeadlineAt;
+          datesUpdated = true;
+        }
+        if (newAppEndAt && (!opp.applicationEndAt || newAppEndAt.getTime() !== opp.applicationEndAt.getTime())) {
+          opp.applicationEndAt = newAppEndAt;
+          datesUpdated = true;
+        }
+        if (newAppStartAt && (!opp.applicationStartAt || newAppStartAt.getTime() !== opp.applicationStartAt.getTime())) {
+          opp.applicationStartAt = newAppStartAt;
+          datesUpdated = true;
+        }
+        
+        if (datesUpdated) {
+          await Opportunity.updateOne(
+            { _id: opp._id },
+            { 
+              $set: { 
+                deadlineAt: opp.deadlineAt,
+                applicationEndAt: opp.applicationEndAt,
+                applicationStartAt: opp.applicationStartAt
+              } 
+            }
+          );
+          console.log(`   🔄 Updated dates from Diavgeia for: ${truncateOneLine(opp.title || "", 50)}`);
+        }
+      }
+    } catch (err) {
+      console.error(`⚠️ Error cross-referencing Diavgeia for ${opp._id}:`, err instanceof Error ? err.message : err);
+    }
+    // --- END Diavgeia Cross-referencing ---
 
     // Check 1: deadlineAt or applicationEndAt < today
     if (

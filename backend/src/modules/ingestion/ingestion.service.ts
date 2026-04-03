@@ -2025,6 +2025,47 @@ export class IngestionService {
 
         const cleaned = cleanAndValidate(cleanerInput);
 
+        // --- NEW: Diavgeia Cross-referencing during Ingestion ---
+        if (cleaned.status !== "rejected") {
+          try {
+            let diavgeiaMatch = null;
+            const titleLower = (item.title || "").toLowerCase();
+            
+            // Attempt 1: ASEP specific match
+            if (titleLower.includes("ασεπ") || titleLower.includes("asep") || source.name?.toLowerCase().includes("ασεπ")) {
+              diavgeiaMatch = await crossReferenceAsepWithDiavgeia(item.title);
+            }
+            
+            // Attempt 2: General match if title is specific enough
+            if (!diavgeiaMatch && item.title && item.title.length > 20) {
+              const searchTitle = item.title.substring(0, 50).replace(/"/g, '');
+              diavgeiaMatch = await searchDiavgeia(`subject:"${searchTitle}"`);
+            }
+
+            if (diavgeiaMatch && diavgeiaMatch.text) {
+              console.log(`   🏛️ Diavgeia Match found during ingestion: ${diavgeiaMatch.url}`);
+              // Append Diavgeia content to raw content for better AI extraction later
+              item.content = `${item.content}\n\n[OFFICIAL DOCUMENT FROM DIAVGEIA]:\n${diavgeiaMatch.text}`;
+              
+              // Re-run cleaner with enriched content to pick up Diavgeia dates
+              const enrichedInput = { ...cleanerInput, rawContent: item.content };
+              const enrichedCleaned = cleanAndValidate(enrichedInput);
+              
+              // Merge dates if found
+              if (enrichedCleaned.deadlineAt) cleaned.deadlineAt = enrichedCleaned.deadlineAt;
+              if (enrichedCleaned.applicationEndAt) cleaned.applicationEndAt = enrichedCleaned.applicationEndAt;
+              if (enrichedCleaned.applicationStartAt) cleaned.applicationStartAt = enrichedCleaned.applicationStartAt;
+              
+              // Add Diavgeia link to metadata
+              if (!item.metadata) item.metadata = {};
+              item.metadata.diavgeiaUrl = diavgeiaMatch.url;
+            }
+          } catch (diavgeiaErr) {
+            console.error(`   ⚠️ Diavgeia cross-ref error:`, diavgeiaErr instanceof Error ? diavgeiaErr.message : diavgeiaErr);
+          }
+        }
+        // --- END Diavgeia Cross-referencing ---
+
         // Determine current source priority (1=API, 2=RSS, 3=HTML)
         const currentSourcePriority = source.type === "api" ? 1 : source.type === "rss" ? 2 : 3;
 
