@@ -27,8 +27,9 @@ WORKDIR /app/backend
 
 ENV NODE_ENV=production
 
-COPY --from=builder /app/backend/package*.json ./
-COPY --from=builder /app/backend/node_modules ./node_modules
+# Εγκατάσταση production deps στο runtime stage για να αποφύγουμε μεγάλο/costly COPY node_modules layer
+COPY backend/package*.json ./
+RUN npm install --omit=dev --no-audit --no-fund
 COPY --from=builder /app/backend/dist ./dist
 
 EXPOSE 3001
