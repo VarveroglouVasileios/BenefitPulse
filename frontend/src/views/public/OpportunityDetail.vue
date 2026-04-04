@@ -1,5 +1,11 @@
 <template>
   <div class="opportunity-detail">
+    <div class="nav-actions">
+      <button @click="router.back()" class="back-btn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Πίσω
+      </button>
+    </div>
     <div v-if="loading" class="loading">Φόρτωση...</div>
     <div v-else-if="opportunity">
       <div class="header">
@@ -181,6 +187,30 @@ useHead({
   padding: 1rem;
   min-width: 0;
   overflow-x: hidden;
+}
+
+.nav-actions {
+  margin-bottom: 1.5rem;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
 }
 
 @media (min-width: 640px) {

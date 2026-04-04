@@ -7,8 +7,8 @@ WORKDIR /app
 COPY backend/package*.json ./backend/
 
 WORKDIR /app/backend
-# --include=dev: το npm παραλείπει devDependencies όταν NODE_ENV=production (π.χ. Coolify build-time env)
-RUN npm ci --include=dev
+# install (όχι ci): το package-lock.json δεν είναι στο git (.gitignore)· --include=dev για Coolify NODE_ENV=production στο build
+RUN npm install --include=dev
 
 COPY backend/ .
 
