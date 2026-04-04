@@ -78,6 +78,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue';
+import { useNotifications } from '../composables/useNotifications';
 
 const props = defineProps<{
   show: boolean;
@@ -88,6 +89,7 @@ const props = defineProps<{
 
 const emit = defineEmits(['close']);
 
+const { showToast } = useNotifications();
 const copied = ref(false);
 const canNativeShare = ref(false);
 
@@ -125,11 +127,13 @@ async function copyLink() {
   try {
     await navigator.clipboard.writeText(props.url);
     copied.value = true;
+    showToast("Το link αντιγράφηκε!", "success");
     setTimeout(() => {
       copied.value = false;
     }, 2000);
   } catch (err) {
     console.error('Failed to copy', err);
+    showToast("Αποτυχία αντιγραφής", "error");
   }
 }
 

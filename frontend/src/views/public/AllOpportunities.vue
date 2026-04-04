@@ -39,19 +39,22 @@
       </div>
 
       <div v-if="opportunities.length === 0" class="empty-state">
-        <div class="empty-icon" aria-hidden="true">🔍</div>
+        <div class="empty-illustration">
+          <div class="search-pulse"></div>
+          <div class="empty-icon" aria-hidden="true">🔍</div>
+        </div>
         <h2 class="empty-title">Δεν βρέθηκαν αποτελέσματα</h2>
         <p class="empty-text">
           <template v-if="hasActiveFilters || activeTab !== 'all'">
-            Δοκίμασε να αλλάξεις την καρτέλα ή να αφαιρέσεις τα φίλτρα — έτσι θα εμφανιστούν περισσότερες ευκαιρίες.
+            Δεν βρήκαμε κάτι με αυτά τα φίλτρα. Δοκίμασε να αλλάξεις την καρτέλα ή να καθαρίσεις τα φίλτρα.
           </template>
-          <template v-else>Αυτή τη στιγμή δεν υπάρχουν δημοσιευμένες εγγραφές που να ταιριάζουν.</template>
+          <template v-else>Αυτή τη στιγμή δεν υπάρχουν δημοσιευμένες εγγραφές σε αυτή την κατηγορία.</template>
         </p>
         <div class="empty-actions">
           <button v-if="hasActiveFilters || activeTab !== 'all'" type="button" class="btn-reset" @click="clearFilters">
-            Επαναφορά φίλτρων
+            Καθαρισμός όλων των φίλτρων
           </button>
-          <router-link v-else to="/" class="btn-secondary-link">Αρχική σελίδα</router-link>
+          <router-link to="/trending" class="btn-secondary-link">Δείτε τα δημοφιλή</router-link>
         </div>
       </div>
       <div v-else class="opportunities-grid">
@@ -254,17 +257,42 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  padding: 3rem 1.5rem 4rem max(2rem, 6vw);
-  max-width: 28rem;
+  padding: 4rem 1.5rem;
+  max-width: 32rem;
   margin: 0 auto;
   color: var(--text-secondary);
 }
 
+.empty-illustration {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .empty-icon {
-  font-size: 2.75rem;
-  line-height: 1;
-  margin-bottom: 1rem;
-  filter: grayscale(0.2);
+  font-size: 3rem;
+  z-index: 2;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+}
+
+.search-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-color);
+  opacity: 0.1;
+  border-radius: 50%;
+  animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.3; }
+  50% { transform: scale(1.2); opacity: 0.1; }
+  100% { transform: scale(0.8); opacity: 0.3; }
 }
 
 .empty-title {

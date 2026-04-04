@@ -183,9 +183,21 @@ async function fetchWithRetry(
   contentLength?: number;
 }> {
   let lastError: any;
+  const enhancedOptions = {
+    ...options,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'el-GR,el;q=0.9,en-US;q=0.8,en;q=0.7',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      ...(options.headers || {}),
+    }
+  };
+
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      return await fetchWithRedirects(url, options);
+      return await fetchWithRedirects(url, enhancedOptions);
     } catch (err: any) {
       lastError = err;
       const status = err.response?.status;
@@ -2047,14 +2059,23 @@ export class IngestionService {
               // Append Diavgeia content to raw content for better AI extraction later
               item.content = `${item.content}\n\n[OFFICIAL DOCUMENT FROM DIAVGEIA]:\n${diavgeiaMatch.text}`;
               
-              // Re-run cleaner with enriched content to pick up Diavgeia dates
+              // RE-RUN CLEANER: Enriched content ALWAYS overwrites previous dates
               const enrichedInput = { ...cleanerInput, rawContent: item.content };
               const enrichedCleaned = cleanAndValidate(enrichedInput);
               
-              // Merge dates if found
-              if (enrichedCleaned.deadlineAt) cleaned.deadlineAt = enrichedCleaned.deadlineAt;
+              // Force overwrite with Diavgeia findings (high authority)
+              if (enrichedCleaned.deadlineAt) {
+                cleaned.deadlineAt = enrichedCleaned.deadlineAt;
+                console.log(`   📅 Diavgeia OVERWRITE Deadline: ${cleaned.deadlineAt}`);
+              }
               if (enrichedCleaned.applicationEndAt) cleaned.applicationEndAt = enrichedCleaned.applicationEndAt;
               if (enrichedCleaned.applicationStartAt) cleaned.applicationStartAt = enrichedCleaned.applicationStartAt;
+              if (enrichedCleaned.startAt) cleaned.startAt = enrichedCleaned.startAt;
+              
+              // If enriched cleaner found a better applicationStatus, use it
+              if (enrichedCleaned.applicationStatus !== "unknown") {
+                cleaned.applicationStatus = enrichedCleaned.applicationStatus;
+              }
               
               // Add Diavgeia link to metadata
               if (!item.metadata) item.metadata = {};
@@ -2091,13 +2112,18 @@ export class IngestionService {
            }
         }
 
-        // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status, try AI
+        // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status OR we have Diavgeia authority, try AI
         // OPTIMIZATION: Skip AI if status is rejected (e.g. service_info) to save tokens/time
         // Check for Groq API key
         const hasAiKey = !!config.groq.apiKey;
+        const hasDiavgeiaAuthority = item.content.includes("[OFFICIAL DOCUMENT FROM DIAVGEIA]");
         
-        if (cleaned.applicationStatus === "unknown" && cleaned.status !== "rejected" && hasAiKey) {
-          console.log("   🤖 AI Status Check: Cleaner returned 'unknown', calling AI (Groq)...");
+        if ((cleaned.applicationStatus === "unknown" || hasDiavgeiaAuthority) && cleaned.status !== "rejected" && hasAiKey) {
+          if (hasDiavgeiaAuthority) {
+            console.log("   🤖 AI Authority Check: Diavgeia content present, forcing AI verification of dates...");
+          } else {
+            console.log("   🤖 AI Status Check: Cleaner returned 'unknown', calling AI (Groq)...");
+          }
           
           // Throttle AI requests to reduce 429s on shared/free limits.
           console.log(`   ⏳ Throttling AI status request (${AI_THROTTLE_DELAY_MS}ms)...`);
@@ -2124,13 +2150,14 @@ export class IngestionService {
               cleaned.applicationStatus = aiStatus.status;
               
               // Also extract dates if AI found them
-              if (aiStatus.deadlineAt && !cleaned.deadlineAt) {
+              // AUTHORITY RULE: If we have Diavgeia content, AI dates ALWAYS overwrite cleaner dates
+              if (aiStatus.deadlineAt && (hasDiavgeiaAuthority || !cleaned.deadlineAt)) {
                 cleaned.deadlineAt = aiStatus.deadlineAt;
-                console.log(`   📅 AI Date: deadline=${aiStatus.deadlineAt}`);
+                console.log(`   📅 AI AUTHORITATIVE Date: deadline=${aiStatus.deadlineAt}`);
               }
-              if (aiStatus.startAt && !cleaned.applicationStartAt) {
+              if (aiStatus.startAt && (hasDiavgeiaAuthority || !cleaned.applicationStartAt)) {
                 cleaned.applicationStartAt = aiStatus.startAt;
-                console.log(`   📅 AI Date: start=${aiStatus.startAt}`);
+                console.log(`   📅 AI AUTHORITATIVE Date: start=${aiStatus.startAt}`);
               }
               
               // Update status if it was draft due to unknown applicationStatus

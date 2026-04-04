@@ -53,17 +53,27 @@ export class ProgressTracker {
     const filled = total > 0 ? Math.round((current / total) * barWidth) : 0;
     const empty = barWidth - filled;
 
-    // ANSI Colors
-    const BLUE = "\x1b[34m";
-    const GREEN = "\x1b[32m";
-    const GRAY = "\x1b[90m";
-    const BOLD = "\x1b[1m";
-    const RESET = "\x1b[0m";
+    const isTTY = process.stdout.isTTY;
 
-    const bar = `${GREEN}${"█".repeat(filled)}${GRAY}${"░".repeat(empty)}${RESET}`;
+    // ANSI Colors - only if TTY
+    const BLUE = isTTY ? "\x1b[34m" : "";
+    const GREEN = isTTY ? "\x1b[32m" : "";
+    const GRAY = isTTY ? "\x1b[90m" : "";
+    const BOLD = isTTY ? "\x1b[1m" : "";
+    const RESET = isTTY ? "\x1b[0m" : "";
+
+    const bar = isTTY 
+      ? `${GREEN}${"█".repeat(filled)}${GRAY}${"░".repeat(empty)}${RESET}`
+      : `${"█".repeat(filled)}${"░".repeat(empty)}`;
+      
     const counter = `${BOLD}(${current}/${total})${RESET}`;
     
     const line = `  ${BOLD}${label}${RESET} ${bar} ${BOLD}${percent}%${RESET} ${counter}${info ? ` | ${info}` : ""}`;
+
+    if (!isTTY) {
+      console.log(line);
+      return;
+    }
 
     // STICKY LOGIC: Save cursor, go to bottom, draw, restore cursor
     // 1. Save cursor position
@@ -185,7 +195,11 @@ export class ProgressTracker {
       const elapsed = this.getElapsed();
       const counter = `(${this.current}/${this.total})`;
 
-      let line = `  ${bar} ${counter} | ⏱️ ${elapsed} | ETA: ${eta}`;
+      const isTTY = process.stdout.isTTY;
+      const YELLOW = isTTY ? "\x1b[33m" : "";
+      const RESET = isTTY ? "\x1b[0m" : "";
+
+      let line = `  ${bar} ${counter} | ⏱️ ${elapsed} | ETA: ${YELLOW}${eta}${RESET}`;
       if (this.showItems && itemLabel) {
         // Truncate item label to keep logs readable
         const maxLabelLen = 45;
@@ -217,34 +231,51 @@ export class ProgressTracker {
   finish(extraStats?: Record<string, string | number>): void {
     const totalMs = Date.now() - this.startTime;
     const bar = this.buildBar(this.total, this.total);
+    const isTTY = process.stdout.isTTY;
 
-    console.log(
-      `\n\x1b[32m${"═".repeat(70)}\x1b[0m`
-    );
-    console.log(
-      `  \x1b[32m\x1b[1m✅ ${this.label.toUpperCase()} — COMPLETED SUCCESSFULY\x1b[0m`
-    );
-    console.log(
-      `  ${bar} (${this.total}/${this.total})`
-    );
-    console.log(
-      `  \x1b[1m⏱️  Total duration:\x1b[0m ${ProgressTracker.formatDuration(totalMs)}`
-    );
+    if (isTTY) {
+      console.log(`\n\x1b[32m${"═".repeat(70)}\x1b[0m`);
+      console.log(`  \x1b[32m\x1b[1m✅ ${this.label.toUpperCase()} — COMPLETED SUCCESSFULY\x1b[0m`);
+    } else {
+      console.log(`\n${"═".repeat(70)}`);
+      console.log(`  ✅ ${this.label.toUpperCase()} — COMPLETED SUCCESSFULY`);
+    }
+
+    console.log(`  ${bar} (${this.total}/${this.total})`);
+
+    if (isTTY) {
+      console.log(`  \x1b[1m⏱️  Total duration:\x1b[0m ${ProgressTracker.formatDuration(totalMs)}`);
+    } else {
+      console.log(`  ⏱️  Total duration: ${ProgressTracker.formatDuration(totalMs)}`);
+    }
+
     if (this.total > 0) {
       const avgMs = totalMs / this.total;
-      console.log(
-        `  \x1b[1m📊 Avg per item:\x1b[0m ${ProgressTracker.formatDuration(avgMs)}`
-      );
-    }
-    if (extraStats) {
-      for (const [key, value] of Object.entries(extraStats)) {
-        console.log(`  \x1b[1m📊 ${key}:\x1b[0m ${value}`);
+      if (isTTY) {
+        console.log(`  \x1b[1m📊 Avg per item:\x1b[0m ${ProgressTracker.formatDuration(avgMs)}`);
+      } else {
+        console.log(`  📊 Avg per item: ${ProgressTracker.formatDuration(avgMs)}`);
       }
     }
-    console.log(
-      `  \x1b[1m🏁 Finished at:\x1b[0m ${new Date().toLocaleString("el-GR", { hour12: false })}`
-    );
-    console.log(`\x1b[32m${"═".repeat(70)}\x1b[0m\n`);
+
+    if (extraStats) {
+      for (const [key, value] of Object.entries(extraStats)) {
+        if (isTTY) {
+          console.log(`  \x1b[1m📊 ${key}:\x1b[0m ${value}`);
+        } else {
+          console.log(`  📊 ${key}: ${value}`);
+        }
+      }
+    }
+
+    const finishedAt = new Date().toLocaleString("el-GR", { hour12: false });
+    if (isTTY) {
+      console.log(`  \x1b[1m🏁 Finished at:\x1b[0m ${finishedAt}`);
+      console.log(`\x1b[32m${"═".repeat(70)}\x1b[0m\n`);
+    } else {
+      console.log(`  🏁 Finished at: ${finishedAt}`);
+      console.log(`${"═".repeat(70)}\n`);
+    }
   }
 }
 
@@ -252,9 +283,16 @@ export class ProgressTracker {
  * Print a clear pipeline phase header
  */
 export function logPhaseStart(phase: string, icon: string = "📦"): void {
-  console.log(`\n${"━".repeat(70)}`);
-  console.log(`  ${icon} PHASE: ${phase}`);
-  console.log(`${"━".repeat(70)}`);
+  const isTTY = process.stdout.isTTY;
+  if (isTTY) {
+    console.log(`\n\x1b[34m${"━".repeat(70)}\x1b[0m`);
+    console.log(`  ${icon} \x1b[1mPHASE: ${phase}\x1b[0m`);
+    console.log(`\x1b[34m${"━".repeat(70)}\x1b[0m`);
+  } else {
+    console.log(`\n${"━".repeat(70)}`);
+    console.log(`  ${icon} PHASE: ${phase}`);
+    console.log(`${"━".repeat(70)}`);
+  }
 }
 
 /**

@@ -7,11 +7,24 @@
     <Footer />
     <Chatbot />
     <CookieBanner />
+    <Toast />
+    
+    <!-- Back to Top Button -->
+    <Transition name="fade">
+      <button 
+        v-if="showBackToTop" 
+        class="back-to-top"
+        @click="scrollToTopSmooth"
+        aria-label="Επιστροφή στην κορυφή"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+      </button>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, nextTick } from "vue";
+import { onMounted, watch, nextTick, ref, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useTracking } from "./composables/useTracking";
 import { useAuthStore } from "./stores/auth.store";
@@ -20,11 +33,22 @@ import NavBar from "./components/NavBar.vue";
 import Footer from "./components/Footer.vue";
 import Chatbot from "./components/Chatbot.vue";
 import CookieBanner from "./components/CookieBanner.vue";
+import Toast from "./components/Toast.vue";
 
 const { trackPageview } = useTracking();
 const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const router = useRouter();
+
+const showBackToTop = ref(false);
+
+function handleScroll() {
+  showBackToTop.value = window.scrollY > 400;
+}
+
+function scrollToTopSmooth() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 // Force scroll to top on mount and after route changes
 function scrollToTop() {
@@ -35,6 +59,7 @@ function scrollToTop() {
 }
 
 onMounted(async () => {
+  window.addEventListener('scroll', handleScroll);
   // Immediately scroll to top (before any async operations)
   scrollToTop();
   
@@ -62,6 +87,10 @@ onMounted(async () => {
   setTimeout(() => {
     scrollToTop();
   }, 100);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
 });
 
 // Watch for route changes and scroll to top
@@ -167,5 +196,48 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   background-color: var(--bg-primary);
+}
+
+.back-to-top {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: var(--primary-color);
+  color: white;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  z-index: 99;
+  transition: transform 0.2s, background-color 0.2s;
+}
+
+.back-to-top:hover {
+  background: var(--accent-hover);
+  transform: translateY(-3px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+@media (max-width: 640px) {
+  .back-to-top {
+    bottom: 1rem;
+    right: 1rem;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 }
 </style>

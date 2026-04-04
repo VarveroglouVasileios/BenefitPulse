@@ -8,10 +8,13 @@ dist/
 build/
 *.tsbuildinfo
 skip-reasons.json
-# Environment
+# Environment (never commit secrets — use .env.example templates only)
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
+backend/.env.development
 
 # IDE
 .vscode/

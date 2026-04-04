@@ -203,13 +203,14 @@ export async function processSourceJob(job: Job): Promise<void> {
     }
   } catch { /* ignore redis errors */ }
 
-  // Color constants
-  const BLUE = "\x1b[34m";
-  const GREEN = "\x1b[32m";
-  const YELLOW = "\x1b[33m";
-  const RED = "\x1b[31m";
-  const RESET = "\x1b[0m";
-  const BOLD = "\x1b[1m";
+  const isTTY = process.stdout.isTTY;
+  // Color constants - only use if TTY
+  const BLUE = isTTY ? "\x1b[34m" : "";
+  const GREEN = isTTY ? "\x1b[32m" : "";
+  const YELLOW = isTTY ? "\x1b[33m" : "";
+  const RED = isTTY ? "\x1b[31m" : "";
+  const RESET = isTTY ? "\x1b[0m" : "";
+  const BOLD = isTTY ? "\x1b[1m" : "";
 
   // Build a top-level progress bar for overall pipeline
   const overallPct = Math.round((sourceIndex / totalSources) * 100);

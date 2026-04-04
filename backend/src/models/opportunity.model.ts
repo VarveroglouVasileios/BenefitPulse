@@ -8,7 +8,7 @@ export interface IOpportunity extends Document {
   summary: string;
   officialUrl: string;
   source: string;
-  sourceType?: string; // 'api', 'rss', 'html_listing'
+  sourceType?: "api" | "rss" | "html_listing" | "manual" | "single_page" | "html_catalog"; // 'api', 'rss', 'html_listing', 'manual', 'single_page', 'html_catalog'
   sourcePriority?: number; // 1 (API), 2 (RSS), 3 (HTML)
   publishedAt: Date;
   startAt?: Date;
@@ -88,7 +88,7 @@ const OpportunitySchema = new Schema<IOpportunity>(
     },
     sourceType: {
       type: String,
-      enum: ["api", "rss", "html_listing", "manual"],
+      enum: ["api", "rss", "html_listing", "manual", "single_page", "html_catalog"],
     },
     sourcePriority: {
       type: Number,

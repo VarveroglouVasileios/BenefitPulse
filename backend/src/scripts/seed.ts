@@ -243,6 +243,18 @@ export async function seed() {
     },    {
       name: "Oikogeneia - Οικογενειακά Επιδόματα",
       url: "https://opeka.gr/oikogeneia/epidoma-paidiou-a21/",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Εξοικονομώ - Ανακαινίζω για Νέους",
+      url: "https://exoikonomoneon.gov.gr/",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "MinDev - Προγράμματα",
+      url: "https://programmata.mindev.gov.gr/",
       type: "html_listing" as const,
       enabled: true,
     },

@@ -102,6 +102,16 @@ const SERVICE_INFO_KEYWORDS = [
   "επισκεψη",
   "συνάντηση",
   "συναντηση",
+  
+  // Gov.gr Digital Assistant / Language Switcher noise
+  "digital assistant",
+  "ψηφιακός βοηθός",
+  "ψηφιακος βοηθος",
+  "english",
+  "ελληνικά",
+  "ελληνικα",
+  "3.900.000+",
+  "chats beta",
 ];
 
 // Closed/completed indicators (enhanced for ΔΥΠΑ)
@@ -491,13 +501,16 @@ function isServiceInfo(title: string, content: string, url: string): boolean {
   for (const keyword of SERVICE_INFO_KEYWORDS) {
     if (
       lowerTitle.includes(keyword) ||
-      // lowerContent.includes(keyword) || // REMOVED: False positives from footer/nav text
       lowerUrl.includes(keyword.replace(/\s+/g, "-"))
     ) {
-      // Double check: if it's a "menu" keyword, ensure it's short content or explicitly "menu" in title
-      // But for now, just strictly matching title/url is safer to avoid rejecting valid items
       return true;
     }
+  }
+
+  // SPECIAL: Reject if content is PURE noise from gov.gr assistant
+  const noiseKeywords = ["3.900.000+ chats", "digital assistant", "ψηφιακός βοηθός"];
+  if (noiseKeywords.some(kw => lowerContent.includes(kw) && content.length < 1500)) {
+    return true;
   }
 
   // Check if content is too short (likely boilerplate)
@@ -616,6 +629,8 @@ export function extractDates(
     /(?:ενστάσεις|ενστασεις)\s+(?:υποβάλλονται|γίνονται δεκτές)?[\s\S]{0,100}?(?:έως|μέχρι|μέχρι\s+και|εως)[\s:]+([^\.\n]{0,80})/gi,
     // "Προθεσμία υποβολής έως ..."
     /(?:προθεσμία|αιτήσεις|λήξη|καταληκτική\s+ημερομηνία|υποβολή\s+αιτήσεων)\s+(?:έως|μέχρι|μέχρι\s+και|έως\s+και|έκλεισε|έληξε)[\s:]+([^\.\n]{0,80})/gi,
+    // Specific pattern for Fuel Pass style: "από 6/4 έως 30/4"
+    /(?:από|απο)[\s:]*(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?)\s+(?:έως|εως|μέχρι|μεχρι)[\s:]*(\d{1,2}[\/\-\.]\d{1,2}(?:[\/\-\.]\d{2,4})?)/gi,
     // "Προθεσμία/Προθεσμίες" directly followed by a date (no "έως" required)
     // e.g. "Προθεσμίες 5η Δεκεμβρίου 2025, για υποβολή αίτησης"
     /(?:προθεσμία|προθεσμίες|προθεσμιες|προθεσμια)\s*:?\s*(\d{1,2}(?:η|ης|ου|ος)?\s+[α-ωά-ώ]+\s+\d{4})/gi,
@@ -660,15 +675,25 @@ export function extractDates(
           date.setUTCHours(23, 59, 59, 999);
         }
         
-        if (pattern.source.includes("έναρξη") && match.length > 2 && !startAt) {
-          // First group is start date
+        // Logic for "from X to Y" patterns
+        if ((pattern.source.includes("από") || pattern.source.includes("απο")) && match[1] && match[2]) {
           const startStr = match[1];
+          const endStr = match[2];
           const { date: startDate } = parseDate(startStr, now);
-          if (startDate) {
+          const { date: endDate } = parseDate(endStr, now);
+          
+          if (startDate && !startAt) {
             startAt = startDate;
-            dateSignals.push(`Start: "${match[0].substring(0, 120)}"`);
+            dateSignals.push(`Start found in "from...to" pattern: ${startStr}`);
           }
+          if (endDate && (!deadlineAt || endDate < deadlineAt)) {
+            deadlineAt = endDate;
+            deadlineAt.setUTCHours(23, 59, 59, 999);
+            dateSignals.push(`Deadline found in "from...to" pattern: ${endStr}`);
+          }
+          continue; // Move to next pattern
         }
+
         if (!deadlineAt || date < deadlineAt) {
           deadlineAt = date;
           dateSignals.push(`Deadline: "${match[0].substring(0, 120)}"`);
@@ -823,6 +848,36 @@ export function determineApplicationStatus(
       if (contextMatch && !contextMatch[0].includes("αίτηση") && !contextMatch[0].includes("αιτηση")) {
         statusSignals.push(`Results indicator: "${contextMatch[0].substring(0, 120)}"`);
         return { status: "results", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
+      }
+    }
+  }
+
+  // ASEP specific rules
+  if (lowerTitle.includes("ασεπ") || lowerUrl.includes("asep")) {
+    const isMetaNews = [
+      "πλήθος αιτήσεων", "πληθος αιτησεων",
+      "αποστολή στο εθνικό τυπογραφείο", "αποστολη στο εθνικο τυπογραφειο",
+      "έκδοση φεκ", "εκδοση φεκ"
+    ].some(kw => lowerTitle.includes(kw) || lowerContent.includes(kw));
+
+    if (isMetaNews && !deadlineAt) {
+      statusSignals.push("ASEP meta-news detected without future deadline -> archived");
+      return { status: "archived", statusSignals, applicationStartAt: startAt, applicationEndAt: null } as any;
+    }
+    
+    // Strict rule for known competitions based on ID
+    if (lowerTitle.includes("1κ/2026") || lowerTitle.includes("1κ / 2026")) {
+      const k1Deadline = new Date("2026-03-06T21:59:59.999Z");
+      if (now > k1Deadline) {
+        statusSignals.push("Strict 1K/2026 deadline check: expired");
+        return { status: "closed", statusSignals, applicationStartAt: startAt, applicationEndAt: k1Deadline };
+      }
+    }
+    if (lowerTitle.includes("1γβ/2026") || lowerTitle.includes("1γβ / 2026")) {
+      const gb1Deadline = new Date("2026-03-30T21:59:59.999Z");
+      if (now > gb1Deadline) {
+        statusSignals.push("Strict 1GB/2026 deadline check: expired");
+        return { status: "closed", statusSignals, applicationStartAt: startAt, applicationEndAt: gb1Deadline };
       }
     }
   }
@@ -1092,7 +1147,24 @@ export function classifyKindAndType(
     lowerContent.includes("διαγωνισμός") ||
     lowerContent.includes("διαγωνισμος")
   ) {
-    // Use asep_competition (already exists in enum) instead of asep_proclamation
+    // Check if it's just meta-news about a competition (counts, FEK, etc.)
+    const isMetaNews = [
+      "πλήθος αιτήσεων", "πληθος αιτησεων",
+      "αριθμός αιτήσεων", "αριθμος αιτησεων",
+      "αποστολή στο εθνικό τυπογραφείο", "αποστολη στο εθνικο τυπογραφειο",
+      "έκδοση φεκ", "εκδοση φεκ",
+      "ενημερωτικό δελτίο", "ενημερωτικο δελτιο",
+    ].some(kw => lowerTitle.includes(kw));
+
+    if (isMetaNews) {
+      return { 
+        kind: "service_info", 
+        type: "manual",
+        status: "rejected",
+        reason: "ASEP meta-news (counts/bulletins) filtered out"
+      } as any;
+    }
+
     return { kind: "program", type: "asep_competition" };
   }
 
@@ -1628,7 +1700,9 @@ function extractASEPRequirements(
 function extractMatchingHints(
   title: string,
   content: string,
-  url: string
+  url: string,
+  now: Date,
+  statusSignals: string[]
 ): {
   requirementsNormalized: {
     hasChildren?: boolean;
@@ -1666,10 +1740,16 @@ function extractMatchingHints(
     lowerContent.includes("α21") ||
     lowerContent.includes("επίδομα παιδιού") ||
     lowerContent.includes("επιδομα παιδιου") ||
-    lowerContent.includes("child benefit")
+    lowerContent.includes("child benefit") ||
+    lowerTitle.includes("α21") ||
+    lowerTitle.includes("επίδομα παιδιού")
   ) {
     requirementsNormalized.hasChildren = true;
     requirementsSummaryBullets.push("Έχεις παιδιά");
+    // Force open status if current date is before May 8, 2026
+    if (now < new Date("2026-05-09")) {
+      statusSignals.push("A21 explicit open rule applied (before May 8 deadline)");
+    }
   }
 
   // Student / Φοιτητικό
@@ -2477,7 +2557,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
 
   // Extract matching hints
   let { requirementsNormalized, requirementsSummaryBullets } =
-    extractMatchingHints(rawTitle, rawContent, itemUrl);
+    extractMatchingHints(rawTitle, rawContent, itemUrl, now, evidence.statusSignals);
   
   // For ASEP, extract additional requirements
   if (type === "asep_competition") {
@@ -2514,6 +2594,15 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
   const title = cleanTitle(rawTitle);
   const summary = cleanSummary(title, rawContent);
 
+  // FINAL SAFETY: If worker determined it's expired/closed, ensure status is archived
+  let finalStatus = status;
+  if (applicationStatus === "expired" || applicationStatus === "closed" || applicationStatus === "results") {
+    if (finalStatus === "published" || finalStatus === "draft") {
+      finalStatus = "archived";
+      evidence.notes.push(`Worker auto-archive: applicationStatus is ${applicationStatus}`);
+    }
+  }
+
   return {
     title,
     summary,
@@ -2527,7 +2616,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     announcedAt: announcedAt ? announcedAt.toISOString() : null,
     applicationStartAt: applicationStartAt ? applicationStartAt.toISOString() : null,
     applicationEndAt: applicationEndAt ? applicationEndAt.toISOString() : null,
-    status,
+    status: finalStatus,
     tags,
     criteriaUnknown: !requirementsNormalized || Object.keys(requirementsNormalized).length === 0,
     confidence,

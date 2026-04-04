@@ -1,129 +1,99 @@
 <template>
-  <Teleport to="body">
-    <Transition name="toast">
-      <div v-if="show" class="toast-container" :class="type">
-        <div class="toast-content">
-          <span class="icon">{{ icon }}</span>
-          <p class="message">{{ message }}</p>
-        </div>
-        <button class="close-btn" @click="$emit('close')">OK</button>
+  <div class="toast-container">
+    <TransitionGroup name="toast">
+      <div
+        v-for="toast in toasts"
+        :key="toast.id"
+        class="toast"
+        :class="toast.type"
+        @click="removeToast(toast.id)"
+      >
+        <span class="icon">
+          <svg v-if="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          <svg v-else-if="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        </span>
+        <span class="message">{{ toast.message }}</span>
       </div>
-    </Transition>
-  </Teleport>
+    </TransitionGroup>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue';
+import { useNotifications } from "../composables/useNotifications";
 
-const props = defineProps<{
-  show: boolean;
-  message: string;
-  type?: 'success' | 'error' | 'info';
-  duration?: number;
-}>();
-
-const emit = defineEmits<{
-  (e: 'close'): void;
-}>();
-
-const icon = computed(() => {
-  switch (props.type) {
-    case 'success': return '✅';
-    case 'error': return '❌';
-    case 'info': return 'ℹ️';
-    default: return '📢';
-  }
-});
-
-watch(() => props.show, (newVal) => {
-  if (newVal) {
-    setTimeout(() => {
-      emit('close');
-    }, props.duration || 3000);
-  }
-});
+const { toasts, removeToast } = useNotifications();
 </script>
 
 <style scoped>
 .toast-container {
   position: fixed;
-  top: 20px;
+  bottom: 2rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1.25rem;
-  border-radius: 50px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  gap: 0.5rem;
   z-index: 9999;
-  min-width: 300px;
-  justify-content: space-between;
-  border: 1px solid rgba(0,0,0,0.05);
+  pointer-events: none;
 }
 
-.toast-container.success {
-  border-left: 4px solid var(--accent-primary, #4caf50);
-}
-.toast-container.error {
-  border-left: 4px solid #f44336;
-}
-
-.toast-content {
+.toast {
+  pointer-events: auto;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 280px;
+  max-width: 90vw;
+  cursor: pointer;
+}
+
+.toast.success {
+  border-left: 4px solid var(--success);
+}
+
+.toast.error {
+  border-left: 4px solid var(--error);
+}
+
+.toast.info {
+  border-left: 4px solid var(--primary-color);
 }
 
 .icon {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
+
+.success .icon { color: var(--success); }
+.error .icon { color: var(--error); }
+.info .icon { color: var(--primary-color); }
 
 .message {
-  margin: 0;
+  font-size: 0.9rem;
   font-weight: 500;
-  color: #333;
-  font-size: 0.95rem;
-}
-
-.close-btn {
-  background: var(--accent-primary, #2563eb);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.close-btn:hover {
-  opacity: 0.9;
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .toast-container {
-    background: rgba(30, 30, 35, 0.95);
-    border: 1px solid rgba(255,255,255,0.1);
-  }
-  .message {
-    color: #e2e2e2;
-  }
+  color: var(--text-primary);
 }
 
 /* Animations */
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.3s ease;
 }
 
-.toast-enter-from,
+.toast-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
 .toast-leave-to {
   opacity: 0;
-  transform: translate(-50%, -20px);
+  transform: scale(0.95);
 }
 </style>

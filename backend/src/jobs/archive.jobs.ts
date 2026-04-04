@@ -6,6 +6,7 @@ import { cleanAndValidate, CleanerInput } from "../modules/ingestion/cleaner";
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { ProgressTracker, logPhaseStart } from "../utils/progress";
+import { invalidateCache } from "../utils/cache";
 
 export function truncateOneLine(s: string, maxLen: number): string {
   const t = (s || "").replace(/\s+/g, " ").trim();
@@ -219,18 +220,20 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       archiveReason = `deadline_passed | ${parts.join(", ")}`;
     }
 
-    // Check 2: ASEP results older than 3 weeks should auto-archive
+    // Check 2: ASEP items (news/results) older than 3 weeks should auto-archive
     if (!shouldArchive) {
       const isAsepSource = opp.source?.toLowerCase().includes("ασεπ") || 
                            opp.source?.toLowerCase().includes("asep");
-      const isResults = (opp as any).applicationStatus === "results";
+      const appStatus = (opp as any).applicationStatus || opp.criteriaJson?.applicationStatus;
+      const isResultsOrNews = appStatus === "results" || appStatus === "news";
+      
       const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
       const publishedDate = opp.publishedAt ? new Date(opp.publishedAt) : null;
       
-      if (isAsepSource && isResults && publishedDate && publishedDate < threeWeeksAgo) {
+      if (isAsepSource && isResultsOrNews && publishedDate && publishedDate < threeWeeksAgo) {
         shouldArchive = true;
-        summaryExpiredCount++; // Reusing counter for simplicity
-        archiveReason = `asep_results_stale | publishedAt=${publishedDate.toISOString()} (>21d)`;
+        summaryExpiredCount++; 
+        archiveReason = `asep_stale | appStatus=${appStatus} | publishedAt=${publishedDate.toISOString()} (>21d)`;
       }
     }
 
@@ -361,14 +364,15 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     progress.tick();
   }
 
-  if (archivedCount === 0) {
-    console.log(`  ℹ️  Archive run: no opportunities moved to archived (checked ${checkedCount})`);
-  } else {
+  if (archivedCount > 0) {
     console.log(
       `  ✅ Archive run: ${archivedCount} opportunity/opportunities archived (checked ${checkedCount})`,
     );
+    // Invalidate feed cache to reflect changes immediately
+    await invalidateCache("feed_*");
+  } else {
+    console.log(`  ℹ️  Archive run: no opportunities moved to archived (checked ${checkedCount})`);
   }
-
   progress.finish({
     "Archived": archivedCount,
     "Deadline expired": deadlineExpiredCount,

@@ -26,7 +26,16 @@
     <div class="card-meta">
       <div class="meta-row">
         <span class="meta-label">Πηγή:</span>
-        <span class="meta-value">{{ getSourceLabel(opportunity.source) }}</span>
+        <div class="meta-value source-info">
+          <img 
+            v-if="sourceIcon" 
+            :src="sourceIcon" 
+            :alt="opportunity.source" 
+            class="source-icon"
+            aria-hidden="true"
+          />
+          <span>{{ getSourceLabel(opportunity.source) }}</span>
+        </div>
       </div>
       <div class="meta-row">
         <span class="meta-label">Κατάσταση:</span>
@@ -40,9 +49,12 @@
       </div>
     </div>
     
-    <div class="meta">
+    <div class="meta" v-if="shouldShowDeadline">
       <span v-if="opportunity.deadlineAt">
         Προθεσμία: {{ formatDate(opportunity.deadlineAt) }}
+      </span>
+      <span v-else-if="statusLabel === 'Ανοικτό'" class="unknown-deadline">
+        Προθεσμία: Ανοικτό (μέχρι εξαντλήσεως προϋπολογισμού)
       </span>
       <span v-else class="unknown-deadline">Προθεσμία: Δεν έχει ανακοινωθεί</span>
     </div>
@@ -160,6 +172,23 @@ const isExpiringSoon = computed(() => {
   const now = Date.now();
   const diffDays = (deadline - now) / MS_PER_DAY;
   return diffDays >= 0 && diffDays <= 7;
+});
+
+const shouldShowDeadline = computed(() => {
+  const appStatus = (props.opportunity as any).applicationStatus || (props.opportunity as any).badge?.applicationStatus;
+  // Hide deadline for upcoming/news/results if not explicitly set
+  if (appStatus === 'upcoming' && !props.opportunity.deadlineAt) return false;
+  if (appStatus === 'news' && !props.opportunity.deadlineAt) return false;
+  return true;
+});
+
+const sourceIcon = computed(() => {
+  const src = props.opportunity.source.toLowerCase();
+  if (src.includes("gov.gr")) return "https://www.gov.gr/favicon.ico";
+  if (src.includes("dypa") || src.includes("δυνα")) return "https://www.dypa.gov.gr/favicon.ico";
+  if (src.includes("opeka") || src.includes("οπεκα")) return "https://opeka.gr/favicon.ico";
+  if (src.includes("asep") || src.includes("ασεπ")) return "https://www.asep.gr/favicon.ico";
+  return null;
 });
 
 const statusLabel = computed(() => {
@@ -357,6 +386,19 @@ function formatDate(date: string | Date): string {
 
 .meta-value {
   color: var(--text-primary);
+}
+
+.source-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.source-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  object-fit: contain;
 }
 
 .status-badge {

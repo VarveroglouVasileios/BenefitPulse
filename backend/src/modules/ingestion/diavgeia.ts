@@ -26,7 +26,30 @@ export async function extractDiavgeiaText(ada: string): Promise<string> {
     const buffer = Buffer.from(response.data);
 
     // 2. Parse the PDF buffer to text
-    const data = await pdfParse(buffer);
+    // pdf.js (bundled in pdf-parse) logs TrueType noise via util.warn → console.log('Warning: …'),
+    // not console.warn — see pdf.worker.js: warn('TT: undefined function: ' + j).
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const isPdfJsNoise = (first: unknown): boolean => {
+      const s = first?.toString() ?? "";
+      return s.includes("Warning: TT:") || s.includes("TT: undefined function");
+    };
+    console.log = (...args: unknown[]) => {
+      if (args.length && isPdfJsNoise(args[0])) return;
+      originalLog.apply(console, args as []);
+    };
+    console.warn = (...args: unknown[]) => {
+      if (args.length && isPdfJsNoise(args[0])) return;
+      originalWarn.apply(console, args as []);
+    };
+
+    let data;
+    try {
+      data = await pdfParse(buffer);
+    } finally {
+      console.log = originalLog;
+      console.warn = originalWarn;
+    }
     
     // 3. Clean up the extracted text
     let text = data.text;
