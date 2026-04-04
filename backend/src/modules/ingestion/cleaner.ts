@@ -741,6 +741,7 @@ export function determineApplicationStatus(
 } {
   const lowerContent = content.toLowerCase();
   const lowerTitle = (title || "").toLowerCase();
+  const lowerUrl = (sourceUrl || "").toLowerCase();
   const statusSignals: string[] = [];
   
   // Special rule for Pass items with year in title (e.g., "Thessaly-Evros Pass 2025")
