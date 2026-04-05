@@ -78,6 +78,120 @@ function extractJsonBlock(text: string): string {
   return text.substring(start); // Fallback to rest of string matches logic
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let googleRequestTimestamps: number[] = [];
+let googleDailyBucketDay = "";
+let googleDailyCount = 0;
+let googleLastRequestAt = 0;
+
+async function enforceGoogleRateLimit(): Promise<void> {
+  const rpm = Math.max(1, config.googleAi.rpm || 10);
+  const rpd = Math.max(1, config.googleAi.rpd || 500);
+  const minIntervalMs = Math.max(0, config.googleAi.minIntervalMs || 0);
+  const now = Date.now();
+  const dayKey = new Date(now).toISOString().slice(0, 10);
+
+  if (googleDailyBucketDay !== dayKey) {
+    googleDailyBucketDay = dayKey;
+    googleDailyCount = 0;
+  }
+  if (googleDailyCount >= rpd) {
+    throw new Error(`Google AI daily quota guard reached (${googleDailyCount}/${rpd})`);
+  }
+
+  if (minIntervalMs > 0 && googleLastRequestAt > 0) {
+    const sinceLastMs = now - googleLastRequestAt;
+    if (sinceLastMs < minIntervalMs) {
+      await sleep(minIntervalMs - sinceLastMs);
+    }
+  }
+
+  const windowStart = Date.now() - 60_000;
+  googleRequestTimestamps = googleRequestTimestamps.filter((t) => t >= windowStart);
+  if (googleRequestTimestamps.length >= rpm) {
+    const waitMs = googleRequestTimestamps[0] + 60_000 - Date.now();
+    if (waitMs > 0) {
+      await sleep(waitMs);
+    }
+    const nextWindowStart = Date.now() - 60_000;
+    googleRequestTimestamps = googleRequestTimestamps.filter((t) => t >= nextWindowStart);
+  }
+}
+
+async function callGoogleJson(
+  userPrompt: string,
+  systemPrompt?: string,
+  temperature: number = 0.1,
+): Promise<any> {
+  const apiKey = config.googleAi.apiKey;
+  if (!apiKey) {
+    throw new Error("Google AI API key missing");
+  }
+
+  const models = [config.googleAi.model, ...config.googleAi.fallbackModels].filter(Boolean);
+  let lastError: any;
+
+  for (const model of models) {
+    try {
+      await enforceGoogleRateLimit();
+
+      const url = `${config.googleAi.apiUrl}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const response = await axios.post(
+        url,
+        {
+          systemInstruction: systemPrompt
+            ? { parts: [{ text: systemPrompt }] }
+            : undefined,
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: userPrompt }],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature,
+          },
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 20000,
+        },
+      );
+
+      googleLastRequestAt = Date.now();
+      googleRequestTimestamps.push(googleLastRequestAt);
+      googleDailyCount++;
+
+      const parts = response.data?.candidates?.[0]?.content?.parts;
+      const rawText = Array.isArray(parts)
+        ? parts.map((p: any) => p?.text || "").join("\n").trim()
+        : "";
+      if (!rawText) {
+        throw new Error("Empty response from Google AI");
+      }
+      return JSON.parse(extractJsonBlock(rawText));
+    } catch (error: any) {
+      lastError = error;
+      const status = error?.response?.status;
+      if (status === 429 || status === 503) {
+        console.warn(`   ⚠️ Google AI ${status} for model ${model}. Trying fallback...`);
+        continue;
+      }
+      if (status === 404 || status === 400) {
+        console.warn(`   ⚠️ Google AI model ${model} unavailable/misconfigured. Trying fallback...`);
+        continue;
+      }
+      break;
+    }
+  }
+
+  throw lastError || new Error("All Google AI models failed");
+}
+
 /**
  * Extract application status using Gemini AI
  *
@@ -89,20 +203,19 @@ export async function extractApplicationStatus(
   content: string,
   sourceUrl?: string,
 ): Promise<AIStatusResult> {
-  const apiKey = config.groq.apiKey;
+  const groqApiKey = config.groq.apiKey;
+  const googleApiKey = config.googleAi.apiKey;
 
-  // If no API key, return unknown immediately
-  if (!apiKey) {
+  // If no API key at all, return unknown immediately
+  if (!googleApiKey && !groqApiKey) {
     return {
       status: "unknown",
       confidence: 0,
-      reasoning: "No Groq API key available",
+      reasoning: "No AI API key available",
     };
   }
 
   try {
-    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const currentYear = now.getFullYear();
@@ -142,11 +255,54 @@ ${content.substring(0, 2000)}
 
 Αν δεν είσαι σίγουρος, βάλε χαμηλό confidence.`;
 
+    if (googleApiKey) {
+      try {
+        const parsed = await callGoogleJson(prompt);
+        let status: AIStatusResult["status"] = "unknown";
+        const rawStatus = (parsed.status || "").toLowerCase();
+
+        if (["open", "active"].includes(rawStatus)) {
+          status = "open";
+        } else if (
+          ["closed", "expired", "completed", "results", "ended"].includes(
+            rawStatus,
+          )
+        ) {
+          status = "closed";
+        } else if (["upcoming", "future", "expected"].includes(rawStatus)) {
+          status = "upcoming";
+        }
+
+        console.log(
+          `   🤖 AI Status (Google ${config.googleAi.model}): ${rawStatus} -> ${status} (${Math.round((parsed.confidence || 0) * 100)}%)`,
+        );
+
+        return {
+          status,
+          confidence:
+            typeof parsed.confidence === "number" ? parsed.confidence : 0,
+          deadlineAt: parsed.deadlineAt,
+          startAt: parsed.startAt,
+          reasoning: parsed.reasoning || "AI determined status",
+        };
+      } catch (googleError: any) {
+        console.warn(
+          `   ⚠️ Google AI status extraction failed, falling back to Groq: ${googleError.message?.substring(0, 120) || "unknown error"}`,
+        );
+      }
+    }
+
+    if (!groqApiKey) {
+      throw new Error("Google AI failed and GROQ_API_KEY is not configured");
+    }
+
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
+
     const fallbackModels = [
       config.groq.model || "llama-3.1-8b-instant",
       "llama-3.3-70b-versatile",
-      "gemma2-9b-it",
-      "mixtral-8x7b-32768"
+      "qwen/qwen3-32b",
+      "moonshotai/kimi-k2-instruct",
     ];
 
     let lastError: any;
@@ -163,7 +319,7 @@ ${content.substring(0, 2000)}
           },
           {
             headers: {
-              Authorization: `Bearer ${apiKey}`,
+              Authorization: `Bearer ${groqApiKey}`,
               "Content-Type": "application/json",
             },
             timeout: 10000,
@@ -241,16 +397,16 @@ ${content.substring(0, 2000)}
 export async function extractOpportunity(
   content: string,
 ): Promise<ExtractedOpportunity> {
-  const apiKey = config.groq.apiKey;
-  if (!apiKey) {
+  const groqApiKey = config.groq.apiKey;
+  const googleApiKey = config.googleAi.apiKey;
+  if (!googleApiKey && !groqApiKey) {
     console.warn(
-      "⚠️  No GROQ_API_KEY found, using fallback keyword extractor.",
+      "⚠️  No AI API key found, using fallback keyword extractor.",
     );
     return fallbackStubExtractor(content);
   }
 
   try {
-    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
     const now = new Date();
     const today = now.toISOString().split("T")[0];
     const currentYear = now.getFullYear();
@@ -276,24 +432,24 @@ export async function extractOpportunity(
 2. **title**: Καθάρισε τον τίτλο. Αφαίρεσε "ΑΔΑ:", "ΑΔΑΜ:", κωδικούς αναρτήσεων. Κράτα τον περιεκτικό και στα ΕΛΛΗΝΙΚΑ.
    - ΣΗΜΑΝΤΙΚΟ: Αν ο τίτλος αφορά "Ανάληψη Υποχρέωσης" ή "Πληρωμή" ή "Εκκαθάριση", βάλε type: "irrelevant".
 
-3. **summary**: Αναλυτική σύνοψη (max 400 χαρακτήρες). 
+3. **summary**: Αναλυτική σύνοψη (max 400 χαρακτήρες).
    - Πρέπει να είναι κατανοητή και να απαντάει στο "Τι κερδίζω;".
    - Δομή: "Τι αφορά η ανακοίνωση. Ποιοι είναι οι ωφελούμενοι. Ποιο είναι το ποσό ή το όφελος αν αναφέρεται."
    - Για ΑΠΟΤΕΛΕΣΜΑΤΑ (news), η σύνοψη πρέπει να λέει καθαρά: "Ανακοινώθηκαν οι προσωρινοί/οριστικοί πίνακες για την προκήρυξη... Δείτε αν είστε στους επιτυχόντες."
 
 4. **dates**:
-   - "deadlineAt": Η ΤΕΛΙΚΗ ΗΜΕΡΟΜΗΝΙΑ ΛΗΞΗΣ (YYYY-MM-DD). 
+   - "deadlineAt": Η ΤΕΛΙΚΗ ΗΜΕΡΟΜΗΝΙΑ ΛΗΞΗΣ (YYYY-MM-DD).
      - Αν υπάρχουν πολλές ημερομηνίες (π.χ. υποβολή ενστάσεων vs υποβολή αιτήσεων), διάλεξε αυτή που αφορά την ΚΥΡΙΑ ΕΝΕΡΓΕΙΑ.
      - Αν λέει "εντός 10 ημερών από την ανάρτηση (δηλ. από ${today})", υπολόγισε την ημερομηνία.
      - Αν είναι "ανοικτό μέχρι εξαντλήσεως προϋπολογισμού", βάλε null.
      - ΠΡΟΣΟΧΗ: Αν το κείμενο αναφέρει λήξη "3 Μαρτίου" αλλά αφορά δράση παλαιότερου έτους (πριν το ${currentYear}), ΠΡΕΠΕΙ ΝΑ ΒΑΛΕΙΣ ΤΟ ΣΩΣΤΟ ΠΑΡΕΛΘΟΝΤΙΚΟ ΕΤΟΣ. ΜΗΝ υποθέτεις το τρέχον έτος (${currentYear}) αν πρόκειται για παλιά ανακοίνωση. Αν η ανακοίνωση είναι εμφανώς ληγμένη, βάλε τη λήξη στο παρελθόν.
-   - "status": 
+   - "status":
      - "open": Οι αιτήσεις γίνονται ΤΩΡΑ.
      - "closed": Η ημερομηνία λήξης πέρασε (πριν από ${today}).
      - "upcoming": Η έναρξη είναι στο μέλλον.
      - "expected": Φήμες, αναμένεται ΚΥΑ, χωρίς ημερομηνίες ακόμα.
 
-5. **tags**: Χρησιμοποίησε tags όπως: "unemployed", "student", "parent", "disabled", "business", "tourism", "farmers", "pensioners". 
+5. **tags**: Χρησιμοποίησε tags όπως: "unemployed", "student", "parent", "disabled", "business", "tourism", "farmers", "pensioners".
    - ΣΗΜΑΝΤΙΚΟ: Για αποτελέσματα/πίνακες, πρόσθεσε ΠΑΝΤΑ το tag "results".
 
 6. **region**: Περιοχή αν αφορά συγκεκριμένο Δήμο ή Περιφέρεια.
@@ -309,11 +465,84 @@ OUTPUT JSON SCHEMA ONLY:
   "confidence": number (0.0 to 1.0)
 }`;
 
+    if (googleApiKey) {
+      try {
+        const parsed = await callGoogleJson(
+          "Text to analyze:\n" + content.substring(0, 3000),
+          systemPrompt,
+          0.1,
+        );
+
+        let type: OpportunityType = "manual";
+        const aiType = parsed.type || "news";
+
+        switch (aiType) {
+          case "subsidy":
+            type = "subsidy";
+            break;
+          case "job":
+            type = "public_call";
+            break;
+          case "program":
+            type = "program";
+            break;
+          case "contest":
+            type = "asep_competition";
+            break;
+          case "news":
+            type = "manual";
+            break;
+          case "irrelevant":
+            type = "manual";
+            break;
+          default:
+            type = "manual";
+        }
+
+        const tags = Array.isArray(parsed.tags) ? parsed.tags : [];
+        const mappedStatusFlags: any[] = [];
+        if (tags.includes("student")) mappedStatusFlags.push("student");
+        if (tags.includes("unemployed")) mappedStatusFlags.push("unemployed");
+        if (tags.includes("parent")) mappedStatusFlags.push("parent");
+        if (tags.includes("pensioners")) mappedStatusFlags.push("retired");
+
+        const criteriaRulesJson: CriteriaRules = {
+          statusFlags:
+            mappedStatusFlags.length > 0
+              ? { required: mappedStatusFlags }
+              : undefined,
+        };
+
+        return {
+          type,
+          title: parsed.title || "Untitled",
+          summary: parsed.summary || "",
+          deadlineAt: parsed.deadlineAt ? new Date(parsed.deadlineAt) : undefined,
+          tags,
+          criteriaJson: {},
+          criteriaRulesJson,
+          confidence:
+            typeof parsed.confidence === "number" ? parsed.confidence : 0.5,
+          status: parsed.status,
+          isIrrelevant: aiType === "irrelevant",
+        };
+      } catch (googleError: any) {
+        console.warn(
+          `   ⚠️ Google AI extraction failed, falling back to Groq: ${googleError.message?.substring(0, 120) || "unknown error"}`,
+        );
+      }
+    }
+
+    if (!groqApiKey) {
+      throw new Error("Google AI failed and GROQ_API_KEY is not configured");
+    }
+
+    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
     const fallbackModels = [
       config.groq.model || "llama-3.1-8b-instant",
       "llama-3.3-70b-versatile",
-      "gemma2-9b-it",
-      "mixtral-8x7b-32768"
+      "qwen/qwen3-32b",
+      "moonshotai/kimi-k2-instruct",
     ];
 
     let lastError: any;
@@ -334,7 +563,7 @@ OUTPUT JSON SCHEMA ONLY:
 
         const response = await axios.post(apiUrl, requestBody, {
           headers: {
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${groqApiKey}`,
             "Content-Type": "application/json",
           },
           timeout: 30000,

@@ -221,7 +221,19 @@ function onFailed(workerName: string) {
     const key = `${workerName}:${job?.id}`;
     jobStartTimes.delete(key);
 
-    console.error(`  ❌ [${workerName}] Job FAILED: ${job?.name} (${job?.id}) — ${err?.message || err}`);
+    const attemptsMade = typeof job?.attemptsMade === "number" ? job.attemptsMade : 0;
+    const maxAttempts = typeof job?.opts?.attempts === "number" ? job.opts.attempts : 1;
+    const willRetry = attemptsMade < maxAttempts;
+
+    if (willRetry) {
+      console.warn(
+        `  ⚠️  [${workerName}] Job attempt failed (will retry): ${job?.name} (${job?.id}) — attempt ${attemptsMade}/${maxAttempts} — ${err?.message || err}`,
+      );
+    } else {
+      console.error(
+        `  ❌ [${workerName}] Job FAILED: ${job?.name} (${job?.id}) — ${err?.message || err}`,
+      );
+    }
 
     if (workerName === "ingestion" && job?.name === "process-all-sources") {
        notificationService.sendToAdmins({

@@ -42,15 +42,37 @@ function batchChainedKey(batchId: string): string {
   return `ingestion:batch:${batchId}:chained`;
 }
 
+function batchCountedJobKey(batchId: string, jobId: string): string {
+  return `ingestion:batch:${batchId}:counted:${jobId}`;
+}
+
 /** After every process-source job (success or fail), maybe enqueue archive + verification once. */
-async function onIngestionBatchSourceFinished(batchId: string | undefined): Promise<void> {
-  if (!batchId) return;
+async function onIngestionBatchSourceFinished(
+  batchId: string | undefined,
+  jobId: string | undefined,
+): Promise<void> {
+  if (!batchId || !jobId) return;
 
   try {
     const redis = getProgressRedis();
     const totalStr = await redis.get(batchTotalKey(batchId));
     const total = parseInt(totalStr || "0", 10);
     if (total <= 0) return;
+
+    // Idempotency guard: count each process-source job at most once per batch.
+    const counted = await redis.set(
+      batchCountedJobKey(batchId, jobId),
+      "1",
+      "EX",
+      172800,
+      "NX",
+    );
+    if (counted !== "OK") {
+      console.log(
+        `  ⏭️  Batch ${batchId}: source job ${jobId} already counted — skipping duplicate completion`,
+      );
+      return;
+    }
 
     const finished = await redis.incr(batchFinishedKey(batchId));
     await redis.expire(batchFinishedKey(batchId), 172800);
@@ -243,9 +265,11 @@ export async function processSourceJob(job: Job): Promise<void> {
   console.log(`${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
 
   const sourceStart = Date.now();
+  let completedSuccessfully = false;
   let result;
   try {
     result = await ingestionService.processSource(sourceId);
+    completedSuccessfully = true;
     const sourceDuration = Date.now() - sourceStart;
 
     // Status color based on findings
@@ -265,7 +289,23 @@ export async function processSourceJob(job: Job): Promise<void> {
     );
     throw error;
   } finally {
-    await onIngestionBatchSourceFinished(batchId);
+    // Count only terminal attempts (success or final failed attempt).
+    const attemptsMade = typeof job.attemptsMade === "number" ? job.attemptsMade : 0;
+    const maxAttempts =
+      typeof job.opts?.attempts === "number" ? job.opts.attempts : 1;
+    const currentAttempt = attemptsMade + 1;
+    const isFinalAttempt = completedSuccessfully || currentAttempt >= maxAttempts;
+
+    if (isFinalAttempt) {
+      await onIngestionBatchSourceFinished(
+        batchId,
+        job.id !== undefined && job.id !== null ? String(job.id) : undefined,
+      );
+    } else {
+      console.log(
+        `  ⏭️  Retry pending for ${sourceName} (attempt ${currentAttempt}/${maxAttempts}) — batch completion counter unchanged`,
+      );
+    }
   }
 
   // If this is the last source, show completion

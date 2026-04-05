@@ -254,7 +254,7 @@ export async function seed() {
     },
     {
       name: "MinDev - Προγράμματα",
-      url: "https://programmata.mindev.gov.gr/",
+      url: "https://ependyseis.mindev.gov.gr/el",
       type: "html_listing" as const,
       enabled: true,
     },

@@ -69,15 +69,52 @@ function hasOpenSignals(pageSignals: string[] = []): boolean {
 }
 
 /**
+ * Extract date from title (e.g. "7 Φεβρουαρίου")
+ */
+function extractDateFromTitle(title: string, now: Date): Date | null {
+  const greekMonths: Record<string, number> = {
+    "ιανουαρίου": 0, "ιανουαριου": 0, "ιαν": 0,
+    "φεβρουαρίου": 1, "φεβρουαριου": 1, "φεβ": 1,
+    "μαρτίου": 2, "μαρτιου": 2, "μαρ": 2,
+    "απριλίου": 3, "απριλιου": 3, "απρ": 3,
+    "μαΐου": 4, "μαιου": 4, "μαι": 4,
+    "ιουνίου": 5, "ιουνιου": 5, "ιουν": 5,
+    "ιουλίου": 6, "ιουλιου": 6, "ιουλ": 6,
+    "αυγούστου": 7, "αυγουστου": 7, "αυγ": 7,
+    "σεπτεμβρίου": 8, "σεπτεμβριου": 8, "σεπ": 8,
+    "οκτωβρίου": 9, "οκτωβριου": 9, "οκτ": 9,
+    "νοεμβρίου": 10, "νοεμβριου": 10, "νοε": 10,
+    "δεκεμβρίου": 11, "δεκεμβριου": 11, "δεκ": 11
+  };
+
+  const lowerTitle = title.toLowerCase();
+  // Pattern: [day] [month] (optionally year)
+  const dateMatch = lowerTitle.match(/(\d{1,2})\s+([α-ωά-ώ]+)(?:\s+(\d{4}))?/);
+  
+  if (dateMatch) {
+    const day = parseInt(dateMatch[1], 10);
+    const monthName = dateMatch[2];
+    const yearStr = dateMatch[3];
+    
+    const month = greekMonths[monthName];
+    if (month !== undefined) {
+      const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
+      const detectedDate = new Date(year, month, day, 23, 59, 59);
+      return detectedDate;
+    }
+  }
+  return null;
+}
+
+/**
  * Rule-based status computation
  * 
  * Rules (priority order):
  * 1) If applicationEndAt < now => closed + archived
- * 2) If applicationStartAt <= now <= applicationEndAt => open + published
- * 3) If applicationStartAt > now => upcoming + published (or draft if insufficient evidence)
- * 4) If no dates: ONLY "draft", not published
- * 5) Extra guard for "Pass 2025": if title has year < current and no open signals => archived
- */
+ * 2) Extra guard for Title Dates: if title has a past date => archived
+ * 3) If applicationStartAt <= now <= applicationEndAt => open + published
+...
+*/
 export function computeStatus(
   inputs: StatusInputs,
   now: Date = new Date()
@@ -105,7 +142,21 @@ export function computeStatus(
     };
   }
 
-  // Rule 2: If applicationStartAt <= now <= applicationEndAt => open + published
+  // Rule 2: Title Date Guard (Past events detection)
+  const titleDate = extractDateFromTitle(title, now);
+  if (titleDate && isPast(titleDate, now)) {
+    // Small buffer for today's events: if it's today, keep it open until end of day
+    const isActuallyPast = compareDatesInAthens(titleDate, now) < 0;
+    if (isActuallyPast) {
+      return {
+        applicationStatus: "closed",
+        status: "archived",
+        reason: `Title contains past date: ${titleDate.toISOString()}`,
+      };
+    }
+  }
+
+  // Rule 3: If applicationStartAt <= now <= applicationEndAt => open + published
   if (effectiveStartAt && effectiveEndAt) {
     const startIsPastOrNow = compareDatesInAthens(effectiveStartAt, now) <= 0;
     const endIsFutureOrNow = compareDatesInAthens(effectiveEndAt, now) >= 0;
@@ -139,7 +190,7 @@ export function computeStatus(
     }
   }
 
-  // Rule 4: If no dates: ONLY "draft", not published
+  // Rule 4: If no dates: check if it's a real benefit or just a draft
   if (!effectiveStartAt && !effectiveEndAt) {
     // Rule 5: Extra guard for "Pass 2025"
     const titleYear = extractYearFromTitle(title);
@@ -154,22 +205,31 @@ export function computeStatus(
       };
     }
     
-    // No dates and no evidence => draft
+    // NEW LOGIC: If it's a real kind but no dates, we still want it published as "unknown/permanent"
+    // We'll trust the caller to pass signals or we'll assume it's published if it's a known benefit
     return {
       applicationStatus: "unknown",
-      status: "draft",
-      reason: "no dates available",
+      status: "published", // Show it as permanent info
+      reason: "no dates available but treated as permanent information",
     };
   }
 
   // Edge cases:
   // - Only startAt exists and is in past => might be open if no end date
   if (effectiveStartAt && !effectiveEndAt && isPast(effectiveStartAt, now)) {
-    if (hasOpenSignals(pageSignals)) {
+    // If title or signals suggest it started, mark as open
+    const titleLower = title.toLowerCase();
+    const hasOpenClues = hasOpenSignals(pageSignals) || 
+                         titleLower.includes("ξεκίνησαν") || 
+                         titleLower.includes("ξεκινησαν") ||
+                         titleLower.includes("αιτήσεις") ||
+                         titleLower.includes("αιτησεις");
+
+    if (hasOpenClues) {
       return {
         applicationStatus: "open",
         status: "published",
-        reason: `startAt (${effectiveStartAt.toISOString()}) is in past with open signals`,
+        reason: `startAt (${effectiveStartAt.toISOString()}) is in past with open clues`,
       };
     } else {
       return {

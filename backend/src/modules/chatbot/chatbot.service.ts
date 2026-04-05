@@ -10,6 +10,20 @@ interface ChatResponse {
   message: string;
 }
 
+let primaryModelWindow: number[] = [];
+
+function canUsePrimaryModel(): boolean {
+  const rpm = Math.max(1, config.chatbot.primaryRpm || 20);
+  const now = Date.now();
+  const windowStart = now - 60_000;
+  primaryModelWindow = primaryModelWindow.filter((t) => t >= windowStart);
+  return primaryModelWindow.length < rpm;
+}
+
+function markPrimaryModelUse(): void {
+  primaryModelWindow.push(Date.now());
+}
+
 export class ChatbotService {
   /**
    * Process chat message using Groq/OpenAI Compatible API
@@ -41,24 +55,62 @@ export class ChatbotService {
         }))
       ];
 
-      const payload = {
-        model: config.chatbot.model,
-        messages: apiMessages,
-        max_tokens: 800,
-        temperature: 0.7,
-      };
+      const primaryModel = config.chatbot.primaryModel || config.chatbot.model;
+      const fallbackModel = config.chatbot.fallbackModel || "llama-3.1-8b-instant";
 
-      const response = await axios.post(
-        config.chatbot.apiUrl,
-        payload,
-        {
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
-          },
-          timeout: 15000,
+      const modelsToTry: string[] = [];
+      if (canUsePrimaryModel()) {
+        modelsToTry.push(primaryModel);
+      } else {
+        console.warn(
+          `[chatbot] Primary model RPM guard reached (${config.chatbot.primaryRpm}/min). Using fallback model.`,
+        );
+      }
+      if (!modelsToTry.includes(fallbackModel)) {
+        modelsToTry.push(fallbackModel);
+      }
+
+      let response: any;
+      let lastError: any;
+      for (const model of modelsToTry) {
+        try {
+          const payload = {
+            model,
+            messages: apiMessages,
+            max_tokens: 800,
+            temperature: 0.7,
+          };
+
+          response = await axios.post(
+            config.chatbot.apiUrl,
+            payload,
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+              },
+              timeout: 15000,
+            }
+          );
+
+          if (model === primaryModel) {
+            markPrimaryModelUse();
+          }
+
+          break;
+        } catch (error: any) {
+          lastError = error;
+          const status = error?.response?.status;
+          if (status === 429 && model === primaryModel && fallbackModel !== primaryModel) {
+            console.warn("[chatbot] Primary model returned 429, switching to fallback.");
+            continue;
+          }
+          throw error;
         }
-      );
+      }
+      if (!response) {
+        throw lastError || new Error("No chatbot response from provider");
+      }
 
       // Parse OpenAI/Groq response
       if (

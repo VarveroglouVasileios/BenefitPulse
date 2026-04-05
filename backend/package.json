@@ -14,7 +14,8 @@
     "seed": "npm run cli seed",
     "migrate:user-profiles": "npm run cli migrate:profiles",
     "vapid-keys": "npm exec -- web-push generate-vapid-keys",
-    "cleanup": "ts-node src/scripts/cleanup-opportunities.ts"
+    "cleanup": "ts-node src/scripts/cleanup-opportunities.ts",
+    "backfill:embeddings": "ts-node src/scripts/backfill-opportunity-embeddings.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.17",

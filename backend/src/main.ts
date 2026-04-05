@@ -222,6 +222,10 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 
 // Public opportunities routes
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
+app.get(
+  "/api/opportunities/semantic-search",
+  opportunitiesController.semanticSearch,
+);
 app.get("/api/feed", optionalAuthMiddleware, opportunitiesController.getFeed); // Feed with optional admin filters
 app.get("/api/opportunities/trending", opportunitiesController.getTrending);
 app.get(

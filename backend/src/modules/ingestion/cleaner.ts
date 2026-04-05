@@ -1169,6 +1169,23 @@ export function classifyKindAndType(
     return { kind: "program", type: "asep_competition" };
   }
 
+  // Explicit Force Classification for known major programs
+  if (lowerTitle.includes("κοινωνικός τουρισμός") || lowerTitle.includes("κοινωνικος τουρισμος")) {
+    return { kind: "benefit", type: "subsidy" };
+  }
+  if (lowerTitle.includes("ανακαινίζω") || lowerTitle.includes("ανακαινιζω") || lowerTitle.includes("νοικιάζω")) {
+    return { kind: "program", type: "program" };
+  }
+  if (lowerTitle.includes("επίδομα παιδιού") || lowerTitle.includes("επιδομα παιδιου")) {
+    return { kind: "benefit", type: "subsidy" };
+  }
+  if (lowerTitle.includes("fuel pass") || lowerTitle.includes("market pass")) {
+    return { kind: "voucher_pass", type: "voucher" };
+  }
+  if (lowerTitle.includes("youth pass")) {
+    return { kind: "voucher_pass", type: "voucher" };
+  }
+
   // Voucher/pass
   if (
     lowerContent.includes("voucher") ||

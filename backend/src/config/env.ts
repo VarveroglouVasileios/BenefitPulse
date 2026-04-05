@@ -58,6 +58,29 @@ export const config = {
     apiKey: process.env.GEMINI_API_KEY || "",
   },
 
+  googleAi: {
+    apiKey: process.env.GEMINI_API_KEY || "",
+    apiUrl:
+      process.env.GOOGLE_AI_API_URL ||
+      "https://generativelanguage.googleapis.com/v1beta",
+    model: process.env.GOOGLE_AI_MODEL || "gemini-3.1-flash-lite-preview",
+    fallbackModels: (process.env.GOOGLE_AI_FALLBACK_MODELS ||
+      "gemini-2.5-flash-lite,gemini-2.5-flash").split(",")
+      .map((m) => m.trim())
+      .filter(Boolean),
+    rpm: parseInt(process.env.GOOGLE_AI_RPM || "10", 10),
+    rpd: parseInt(process.env.GOOGLE_AI_RPD || "500", 10),
+    minIntervalMs: parseInt(process.env.GOOGLE_AI_MIN_INTERVAL_MS || "7000", 10),
+    embeddingModel:
+      process.env.GOOGLE_AI_EMBEDDING_MODEL || "gemini-embedding-001",
+    embeddingRpm: parseInt(process.env.GOOGLE_AI_EMBEDDING_RPM || "60", 10),
+    embeddingRpd: parseInt(process.env.GOOGLE_AI_EMBEDDING_RPD || "1000", 10),
+    embeddingMinIntervalMs: parseInt(
+      process.env.GOOGLE_AI_EMBEDDING_MIN_INTERVAL_MS || "1000",
+      10,
+    ),
+  },
+
   groq: {
     apiKey: process.env.GROQ_API_KEY || "",
     apiUrl: "https://api.groq.com/openai/v1/chat/completions",
@@ -74,6 +97,11 @@ export const config = {
       process.env.CHATBOT_API_URL ||
       "https://api.groq.com/openai/v1/chat/completions",
     model: process.env.CHATBOT_MODEL || "llama-3.3-70b-versatile",
+    primaryModel:
+      process.env.CHATBOT_PRIMARY_MODEL || "llama-3.3-70b-versatile",
+    fallbackModel:
+      process.env.CHATBOT_FALLBACK_MODEL || "llama-3.1-8b-instant",
+    primaryRpm: parseInt(process.env.CHATBOT_PRIMARY_RPM || "20", 10),
   },
 
   rateLimit: {

@@ -23,6 +23,7 @@ export interface IOpportunity extends Document {
   criteriaRulesJson: Record<string, any>;
   criteriaUnknown?: boolean;
   confidence: number;
+  embedding?: number[];
   applicationStatus?: "upcoming" | "open" | "closed" | "expired" | "unknown" | "results" | "news"; // Application status (computed)
   status: "draft" | "published" | "archived" | "rejected";
   // Live verification fields
@@ -158,6 +159,10 @@ const OpportunitySchema = new Schema<IOpportunity>(
       default: 0,
       min: 0,
       max: 1,
+    },
+    embedding: {
+      type: [Number],
+      default: undefined,
     },
     applicationStatus: {
       type: String,

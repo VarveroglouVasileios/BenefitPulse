@@ -64,6 +64,27 @@ export async function getFeed(req: Request, res: Response): Promise<void> {
   }
 }
 
+export async function semanticSearch(req: Request, res: Response): Promise<void> {
+  try {
+    const { q, page, limit } = req.query;
+    const query = typeof q === "string" ? q : "";
+    if (!query.trim()) {
+      res.status(400).json({ error: "Query parameter 'q' is required" });
+      return;
+    }
+    const result = await opportunitiesService.semanticSearch({
+      q: query,
+      page: safeParsePage(page),
+      limit: safeParseLimit(limit),
+    });
+    res.status(200).json(result);
+  } catch (error: any) {
+    const errorMessage =
+      config.nodeEnv === "production" ? "Internal server error" : error.message;
+    res.status(500).json({ error: errorMessage });
+  }
+}
+
 export async function getOpportunityById(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;

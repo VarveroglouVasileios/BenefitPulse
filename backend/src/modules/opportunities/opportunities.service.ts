@@ -6,6 +6,9 @@ import { evaluateMatch } from "../../rules/evaluate";
 import { CriteriaRules } from "../../shared/rulesTypes";
 import { sanitizeSearchQuery } from "../../utils/validation";
 import { getOrCache } from "../../utils/cache";
+import { embeddingService } from "./embedding.service";
+
+type OpportunityWithScore = IOpportunity & { semanticScore?: number };
 
 export class OpportunitiesService {
   async getPublicOpportunities(query: {
@@ -261,8 +264,8 @@ export class OpportunitiesService {
     } else if (tab === "upcoming") {
       // Upcoming: ALL real kinds (benefit, voucher_pass, program) with applicationStatus="upcoming"
       // FIXED: Include all real opportunity kinds, not just programs
-      const realKinds = ["benefit", "voucher_pass", "program"];
-      filter.kind = { $in: realKinds };
+      const upcomingRealKinds = ["benefit", "voucher_pass", "program"];
+      filter.kind = { $in: upcomingRealKinds };
       filter.$or = [
         { applicationStatus: "upcoming" },
         { "criteriaJson.applicationStatus": "upcoming" },
@@ -290,12 +293,13 @@ export class OpportunitiesService {
       });
 
       // Calculate exclusion stats
+      const realKinds = ["benefit", "voucher_pass", "program"];
       const baseFilterForStats: any = {
         status: showRejected
           ? { $in: ["published", "draft", "archived", "rejected"] }
           : "published",
         deletedAt: null,
-        kind: "program",
+        kind: { $in: upcomingRealKinds },
         $or: [
           { applicationStatus: "upcoming" },
           { "criteriaJson.applicationStatus": "upcoming" },
@@ -315,12 +319,12 @@ export class OpportunitiesService {
       exclusionReasons.brokenLink = excludedBroken;
       exclusionReasons.deadLink = excludedDeadLink;
     } else if (tab === "current") {
-      // Τρέχοντα: kind="program" AND applicationStatus="open"
-      // FIXED: Don't require verificationResult - allow items with applicationStatus="open" even if not verified yet
-      filter.kind = "program";
+      // Τρέχοντα: All real kinds AND (applicationStatus="open" OR "unknown")
+      const realKinds = ["benefit", "voucher_pass", "program"];
+      filter.kind = { $in: realKinds };
       filter.$or = [
-        { applicationStatus: "open" },
-        { "criteriaJson.applicationStatus": "open" },
+        { applicationStatus: { $in: ["open", "unknown"] } },
+        { "criteriaJson.applicationStatus": { $in: ["open", "unknown"] } },
       ];
       // EXCLUDE broken links from Current tab (only if verified as broken)
       filter.$and = filter.$and || [];
@@ -355,7 +359,7 @@ export class OpportunitiesService {
           ? { $in: ["published", "draft", "archived", "rejected"] }
           : "published",
         deletedAt: null,
-        kind: "program",
+        kind: { $in: realKinds },
         $or: [
           { applicationStatus: "open" },
           { "criteriaJson.applicationStatus": "open" },
@@ -499,6 +503,77 @@ export class OpportunitiesService {
       },
     };
     }, 300); // Cache for 5 minutes
+  }
+
+  async semanticSearch(query: {
+    q: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ opportunities: OpportunityWithScore[]; total: number }> {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+    const skip = (page - 1) * limit;
+    const now = new Date();
+    const sanitized = sanitizeSearchQuery(query.q || "");
+
+    if (!sanitized) {
+      return { opportunities: [], total: 0 };
+    }
+
+    const queryEmbedding = await embeddingService.embedText(sanitized);
+    if (!queryEmbedding) {
+      // Fallback to classic text search if embedding service is unavailable.
+      const filter = {
+        status: "published",
+        deletedAt: null,
+        kind: { $nin: ["service_info", "tender"] },
+        $text: { $search: sanitized },
+        $and: [
+          { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+          { $or: [{ applicationEndAt: null }, { applicationEndAt: { $gte: now } }] },
+        ],
+      };
+      const opportunities = await Opportunity.find(filter)
+        .sort({ publishedAt: -1 })
+        .skip(skip)
+        .limit(limit);
+      const total = await Opportunity.countDocuments(filter);
+      return { opportunities: opportunities as OpportunityWithScore[], total };
+    }
+
+    const candidates = await Opportunity.find({
+      status: "published",
+      deletedAt: null,
+      kind: { $nin: ["service_info", "tender"] },
+      embedding: { $exists: true, $ne: [] },
+      $and: [
+        { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+        { $or: [{ applicationEndAt: null }, { applicationEndAt: { $gte: now } }] },
+      ],
+    })
+      .sort({ publishedAt: -1 })
+      .limit(2000);
+
+    const scored = candidates
+      .map((opp) => {
+        const rawEmbedding = (opp as any).embedding;
+        if (!Array.isArray(rawEmbedding)) return null;
+        const score = embeddingService.cosineSimilarity(
+          queryEmbedding,
+          rawEmbedding as number[],
+        );
+        if (!Number.isFinite(score) || score < 0.05) return null;
+        return {
+          ...(opp.toObject() as IOpportunity),
+          semanticScore: score,
+        } as OpportunityWithScore;
+      })
+      .filter(Boolean) as OpportunityWithScore[];
+
+    scored.sort((a, b) => (b.semanticScore || 0) - (a.semanticScore || 0));
+    const total = scored.length;
+    const opportunities = scored.slice(skip, skip + limit);
+    return { opportunities, total };
   }
 
   async getOpportunityById(id: string): Promise<IOpportunity | null> {

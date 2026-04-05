@@ -59,6 +59,21 @@ function alternateGovGrUrlIfEnglish(url: string): string | null {
   }
 }
 
+/** Retired host migration: programmata.mindev.gov.gr -> ependyseis.mindev.gov.gr/el */
+function migrateDeprecatedMindevUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.toLowerCase() !== "programmata.mindev.gov.gr") return null;
+    u.hostname = "ependyseis.mindev.gov.gr";
+    if (!u.pathname || u.pathname === "/") {
+      u.pathname = "/el";
+    }
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 // Headers per source type
 function getHeadersForSourceType(sourceType: string, url?: string): Record<string, string> {
   const baseHeaders = {
@@ -670,6 +685,20 @@ export class IngestionService {
   }
 
   async fetchHTMLListing(source: any, reporter?: IngestionReporter, sourceId?: string): Promise<any[]> {
+    // One-time URL migration for deprecated MinDev source host.
+    const migratedMindevUrl = migrateDeprecatedMindevUrl(source.url);
+    if (migratedMindevUrl) {
+      console.warn(`⚠️  Migrating deprecated source URL: ${source.url} -> ${migratedMindevUrl}`);
+      source.url = migratedMindevUrl;
+      if (source._id) {
+        try {
+          await Source.updateOne({ _id: source._id }, { $set: { url: migratedMindevUrl } });
+        } catch {
+          // Non-critical: continue processing with in-memory migrated URL.
+        }
+      }
+    }
+
     try {
       const headers = getHeadersForSourceType("html_listing");
       const { data, finalUrl, statusCode, is404, contentType, contentLength } = await fetchWithRetry(source.url, {
