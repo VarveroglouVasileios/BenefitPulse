@@ -455,6 +455,36 @@ export async function seed() {
       type: "single_page" as const,
       enabled: true,
     },
+    {
+      name: "Digital School - Ενεργός Πολίτης",
+      url: "https://act.digitalschool.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Υπουργείο Υγείας - Δελτία Τύπου",
+      url: "https://www.moh.gov.gr/articles/ministry/grafeio-typoy/press-releases",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ΓΓ Συντονισμού - Ανακοινώσεις",
+      url: "https://gsco.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Υπουργείο Κοινωνικής Συνοχής - Ανακοινώσεις",
+      url: "https://minscfa.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Υπουργείο Υποδομών & Μεταφορών - Ανακοινώσεις",
+      url: "https://www.m-t.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
   ];
 
   for (const sourceData of sources) {
