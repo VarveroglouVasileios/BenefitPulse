@@ -326,7 +326,7 @@ export async function seed() {
     },
     {
       name: "Ανταγωνιστικότητα Προκηρύξεις",
-      url: "https://21-27.antagonistikotita.gr/prokiryxeis/",
+      url: "https://21-27.antagonistikotita.gr/category/energes-proskliseis/",
       type: "html_listing" as const,
       enabled: true,
     },
@@ -445,13 +445,13 @@ export async function seed() {
     },
     {
       name: "OPEKA Επιδόματα λίστα",
-      url: "https://www.opeka.gr/category/epidomata/",
+      url: "https://www.opeka.gr/epidomata/",
       type: "html_listing" as const,
       enabled: true,
     },
     {
       name: "Σπίτι μου II",
-      url: "https://www.dypa.gov.gr/spiti-mou",
+      url: "https://www.dypa.gov.gr/spitimou",
       type: "single_page" as const,
       enabled: true,
     },
