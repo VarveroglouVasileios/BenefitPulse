@@ -73,36 +73,49 @@ function hasOpenSignals(pageSignals: string[] = []): boolean {
  */
 function extractDateFromTitle(title: string, now: Date): Date | null {
   const greekMonths: Record<string, number> = {
-    "ιανουαρίου": 0, "ιανουαριου": 0, "ιαν": 0,
-    "φεβρουαρίου": 1, "φεβρουαριου": 1, "φεβ": 1,
-    "μαρτίου": 2, "μαρτιου": 2, "μαρ": 2,
-    "απριλίου": 3, "απριλιου": 3, "απρ": 3,
-    "μαΐου": 4, "μαιου": 4, "μαι": 4,
-    "ιουνίου": 5, "ιουνιου": 5, "ιουν": 5,
-    "ιουλίου": 6, "ιουλιου": 6, "ιουλ": 6,
-    "αυγούστου": 7, "αυγουστου": 7, "αυγ": 7,
-    "σεπτεμβρίου": 8, "σεπτεμβριου": 8, "σεπ": 8,
-    "οκτωβρίου": 9, "οκτωβριου": 9, "οκτ": 9,
-    "νοεμβρίου": 10, "νοεμβριου": 10, "νοε": 10,
-    "δεκεμβρίου": 11, "δεκεμβριου": 11, "δεκ": 11
+    "ιανουάριος": 0, "ιανουαρίου": 0, "ιανουαριου": 0, "ιαν": 0,
+    "φεβρουάριος": 1, "φεβρουαρίου": 1, "φεβρουαριου": 1, "φεβ": 1,
+    "μάρτιος": 2, "μαρτίου": 2, "μαρτιου": 2, "μαρ": 2,
+    "απρίλιος": 3, "απριλίου": 3, "απριλιου": 3, "απρ": 3,
+    "μάιος": 4, "μαΐου": 4, "μαιου": 4, "μαι": 4,
+    "ιούνιος": 5, "ιουνίου": 5, "ιουνιου": 5, "ιουν": 5,
+    "ιούλιος": 6, "ιουλίου": 6, "ιουλιου": 6, "ιουλ": 6,
+    "αύγουστος": 7, "αυγούστου": 7, "αυγουστου": 7, "αυγ": 7,
+    "σεπτέμβριος": 8, "σεπτεμβρίου": 8, "σεπτεμβριου": 8, "σεπ": 8,
+    "οκτώβριος": 9, "οκτωβρίου": 9, "οκτωβριου": 9, "οκτ": 9,
+    "νοέμβριος": 10, "νοεμβρίου": 10, "νοεμβριου": 10, "νοε": 10,
+    "δεκέμβριος": 11, "δεκεμβρίου": 11, "δεκεμβριου": 11, "δεκ": 11
   };
 
   const lowerTitle = title.toLowerCase();
-  // Pattern: [day] [month] (optionally year)
-  const dateMatch = lowerTitle.match(/(\d{1,2})\s+([α-ωά-ώ]+)(?:\s+(\d{4}))?/);
   
+  // Pattern 1: [day] [Greek Month Name] (e.g. "7 Φεβρουαρίου")
+  const dateMatch = lowerTitle.match(/(\d{1,2})\s+([α-ωά-ώ]{3,15})(?:\s+(\d{4}))?/);
   if (dateMatch) {
     const day = parseInt(dateMatch[1], 10);
     const monthName = dateMatch[2];
     const yearStr = dateMatch[3];
     
-    const month = greekMonths[monthName];
-    if (month !== undefined) {
+    // Find month index by checking if our map keys include the monthName
+    const monthEntry = Object.entries(greekMonths).find(([key]) => monthName.startsWith(key.substring(0, 3)));
+    
+    if (monthEntry) {
+      const month = monthEntry[1];
       const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
-      const detectedDate = new Date(year, month, day, 23, 59, 59);
-      return detectedDate;
+      return new Date(year, month, day, 23, 59, 59);
     }
   }
+
+  // Pattern 2: DD/MM/YYYY or DD/MM
+  const numericMatch = lowerTitle.match(/(\d{1,2})[\/\-\.](\d{1,2})(?:[\/\-\.](\d{2,4}))?/);
+  if (numericMatch) {
+    const day = parseInt(numericMatch[1], 10);
+    const month = parseInt(numericMatch[2], 10) - 1;
+    let year = numericMatch[3] ? parseInt(numericMatch[3], 10) : now.getFullYear();
+    if (year < 100) year += 2000;
+    return new Date(year, month, day, 23, 59, 59);
+  }
+
   return null;
 }
 
@@ -111,10 +124,11 @@ function extractDateFromTitle(title: string, now: Date): Date | null {
  * 
  * Rules (priority order):
  * 1) If applicationEndAt < now => closed + archived
- * 2) Extra guard for Title Dates: if title has a past date => archived
+ * 2) Title Date Guard: if title has a past date => archived (MOVED UP)
  * 3) If applicationStartAt <= now <= applicationEndAt => open + published
-...
-*/
+ * 4) If applicationStartAt > now => upcoming + published
+ * 5) If no dates: check if it's a real benefit or just a draft
+ */
 export function computeStatus(
   inputs: StatusInputs,
   now: Date = new Date()
@@ -170,7 +184,7 @@ export function computeStatus(
     }
   }
 
-  // Rule 3: If applicationStartAt > now => upcoming + published (or draft if insufficient evidence)
+  // Rule 4: If applicationStartAt > now => upcoming + published (or draft if insufficient evidence)
   if (effectiveStartAt && isFuture(effectiveStartAt, now)) {
     // Check if we have enough evidence (dates + signals or publishedAt)
     const hasEvidence = (effectiveEndAt && publishedAt) || hasOpenSignals(pageSignals);
@@ -190,9 +204,9 @@ export function computeStatus(
     }
   }
 
-  // Rule 4: If no dates: check if it's a real benefit or just a draft
+  // Rule 5: If no dates: check if it's a real benefit or just a draft
   if (!effectiveStartAt && !effectiveEndAt) {
-    // Rule 5: Extra guard for "Pass 2025"
+    // Extra guard for "Pass 2025"
     const titleYear = extractYearFromTitle(title);
     const currentYear = now.getFullYear();
     
@@ -205,12 +219,32 @@ export function computeStatus(
       };
     }
     
-    // NEW LOGIC: If it's a real kind but no dates, we still want it published as "unknown/permanent"
-    // We'll trust the caller to pass signals or we'll assume it's published if it's a known benefit
+    // If it's a real kind but no dates, we still want it published as "unknown/permanent"
+    const realKinds = ["benefit", "program", "voucher_pass"];
+    // Note: pageSignals or title-based extraction could still mark it as archived if it's old
+    
+    // Check if the current item kind is in realKinds
+    // Since kind is not in StatusInputs, we'll check common keywords in title as a proxy
+    const lowerTitle = title.toLowerCase();
+    const isLikelyRealBenefit = 
+      lowerTitle.includes("επίδομα") || 
+      lowerTitle.includes("πρόγραμμα") || 
+      lowerTitle.includes("pass") || 
+      lowerTitle.includes("voucher");
+
+    if (isLikelyRealBenefit) {
+      return {
+        applicationStatus: "unknown",
+        status: "published", 
+        reason: "no dates available but treated as permanent information",
+      };
+    }
+
+    // Default for news/others without dates: draft
     return {
       applicationStatus: "unknown",
-      status: "published", // Show it as permanent info
-      reason: "no dates available but treated as permanent information",
+      status: "draft",
+      reason: "no dates available and not a primary benefit kind",
     };
   }
 
@@ -279,4 +313,3 @@ export function computeStatus(
     reason: "insufficient evidence",
   };
 }
-

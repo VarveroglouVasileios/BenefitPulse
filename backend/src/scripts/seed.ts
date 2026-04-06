@@ -57,9 +57,9 @@ export async function seed() {
     },
     {
       name: "ΑΣΕΠ - Ειδικές Ανακοινώσεις",
-      url: "https://info.asep.gr/archive/special-announcements",
+      url: "https://info.asep.gr/",
       type: "html_listing" as const,
-      enabled: false, // Integrated into info.asep.gr/feed.xml
+      enabled: true,
     },
     {
       name: "ΑΣΕΠ - Αρχείο Ανακοινώσεων ΣΟΧ & ΣΜΕ",
@@ -92,6 +92,12 @@ export async function seed() {
       enabled: true,
     },
     {
+      name: "ΔΥΠΑ Voucher Κατάρτισης",
+      url: "https://voucher.gov.gr/",
+      type: "html_catalog" as const,
+      enabled: true,
+    },
+    {
       name: "GovGR Υγεία & Πρόνοια - Επιδόματα",
       url: "https://www.gov.gr/ipiresies/ugeia-kai-pronoia/epidomata",
       type: "html_listing" as const,
@@ -101,11 +107,17 @@ export async function seed() {
       name: "GovGR Επιδoτήσεις πολιτών",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon",
       type: "html_listing" as const,
-      enabled: false, // 403
+      enabled: true,
     },
     {
       name: "Youth Pass Page",
       url: "https://vouchers.gov.gr/youthpass",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Fuel Pass III",
+      url: "https://vouchers.gov.gr/fuelpass",
       type: "single_page" as const,
       enabled: true,
     },
@@ -189,15 +201,15 @@ export async function seed() {
     },
     {
       name: "MITOS - EMDD API",
-      url: "https://api.mitos.gov.gr/v1",
-      type: "api" as const,
-      enabled: false, // 404
+      url: "https://mitos.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
     },
     {
       name: "MITOS - EMDD API (Services)",
-      url: "https://api.mitos.gov.gr/v1/services",
-      type: "api" as const,
-      enabled: false, // 404
+      url: "https://mitos.gov.gr/index.php/%CE%91%CF%81%CF%87%CE%B9%CE%BA%CE%AE_%CF%83%CE%B5%CE%BB%CE%AF%CE%B4%CE%B1",
+      type: "html_listing" as const,
+      enabled: true,
     },
     {
       name: "OPEKA - Ανακοινώσεις / Δελτία Τύπου (discovery)",
@@ -237,9 +249,9 @@ export async function seed() {
     },
     {
       name: "ESPA Antagonistikotita",
-      url: "https://www.antagonistikotita.gr/category/nea/feed/",
+      url: "https://21-27.antagonistikotita.gr/feed/",
       type: "rss" as const,
-      enabled: false, // Timeout
+      enabled: true,
     },    {
       name: "Oikogeneia - Οικογενειακά Επιδόματα",
       url: "https://opeka.gr/oikogeneia/epidoma-paidiou-a21/",
@@ -296,9 +308,9 @@ export async function seed() {
     },
     {
       name: "ESPA Fisheries",
-      url: "https://alieia.minagric.gr/",
+      url: "https://www.alieia.gr/",
       type: "html_listing" as const,
-      enabled: false, // Error
+      enabled: true,
     },
     {
       name: "ESPA Ανθρώπινο Δυναμικό",
@@ -309,6 +321,12 @@ export async function seed() {
     {
       name: "Ανταγωνιστικότητα 2021-2027",
       url: "https://21-27.antagonistikotita.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Ανταγωνιστικότητα Προκηρύξεις",
+      url: "https://21-27.antagonistikotita.gr/prokiryxeis/",
       type: "html_listing" as const,
       enabled: true,
     },
@@ -350,9 +368,9 @@ export async function seed() {
     },
     {
       name: "Culture Portal (Grants)",
-      url: "https://portal.culture.gov.gr/",
+      url: "https://www.culture.gov.gr/",
       type: "html_listing" as const,
-      enabled: false, // Error
+      enabled: true,
       config: {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
@@ -380,6 +398,12 @@ export async function seed() {
     {
       name: "ESPA - Όλες οι Προκηρύξεις (κύρια λίστα)",
       url: "https://www.espa.gr/el/Pages/Proclamations.aspx",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ΕΣΠΑ Προκηρύξεις",
+      url: "https://www.espa.gr/el/Pages/procsimsea.aspx",
       type: "html_listing" as const,
       enabled: true,
     },
@@ -415,9 +439,21 @@ export async function seed() {
     },
     {
       name: "Oikogeneia - Οικογενειακά Επιδόματα (Canonical)",
-      url: "https://www.oikogeneia.gov.gr/",
+      url: "https://opeka.gr/oikogeneia/",
       type: "html_listing" as const,
-      enabled: false, // Error
+      enabled: true,
+    },
+    {
+      name: "OPEKA Επιδόματα λίστα",
+      url: "https://www.opeka.gr/category/epidomata/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Σπίτι μου II",
+      url: "https://www.dypa.gov.gr/spiti-mou",
+      type: "single_page" as const,
+      enabled: true,
     },
   ];
 

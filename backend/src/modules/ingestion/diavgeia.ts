@@ -74,21 +74,51 @@ export async function extractDiavgeiaText(ada: string): Promise<string> {
   }
 }
 export async function searchDiavgeia(queryText: string): Promise<{ text: string, url: string } | null> {
-  try {
-    const query = encodeURIComponent(queryText);
-    const url = `https://diavgeia.gov.gr/luminapi/api/search?q=${query}&sort=recent&size=1`;
-    const response = await axios.get(url, {
-      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
-      timeout: 30000,
-    });
-    
-    if (response.data && response.data.decisions && response.data.decisions.length > 0) {
-      const ada = response.data.decisions[0].ada;
-      const pdfText = await extractDiavgeiaText(ada);
-      return { text: pdfText, url: `https://diavgeia.gov.gr/doc/${ada}` };
+  const query = encodeURIComponent(queryText);
+  const url = `https://diavgeia.gov.gr/luminapi/api/search?q=${query}&sort=recent&size=1`;
+  const maxAttempts = 3;
+  const baseDelayMs = 1500;
+
+  const isTransientError = (err: any): boolean => {
+    const status = err?.response?.status;
+    if (status === 429 || status === 503) return true;
+    const code = err?.code || "";
+    if (code === "ECONNABORTED" || code === "ETIMEDOUT" || code === "ENOTFOUND") return true;
+    const message = (err?.message || "").toLowerCase();
+    return message.includes("timeout") || message.includes("network");
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await axios.get(url, {
+        headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+        timeout: 30000,
+      });
+      
+      if (response.data && response.data.decisions && response.data.decisions.length > 0) {
+        const ada = response.data.decisions[0].ada;
+        const pdfText = await extractDiavgeiaText(ada);
+        return { text: pdfText, url: `https://diavgeia.gov.gr/doc/${ada}` };
+      }
+      return null;
+    } catch (err: any) {
+      const transient = isTransientError(err);
+      const shouldRetry = transient && attempt < maxAttempts;
+
+      if (shouldRetry) {
+        const delayMs = baseDelayMs * Math.pow(2, attempt - 1);
+        console.warn(
+          `⚠️ Diavgeia transient error for "${queryText}" (attempt ${attempt}/${maxAttempts}): ${err.message} — retrying in ${delayMs}ms`,
+        );
+        await sleep(delayMs);
+        continue;
+      }
+
+      console.error(`⚠️ Diavgeia search failed for "${queryText}":`, err.message);
+      return null;
     }
-  } catch (err: any) {
-    console.error(`⚠️ Diavgeia search failed for "${queryText}":`, err.message);
   }
   return null;
 }
