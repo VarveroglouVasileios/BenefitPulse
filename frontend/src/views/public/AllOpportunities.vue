@@ -210,6 +210,7 @@ onMounted(() => {
 .all-opportunities h1 {
   color: var(--text-primary);
   margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
 }
 
 .tabs {
@@ -235,6 +236,7 @@ onMounted(() => {
   transition: all 0.2s;
   white-space: nowrap;
   flex-shrink: 0;
+  border-radius: 0.35rem 0.35rem 0 0;
 }
 
 @media (min-width: 640px) {
@@ -253,6 +255,7 @@ onMounted(() => {
   color: var(--primary-color);
   border-bottom-color: var(--primary-color);
   font-weight: 600;
+  background: var(--bg-secondary);
 }
 
 .empty-state {
@@ -373,7 +376,7 @@ onMounted(() => {
   gap: 1rem;
   background: var(--bg-tertiary);
   padding: 0.75rem 1rem;
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   margin-bottom: 1.5rem;
   color: var(--text-primary);
   flex-wrap: wrap;

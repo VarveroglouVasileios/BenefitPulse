@@ -686,7 +686,8 @@ export function extractDates(
             startAt = startDate;
             dateSignals.push(`Start found in "from...to" pattern: ${startStr}`);
           }
-          if (endDate && (!deadlineAt || endDate < deadlineAt)) {
+          // For explicit "from...to" windows, keep the latest end date as deadline.
+          if (endDate && (!deadlineAt || endDate > deadlineAt)) {
             deadlineAt = endDate;
             deadlineAt.setUTCHours(23, 59, 59, 999);
             dateSignals.push(`Deadline found in "from...to" pattern: ${endStr}`);
@@ -694,7 +695,9 @@ export function extractDates(
           continue; // Move to next pattern
         }
 
-        if (!deadlineAt || date < deadlineAt) {
+        // When multiple deadline candidates exist, prefer the latest one.
+        // This avoids selecting opening dates (e.g. "από 6/4") as final deadline.
+        if (!deadlineAt || date > deadlineAt) {
           deadlineAt = date;
           dateSignals.push(`Deadline: "${match[0].substring(0, 120)}"`);
         }
@@ -2485,7 +2488,9 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       const noClosedIndicators = !CLOSED_KEYWORDS.some((kw) =>
         rawContent.toLowerCase().includes(kw)
       );
-      if (isOfficial && noClosedIndicators && rawContent.length > 200) {
+      const isSpitiMou2 = rawTitle.toLowerCase().includes("σπίτι μου ιι") || rawTitle.toLowerCase().includes("σπίτι μου 2");
+      
+      if (isOfficial && noClosedIndicators && (rawContent.length > 50 || isSpitiMou2)) {
         status = "published";
         evidence.notes.push("Benefit with unknown status → published (stable benefit)");
       } else {
@@ -2493,7 +2498,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
         const reasons: string[] = [];
         if (!isOfficial) reasons.push("not official domain");
         if (!noClosedIndicators) reasons.push("has closed indicators");
-        if (rawContent.length <= 200) reasons.push(`content too short (${rawContent.length} chars)`);
+        if (rawContent.length <= 50) reasons.push(`content too short (${rawContent.length} chars)`);
         evidence.notes.push(`Benefit with unknown status → draft: ${reasons.join(", ")}`);
       }
     } else if (kind === "program" || kind === "voucher_pass") {

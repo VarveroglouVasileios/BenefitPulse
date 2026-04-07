@@ -798,6 +798,25 @@ export class IngestionService {
         });
       }
 
+      // Special handling for ESPA
+      if (isEskaEsPa) {
+        $("a[href*='item=']").each((_, el) => {
+          const $el = $(el);
+          const href = $el.attr("href");
+          if (!href) return;
+          
+          const title = $el.text().trim();
+          if (!title || title.length < 5) return;
+
+          items.push({
+            title,
+            url: href.startsWith("http") ? href : new URL(href, finalUrl || source.url).toString(),
+            content: title,
+            publishedAt: new Date(),
+          });
+        });
+      }
+
       // Special handling for Diavgeia HTML listings
       if (isDiavgeiaHtml) {
         $(".decision-row, .result-item, tr.decision").each((_, el) => {

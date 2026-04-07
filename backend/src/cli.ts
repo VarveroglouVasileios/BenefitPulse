@@ -120,6 +120,22 @@ async function runCommand() {
         break;
       }
 
+      case "check:health": {
+        console.log("🩺 Checking enabled source health...");
+        const healthModule = await import("./scripts/check-all-sources");
+        await healthModule.default();
+        process.exit(0);
+        break;
+      }
+
+      case "audit:correct-data": {
+        console.log("🧾 Auditing CorrectData.txt against production DB...");
+        const auditModule = await import("./scripts/audit-correct-data");
+        await auditModule.default();
+        process.exit(0);
+        break;
+      }
+
       case "workers:ingest": {
         console.log("🔄 Running ingestion worker manually...");
         const workersModule = await import("./scripts/run-workers");
@@ -195,6 +211,8 @@ Usage:
 📊 Diagnostics:
   check:sources         Check sources and data status
   check:drafts          Check draft opportunities and why they're not published
+  check:health          Run source health checks for all enabled sources
+  audit:correct-data    Compare CorrectData.txt with DB opportunities
 
 📖 Documentation:
   help                  Show this help message

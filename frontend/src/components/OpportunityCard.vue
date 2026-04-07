@@ -183,7 +183,8 @@ const shouldShowDeadline = computed(() => {
 });
 
 const sourceIcon = computed(() => {
-  const src = props.opportunity.source.toLowerCase();
+  const src = (props.opportunity.source || "").toLowerCase();
+  if (!src) return null;
   if (src.includes("gov.gr")) return "https://www.gov.gr/favicon.ico";
   if (src.includes("dypa") || src.includes("δυνα")) return "https://www.dypa.gov.gr/favicon.ico";
   if (src.includes("opeka") || src.includes("οπεκα")) return "https://opeka.gr/favicon.ico";
@@ -246,13 +247,16 @@ const statusClass = computed(() => {
 });
 
 function getSourceLabel(source: string): string {
+  const normalized = (source || "").toLowerCase();
+  if (!normalized) return "Άγνωστη πηγή";
+
   const sourceMap: Record<string, string> = {
     "gov.gr": "gov.gr",
     "vouchers.gov.gr": "vouchers.gov.gr",
     "dypa": "ΔΥΠΑ",
     "opeka": "ΟΠΕΚΑ",
   };
-  return sourceMap[source.toLowerCase()] || source;
+  return sourceMap[normalized] || source;
 }
 
 function formatDate(date: string | Date): string {
@@ -285,7 +289,7 @@ function formatDate(date: string | Date): string {
 .opportunity-card {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   padding: 1rem;
   transition: box-shadow 0.2s, border-color 0.2s;
   display: flex;
@@ -346,6 +350,10 @@ function formatDate(date: string | Date): string {
   margin-right: 1rem;
   font-size: 1rem;
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -360,6 +368,7 @@ function formatDate(date: string | Date): string {
 .summary {
   color: var(--text-secondary);
   margin-bottom: 1rem;
+  line-height: 1.55;
 }
 
 .card-meta {
@@ -368,7 +377,7 @@ function formatDate(date: string | Date): string {
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   margin-bottom: 1rem;
   font-size: 0.85rem;
 }

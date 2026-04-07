@@ -32,6 +32,7 @@ export interface IOpportunity extends Document {
   evidenceSnippet?: string; // Max 200 chars
   rejectionReason?: string; // Reason if rejected (e.g., "dead_link")
   brokenLink?: boolean; // True if URL is 404/redirect to unrelated domain
+  isLocked?: boolean; // If true, automated jobs (archive, cleanup) will not modify this
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -191,6 +192,11 @@ const OpportunitySchema = new Schema<IOpportunity>(
       type: String,
     },
     brokenLink: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isLocked: {
       type: Boolean,
       default: false,
       index: true,
