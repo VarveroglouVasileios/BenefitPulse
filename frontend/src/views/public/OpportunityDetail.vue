@@ -62,7 +62,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useHead } from '@unhead/vue';
 import { api } from "../../api/endpoints";
 import { useAuthStore } from "../../stores/auth.store";
@@ -73,6 +73,7 @@ import Badge from "../../components/Badge.vue";
 import WhyThis from "../../components/WhyThis.vue";
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
 const bookmarksStore = useBookmarksStore();
 const { trackOfficialClick: trackClick } = useTracking();
