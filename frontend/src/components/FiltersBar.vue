@@ -21,6 +21,7 @@
             v-for="opt in typeOptions"
             :key="opt.value"
             class="chip"
+            type="button"
             :class="{ active: localFilters.type === opt.value }"
             @click="setType(opt.value)"
           >
@@ -113,7 +114,7 @@ watch(
 .filters-bar {
   margin-bottom: 1.5rem;
   border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   overflow: hidden;
   background: var(--bg-secondary);
 }
@@ -210,7 +211,7 @@ watch(
   width: 100%;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 0.95rem;

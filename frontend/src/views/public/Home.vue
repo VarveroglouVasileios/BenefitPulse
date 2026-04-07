@@ -615,14 +615,27 @@ onBeforeUnmount(() => {
     transform: none;
     animation: none;
   }
+
+  .card,
+  .chip,
+  .btn,
+  .step,
+  .safety-card,
+  .example-card,
+  .faq-item {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 .hero-title {
   font-size: 1.75rem;
   margin-bottom: 1rem;
-  line-height: 1.2;
+  line-height: 1.15;
   color: var(--text-primary);
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 @media (min-width: 640px) {
@@ -648,6 +661,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
   margin-bottom: 1.5rem;
   line-height: 1.6;
+  max-width: 62ch;
 }
 
 @media (min-width: 640px) {
@@ -700,6 +714,7 @@ onBeforeUnmount(() => {
   font-weight: 600;
   transition: all 0.2s;
   display: inline-block;
+  line-height: 1.2;
 }
 
 .btn-primary {
@@ -980,6 +995,7 @@ onBeforeUnmount(() => {
 .section-header h2 {
   font-size: 1.75rem;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .link {

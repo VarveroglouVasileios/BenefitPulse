@@ -285,7 +285,7 @@ function formatDate(date: string | Date): string {
 .opportunity-card {
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   padding: 1rem;
   transition: box-shadow 0.2s, border-color 0.2s;
   display: flex;
@@ -346,6 +346,10 @@ function formatDate(date: string | Date): string {
   margin-right: 1rem;
   font-size: 1rem;
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 @media (min-width: 640px) {
@@ -360,6 +364,7 @@ function formatDate(date: string | Date): string {
 .summary {
   color: var(--text-secondary);
   margin-bottom: 1rem;
+  line-height: 1.55;
 }
 
 .card-meta {
@@ -368,7 +373,7 @@ function formatDate(date: string | Date): string {
   gap: 0.5rem;
   padding: 0.75rem;
   background: var(--bg-secondary);
-  border-radius: 0.5rem;
+  border-radius: 0.625rem;
   margin-bottom: 1rem;
   font-size: 0.85rem;
 }

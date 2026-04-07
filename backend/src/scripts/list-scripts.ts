@@ -109,6 +109,22 @@ const scripts: ScriptInfo[] = [
     usage: "npm run cli check:drafts",
   },
   {
+    name: "check:health",
+    file: "check-all-sources.ts",
+    category: "diagnostics",
+    status: "active",
+    description: "Run health checks for all enabled sources",
+    usage: "npm run cli check:health",
+  },
+  {
+    name: "audit:correct-data",
+    file: "audit-correct-data.ts",
+    category: "diagnostics",
+    status: "active",
+    description: "Compare CorrectData.txt with opportunities in DB",
+    usage: "npm run cli audit:correct-data [optional-path]",
+  },
+  {
     name: "run-ingestion-once",
     file: "run-ingestion-once.ts",
     category: "deprecated",

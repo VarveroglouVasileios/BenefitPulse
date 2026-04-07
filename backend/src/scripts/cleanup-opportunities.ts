@@ -95,8 +95,11 @@ function isGarbage(title: string, summary: string, url: string): boolean {
     "επικοινωνία",
   ];
   
-  // Check if title is very short or generic
-  if (title.length < 10) return true;
+  // Check if it's an ASEP proclamation (usually short title like 1K/2024 or 2GB/2025)
+  const isAsepPattern = /\b\d+[Α-ΩΆ-ΏA-Z]+\/\d{4}\b/i.test(title);
+  
+  // Check if title is very short or generic (but allow ASEP patterns)
+  if (title.length < 10 && !isAsepPattern) return true;
   
   // Check for "test" in title (test/demo content)
   if (/\btest\b/i.test(title)) return true;
