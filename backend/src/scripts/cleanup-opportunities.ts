@@ -203,6 +203,7 @@ export async function cleanupOpportunities(): Promise<CleanupStats> {
   const urlMap = new Map<string, string>(); // old -> canonical
   
   for (const opp of opportunities) {
+    if ((opp as any).isLocked) continue;
     const canonicalUrl = canonicalizeUrl(opp.officialUrl);
     if (canonicalUrl !== opp.officialUrl) {
       urlMap.set(opp.officialUrl, canonicalUrl);
@@ -239,6 +240,7 @@ export async function cleanupOpportunities(): Promise<CleanupStats> {
   const duplicateGroups = new Map<string, typeof opportunities>();
   
   for (const opp of opportunities) {
+    if ((opp as any).isLocked) continue;
     const canonicalUrl = canonicalizeUrl(opp.officialUrl);
     const normalizedTitle = normalizeTitle(opp.title);
     const key = `${canonicalUrl}|${normalizedTitle}|${opp.source}`;
