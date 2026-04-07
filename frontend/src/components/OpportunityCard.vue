@@ -183,7 +183,8 @@ const shouldShowDeadline = computed(() => {
 });
 
 const sourceIcon = computed(() => {
-  const src = props.opportunity.source.toLowerCase();
+  const src = (props.opportunity.source || "").toLowerCase();
+  if (!src) return null;
   if (src.includes("gov.gr")) return "https://www.gov.gr/favicon.ico";
   if (src.includes("dypa") || src.includes("δυνα")) return "https://www.dypa.gov.gr/favicon.ico";
   if (src.includes("opeka") || src.includes("οπεκα")) return "https://opeka.gr/favicon.ico";
@@ -246,13 +247,16 @@ const statusClass = computed(() => {
 });
 
 function getSourceLabel(source: string): string {
+  const normalized = (source || "").toLowerCase();
+  if (!normalized) return "Άγνωστη πηγή";
+
   const sourceMap: Record<string, string> = {
     "gov.gr": "gov.gr",
     "vouchers.gov.gr": "vouchers.gov.gr",
     "dypa": "ΔΥΠΑ",
     "opeka": "ΟΠΕΚΑ",
   };
-  return sourceMap[source.toLowerCase()] || source;
+  return sourceMap[normalized] || source;
 }
 
 function formatDate(date: string | Date): string {
