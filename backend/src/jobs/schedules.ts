@@ -1,4 +1,4 @@
-import { ingestionQueue } from "./queues";
+import { ingestionQueue, aggregationQueue } from "./queues";
 
 /**
  * Schedule ingestion. Archive / verification are enqueued only after all
@@ -21,4 +21,20 @@ export async function scheduleIngestionJobs(): Promise<void> {
   console.log(
     "✅ Archive & verification run after each full ingestion batch (delays configurable via env)",
   );
+
+  // Schedule status recomputation every 12 hours so applicationStatus stays
+  // accurate even between ingestion runs (e.g. an "upcoming" item whose
+  // applicationStartAt arrives between two ingestion cycles).
+  await aggregationQueue.add(
+    "recompute-status",
+    {},
+    {
+      repeat: {
+        every: 12 * 60 * 60 * 1000, // every 12 hours
+      },
+      removeOnComplete: { count: 5 },
+      removeOnFail: { count: 10 },
+    }
+  );
+  console.log("✅ Status recomputation scheduled (every 12 hours)");
 }

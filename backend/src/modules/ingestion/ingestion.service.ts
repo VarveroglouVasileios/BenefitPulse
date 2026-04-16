@@ -2447,7 +2447,7 @@ export class IngestionService {
              existingOpp.sourcePriority = currentSourcePriority;
              existingOpp.source = cleaned.source;
           }
-          
+
           existingOpp.title = cleaned.title;
           existingOpp.summary = finalSummary;
           existingOpp.kind = finalKind;
@@ -2467,33 +2467,67 @@ export class IngestionService {
           await existingOpp.save();
           console.log(`   ✅ UPDATED existing opportunity (status=${cleaned.status})`);
         } else {
+          // TITLE FUZZY DEDUP: Detect same program published under a different URL.
+          // Uses a case-insensitive prefix match on the first 40 chars of the title to
+          // catch variants like "Σπίτι μου ΙΙ" coming from vouchers.gov.gr AND dypa.gov.gr.
+          let titleDuplicate: typeof existingOpp | null = null;
+          const titlePrefix = cleaned.title.substring(0, 40).trim();
+          if (titlePrefix.length >= 10) {
+            const escapedPrefix = titlePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            titleDuplicate = await Opportunity.findOne({
+              officialUrl: { $ne: cleaned.officialUrl },
+              title: { $regex: `^${escapedPrefix}`, $options: 'i' },
+              deletedAt: null,
+            }) as typeof existingOpp;
+          }
+
+          if (titleDuplicate) {
+            const existingPriority = titleDuplicate.sourcePriority || 3;
+            if (currentSourcePriority < existingPriority) {
+              // Higher-priority source (e.g. API < RSS < HTML) — upgrade the existing record's URL
+              console.log(`   ⭐ TITLE DEDUP UPGRADE: "${cleaned.title.substring(0, 50)}" — switching to higher-priority URL ${cleaned.officialUrl}`);
+              titleDuplicate.officialUrl = cleaned.officialUrl;
+              titleDuplicate.sourceType = source.type;
+              titleDuplicate.sourcePriority = currentSourcePriority;
+              titleDuplicate.source = cleaned.source;
+              await titleDuplicate.save();
+            } else {
+              console.log(`   ⏭️  TITLE DEDUP SKIP: "${cleaned.title.substring(0, 50)}" already exists (id=${titleDuplicate._id})`);
+            }
+            rawItem.processed = true;
+            await rawItem.save();
+            processedCount++;
+            if (reporter) reporter.trackUpdated(sourceId);
+            continue;
+          }
+
           // Create new opportunity
-        // Store applicationStatus in model field
-        await Opportunity.create({
-          type: cleaned.type,
-          kind: finalKind,
-          title: cleaned.title,
-          summary: finalSummary,
-          officialUrl: cleaned.officialUrl,
-          source: cleaned.source,
-          sourceType: source.type,
-          sourcePriority: currentSourcePriority,
-          publishedAt: item.publishedAt,
-          deadlineAt,
-          startAt,
-          announcedAt,
-          applicationStartAt,
-          applicationEndAt,
-          tags,
-          region: extracted.region,
-          criteriaJson: extracted.criteriaJson || {},
-          criteriaRulesJson,
-          criteriaUnknown: cleaned.criteriaUnknown,
-          confidence: cleaned.confidence,
-          applicationStatus: cleaned.applicationStatus,
-          status: cleaned.status,
-        });
-        console.log(`   ✅ CREATED new opportunity (status=${cleaned.status})`);
+          // Store applicationStatus in model field
+          await Opportunity.create({
+            type: cleaned.type,
+            kind: finalKind,
+            title: cleaned.title,
+            summary: finalSummary,
+            officialUrl: cleaned.officialUrl,
+            source: cleaned.source,
+            sourceType: source.type,
+            sourcePriority: currentSourcePriority,
+            publishedAt: item.publishedAt,
+            deadlineAt,
+            startAt,
+            announcedAt,
+            applicationStartAt,
+            applicationEndAt,
+            tags,
+            region: extracted.region,
+            criteriaJson: extracted.criteriaJson || {},
+            criteriaRulesJson,
+            criteriaUnknown: cleaned.criteriaUnknown,
+            confidence: cleaned.confidence,
+            applicationStatus: cleaned.applicationStatus,
+            status: cleaned.status,
+          });
+          console.log(`   ✅ CREATED new opportunity (status=${cleaned.status})`);
         }
 
         rawItem.processed = true;

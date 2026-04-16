@@ -1091,13 +1091,51 @@ export function classifyKindAndType(
   // Live verification will check if it's relevant to benefits/programs
   // If not relevant, it will be marked as kind="decision" and excluded from active tabs
   if (lowerUrl.includes("diavgeia.gov.gr") || lowerUrl.includes("opendata.diavgeia.gov.gr")) {
+    // --- LOCAL / MUNICIPAL DECISION FILTER ---
+    // Diavgeia indexes ALL government decisions, including those of local authorities
+    // (δήμοι, ΔΕΥΑ, ΔΕΗ-municipal, κοινωφελείς επιχειρήσεις, etc.).  These are NOT
+    // national benefit programs and should never surface in BenefitPulse feeds.
+    // We reject them early so they don't waste AI quota or pollute the feed.
+    const localMunicipalIndicators = [
+      // Municipal water / sewage utilities
+      "δευαν", "δευακ", "δευαλ", "δευα ", "δευαη",
+      // Generic local-body phrases
+      "κοινωφελης επιχειρηση δημου",
+      "κοινωφελης επιχειρηση",
+      "κοινωφελή επιχείρηση δήμου",
+      "δημοτικη επιχειρηση",
+      "δημοτική επιχείρηση",
+      "ανωνυμη εταιρεια οτα",
+      "α.ε. ο.τ.α.",
+      "αε οτα",
+      // Common local-decision subjects (Easter/Christmas bonuses for municipal employees)
+      "επιδομα εορτης",
+      "επίδομα εορτής",
+      "δωρο πασχα εργαζομενοι",
+      "δώρο πάσχα εργαζόμενοι",
+      "χριστουγεννιατικο δωρο εργαζομενοι",
+      "εορταστικο επιδομα",
+      "εορτή πάσχα εργαζόμενων",
+      "εορτη πασχα εργαζομενων",
+    ];
+
+    const isLocalMunicipal = localMunicipalIndicators.some(indicator =>
+      lowerTitle.includes(indicator) || lowerContent.includes(indicator)
+    );
+
+    if (isLocalMunicipal) {
+      // Classify as service_info → will be rejected by the ingestion pipeline
+      return { kind: "service_info", type: "manual" };
+    }
+    // --- END LOCAL / MUNICIPAL DECISION FILTER ---
+
     // Default to decision, but allow override during ingestion if keywords are present
     const hasRelevantKeywords = [
       "voucher", "pass", "επίδομα", "επιδομα", "επιδότηση", "επιχορηγηση",
       "πρόγραμμα", "προγραμμα", "παροχή", "παροχη", "βοήθημα", "βοηθημα",
       "κατάρτιση", "καταρτιση", "απασχόληση", "απασχοληση", "ανεργία", "ανεργια",
     ].some(kw => lowerTitle.includes(kw) || lowerContent.includes(kw));
-    
+
     // If has relevant keywords, allow it to be classified as program/benefit
     // Live verification will do final check
     if (hasRelevantKeywords && lowerContent.length > 200) {
@@ -1109,7 +1147,7 @@ export function classifyKindAndType(
         return { kind: "benefit", type: "subsidy" };
       }
     }
-    
+
     // Default: decision (will be verified during live verification)
     return { kind: "decision", type: "decision" };
   }

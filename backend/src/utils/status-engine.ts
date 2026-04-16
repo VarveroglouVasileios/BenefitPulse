@@ -55,21 +55,87 @@ function hasClosedSignals(pageSignals: string[] = []): boolean {
  * Check if page signals indicate open status
  */
 function hasOpenSignals(pageSignals: string[] = []): boolean {
+  // NOTE: "από" and "έως" were intentionally removed — they are too generic
+  // (appear in almost any Greek sentence) and caused false "open" readings.
   const openKeywords = [
     "υποβολή αιτήσεων",
     "αιτήσεις",
     "ανοικτό",
     "ανοιχτό",
-    "από",
-    "έως",
   ];
-  
+
   const signalsText = pageSignals.join(" ").toLowerCase();
   return openKeywords.some(keyword => signalsText.includes(keyword.toLowerCase()));
 }
 
 /**
- * Extract date from title (e.g. "7 Φεβρουαρίου")
+ * Compute Greek Orthodox Easter (Meeus Julian algorithm) for a given year.
+ * Returns a Date in the Athens timezone (UTC+2/+3).
+ */
+function getGreekOrthodoxEaster(year: number): Date {
+  const a = year % 4;
+  const b = year % 7;
+  const c = year % 19;
+  const d = (19 * c + 15) % 30;
+  const e = (2 * a + 4 * b - d + 34) % 7;
+  const month = Math.floor((d + e + 114) / 31); // 3 = March, 4 = April
+  const day = ((d + e + 114) % 31) + 1;
+  // Julian to Gregorian: add 13 days (valid for 1900–2099)
+  const julian = new Date(year, month - 1, day + 13, 23, 59, 59);
+  return julian;
+}
+
+/**
+ * Resolve Greek religious holiday aliases to calendar dates.
+ * Returns null if the alias is not recognised.
+ */
+function resolveGreekHolidayAlias(alias: string, year: number): Date | null {
+  const easter = getGreekOrthodoxEaster(year);
+  const easterMs = easter.getTime();
+  const day = 24 * 60 * 60 * 1000;
+
+  const map: Record<string, Date> = {
+    // Holy Week
+    "μ. δευτέρα":   new Date(easterMs - 6 * day),
+    "μ. τρίτη":     new Date(easterMs - 5 * day),
+    "μ. τεταρτη":   new Date(easterMs - 4 * day),
+    "μ. πεμπτη":    new Date(easterMs - 3 * day),
+    "μεγαλη παρασκευη": new Date(easterMs - 2 * day),
+    "μ. παρασκευη": new Date(easterMs - 2 * day),
+    "μεγαλο σαββατο": new Date(easterMs - 1 * day),
+    "μ. σαββατο":   new Date(easterMs - 1 * day),
+    // Easter & close feasts
+    "πασχα":        easter,
+    "πάσχα":        easter,
+    "κυριακη πασχα": easter,
+    "δευτερα πασχα": new Date(easterMs + 1 * day),
+    "αναληψη":      new Date(easterMs + 39 * day),
+    "πεντηκοστη":   new Date(easterMs + 49 * day),
+    "αγιο πνευμα":  new Date(easterMs + 50 * day),
+    // Fixed feasts (month/day, year provided by caller)
+    "χριστουγεννα": new Date(year, 11, 25, 23, 59, 59),
+    "χριστούγεννα": new Date(year, 11, 25, 23, 59, 59),
+    "πρωτοχρονια":  new Date(year, 0, 1, 23, 59, 59),
+    "πρωτοχρονιά":  new Date(year, 0, 1, 23, 59, 59),
+    "θεοφανεια":    new Date(year, 0, 6, 23, 59, 59),
+    "15 αυγουστου": new Date(year, 7, 15, 23, 59, 59),
+    "28 οκτωβριου": new Date(year, 9, 28, 23, 59, 59),
+    "25 μαρτιου":   new Date(year, 2, 25, 23, 59, 59),
+  };
+
+  // Normalise: strip accents, lowercase, collapse spaces
+  const norm = alias
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return map[norm] ?? null;
+}
+
+/**
+ * Extract date from title (e.g. "7 Φεβρουαρίου" or "έως Πάσχα")
  */
 function extractDateFromTitle(title: string, now: Date): Date | null {
   const greekMonths: Record<string, number> = {
@@ -88,21 +154,36 @@ function extractDateFromTitle(title: string, now: Date): Date | null {
   };
 
   const lowerTitle = title.toLowerCase();
-  
+  const year = now.getFullYear();
+
+  // Pattern 0: Greek religious holiday aliases (e.g. "Πάσχα", "Μ. Τρίτη")
+  // Matches patterns like "έως Πάσχα", "μέχρι Μ. Τρίτη", "έως τα Χριστούγεννα"
+  const holidayPatterns = [
+    /(?:έως|εως|μέχρι|μεχρι|ως|πριν από|προ)\s+(?:τα?\s+|της?\s+)?([Μμ]\.\s*[α-ωά-ώΑ-ΩΆ-Ώ]{3,20})/u,
+    /(?:έως|εως|μέχρι|μεχρι|ως)\s+(?:τα?\s+|της?\s+)?([α-ωά-ώΑ-ΩΆ-Ώ]{4,20}(?:\s+[α-ωά-ώΑ-ΩΆ-Ώ]{3,20})?)/u,
+  ];
+  for (const pat of holidayPatterns) {
+    const m = lowerTitle.match(pat);
+    if (m) {
+      const resolved = resolveGreekHolidayAlias(m[1].trim(), year);
+      if (resolved) return resolved;
+    }
+  }
+
   // Pattern 1: [day] [Greek Month Name] (e.g. "7 Φεβρουαρίου")
   const dateMatch = lowerTitle.match(/(\d{1,2})\s+([α-ωά-ώ]{3,15})(?:\s+(\d{4}))?/);
   if (dateMatch) {
     const day = parseInt(dateMatch[1], 10);
     const monthName = dateMatch[2];
     const yearStr = dateMatch[3];
-    
+
     // Find month index by checking if our map keys include the monthName
     const monthEntry = Object.entries(greekMonths).find(([key]) => monthName.startsWith(key.substring(0, 3)));
-    
+
     if (monthEntry) {
       const month = monthEntry[1];
-      const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
-      return new Date(year, month, day, 23, 59, 59);
+      const yr = yearStr ? parseInt(yearStr, 10) : year;
+      return new Date(yr, month, day, 23, 59, 59);
     }
   }
 
@@ -111,9 +192,9 @@ function extractDateFromTitle(title: string, now: Date): Date | null {
   if (numericMatch) {
     const day = parseInt(numericMatch[1], 10);
     const month = parseInt(numericMatch[2], 10) - 1;
-    let year = numericMatch[3] ? parseInt(numericMatch[3], 10) : now.getFullYear();
-    if (year < 100) year += 2000;
-    return new Date(year, month, day, 23, 59, 59);
+    let yr = numericMatch[3] ? parseInt(numericMatch[3], 10) : year;
+    if (yr < 100) yr += 2000;
+    return new Date(yr, month, day, 23, 59, 59);
   }
 
   return null;

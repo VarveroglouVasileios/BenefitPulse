@@ -43,6 +43,7 @@ import {
   recomputeOpportunityMatchesJob,
 } from "./jobs/matching.jobs";
 import { archiveExpiredOpportunitiesJob } from "./jobs/archive.jobs";
+import { recomputeStatus } from "./scripts/recompute-status";
 import { verifyAllPublishedJob, verifyOpportunityJob } from "./jobs/verification.jobs";
 import * as Sentry from "@sentry/node";
 
@@ -124,6 +125,8 @@ const aggregationWorker = new Worker(
       console.log("Daily metrics aggregation (placeholder)");
     } else if (job.name === "archive-expired-opportunities") {
       await archiveExpiredOpportunitiesJob(job);
+    } else if (job.name === "recompute-status") {
+      await recomputeStatus(false);
     } else {
       throw new Error(`Unknown aggregation job name: ${job.name}`);
     }

@@ -485,6 +485,67 @@ export async function seed() {
       type: "html_listing" as const,
       enabled: true,
     },
+    // ── Νέες πηγές (April 2026) ────────────────────────────────────────────
+    {
+      name: "Κινούμαι Ηλεκτρικά Γ' κύκλος",
+      url: "https://kinoumeilektrika3.gov.gr/",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Ανακαινίζω - Νοικιάζω",
+      url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/anakainizo-noikiazo",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Αναβαθμίζω το Σπίτι μου",
+      url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/anavathmizo-to-spiti-mou",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "ΔΥΠΑ - Πρόσληψη Ανέργων 50+ (5.000 θέσεις)",
+      url: "https://www.dypa.gov.gr/neo-programma-apascholisis-5000-anergon-ano-50",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "ΔΥΠΑ - Πρόσληψη 10.000 Ανέργων Γυναικών",
+      url: "https://www.dypa.gov.gr/proghramma-prosliipsis-10000-anerghon-ghynaikon",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Νταντάδες της Γειτονιάς",
+      url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/nantades-tis-geitonias",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Αλλάζω Συσκευή / Θερμοσίφωνα",
+      url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/allazw-syskeyi",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      name: "Εξοικονομώ - Ανακαινίζω (Νέο 2026)",
+      url: "https://exoikonomoneon.gov.gr/",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "ESPA - Ανταγωνιστικότητα Ενεργές Προσκλήσεις",
+      url: "https://www.espa.gr/el/Pages/procsimsea.aspx",
+      type: "html_listing" as const,
+      enabled: true,
+    },
+    {
+      name: "Ypergasias - Δελτία Τύπου",
+      url: "https://ypergasias.gov.gr/feed/",
+      type: "rss" as const,
+      enabled: true,
+    },
   ];
 
   for (const sourceData of sources) {
