@@ -74,7 +74,9 @@ export async function extractDiavgeiaText(ada: string): Promise<string> {
   }
 }
 export async function searchDiavgeia(queryText: string): Promise<{ text: string, url: string } | null> {
-  const query = encodeURIComponent(queryText);
+  // Sanitize: collapse newlines/tabs into spaces to prevent HTTP 400 from Diavgeia API
+  const sanitized = queryText.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  const query = encodeURIComponent(sanitized);
   const url = `https://diavgeia.gov.gr/luminapi/api/search?q=${query}&sort=recent&size=1`;
   const maxAttempts = 3;
   const baseDelayMs = 1500;

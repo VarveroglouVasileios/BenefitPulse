@@ -83,7 +83,7 @@ async function fetchFullPageContent(url: string): Promise<string | null> {
         "Upgrade-Insecure-Requests": "1",
         "Referer": url.includes("asep.gr") ? "https://info.asep.gr/" : url
       },
-      timeout: 15000,
+      timeout: 30000, // Increased from 15000 — slow gov sites (espa.gr, etc.) regularly exceed 15s
     });
     const $ = cheerio.load(response.data);
     $("script, style").remove();

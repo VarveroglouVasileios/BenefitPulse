@@ -2468,8 +2468,9 @@ export class IngestionService {
           console.log(`   ✅ UPDATED existing opportunity (status=${cleaned.status})`);
         } else {
           // TITLE FUZZY DEDUP: Detect same program published under a different URL.
-          // Uses a case-insensitive prefix match on the first 40 chars of the title to
-          // catch variants like "Σπίτι μου ΙΙ" coming from vouchers.gov.gr AND dypa.gov.gr.
+          // Pass 1 — prefix match: catches "Σπίτι μου ΙΙ" vs "Σπίτι μου ΙΙ (ΔΥΠΑ)"
+          // Pass 2 — token overlap: catches cross-language variants like
+          //   "Gigabit Connectivity Voucher" vs "Κουπόνι συνδεσιμότητας Gigabit"
           let titleDuplicate: typeof existingOpp | null = null;
           const titlePrefix = cleaned.title.substring(0, 40).trim();
           if (titlePrefix.length >= 10) {
@@ -2479,6 +2480,46 @@ export class IngestionService {
               title: { $regex: `^${escapedPrefix}`, $options: 'i' },
               deletedAt: null,
             }) as typeof existingOpp;
+          }
+
+          // Pass 2: token-overlap dedup (catches cross-language / reordered titles)
+          if (!titleDuplicate) {
+            const extractTokens = (t: string): Set<string> => {
+              const stopWords = new Set([
+                'το', 'τα', 'τον', 'την', 'τους', 'τις', 'ο', 'η', 'οι',
+                'για', 'και', 'της', 'του', 'στο', 'στη', 'στον', 'στην',
+                'με', 'απο', 'προγραμμα', 'program', 'the', 'for', 'a', 'an', 'of',
+                'νεο', 'new', 'νεα', 'δραση', 'δρασης',
+              ]);
+              return new Set(
+                t.toLowerCase()
+                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+                  .replace(/[«»"'()\[\]{}\-–—]/g, ' ')
+                  .split(/\s+/)
+                  .filter(tok => tok.length >= 4 && !stopWords.has(tok))
+              );
+            };
+            const newTokens = extractTokens(cleaned.title);
+            if (newTokens.size >= 2) {
+              // Fetch recent published/draft opps with a different URL (limit search scope)
+              const candidates = await Opportunity.find({
+                officialUrl: { $ne: cleaned.officialUrl },
+                status: { $in: ['published', 'draft'] },
+                deletedAt: null,
+              }).select('title officialUrl sourcePriority sourceType source').limit(500).lean();
+
+              for (const candidate of candidates) {
+                const candTokens = extractTokens(candidate.title);
+                if (candTokens.size < 2) continue;
+                const shared = [...newTokens].filter(t => candTokens.has(t)).length;
+                const overlap = shared / Math.min(newTokens.size, candTokens.size);
+                if (overlap >= 0.65) {
+                  titleDuplicate = candidate as any;
+                  console.log(`   🔍 TOKEN DEDUP: "${cleaned.title.substring(0, 50)}" ≈ "${candidate.title.substring(0, 50)}" (overlap=${(overlap * 100).toFixed(0)}%)`);
+                  break;
+                }
+              }
+            }
           }
 
           if (titleDuplicate) {

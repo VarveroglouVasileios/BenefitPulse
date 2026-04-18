@@ -2088,6 +2088,15 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     "υπηρεσίες σύζευξης", "υπηρεσιες συζευξης",
     "παροχές ασφάλισης", "παροχες ασφαλισης",
     "αναστολή λειτουργίας", "αναστολη λειτουργιας",
+
+    // EVENTS / CAREER FAIRS — not programs for citizens (Added Apr 2026)
+    "ημέρα καριέρας", "ημερα καριερας",   // e.g. "54η Ημέρα Καριέρας ΔΥΠΑ"
+    "jobready", "job ready",               // e.g. "JobReady Ξάνθη"
+    "εγκαίνια", "εγκαινια",               // inauguration events
+    "μνημόνιο συνεργασίας", "μνημονιο συνεργασιας", // institutional MoUs — not citizen benefits
+    "επιστημονική συνεργασία", "επιστημονικη συνεργασια",
+    "μητρώο επιλέξιμων παρόχων", "μητρωο επιλεξιμων παροχων", // provider registries — not citizen-facing
+    "χρονοδιάγραμμα προσκλήσεων", "χρονοδιαγραμμα προσκλησεων", // abstract schedule announcements
   ];
   
   const lowerTitle = rawTitle.toLowerCase();

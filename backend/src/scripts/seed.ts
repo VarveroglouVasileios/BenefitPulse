@@ -122,10 +122,11 @@ export async function seed() {
       enabled: true,
     },
     {
+      // Tourism4All 2025 έληξε. Ενεργοποίησε όταν ανακοινωθεί το 2026.
       name: "Tourism4All 2025 Page",
       url: "https://vouchers.gov.gr/tourism4all-2025",
       type: "single_page" as const,
-      enabled: true,
+      enabled: false,
     },
     {
       name: "OPEKA Επιδόματα",
@@ -164,10 +165,12 @@ export async function seed() {
       enabled: true,
     },
     {
+      // Disabled: deep fetch hits redirect loop on /e-services?tab=... links found on this page.
+      // Published 0 items consistently — not worth the noise.
       name: "ΔΥΠΑ Prosvasis - Εργαλειοθήκη Εργοδότη",
       url: "https://prosvasis.dypa.gov.gr/erghaleiothiki-erghodoti",
       type: "html_listing" as const,
-      enabled: true,
+      enabled: false,
     },
     {
       name: "Ελάχιστο Εγγυημένο Εισόδημα",
@@ -499,34 +502,65 @@ export async function seed() {
       enabled: true,
     },
     {
+      // TODO: URL 404 — gov.gr αναδιοργάνωσε τις σελίδες επιδοτήσεων.
+      // Βρες το σωστό URL από: https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon
+      // και ενεργοποίησε ξανά.
       name: "Αναβαθμίζω το Σπίτι μου",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/anavathmizo-to-spiti-mou",
       type: "single_page" as const,
-      enabled: true,
+      enabled: false,
     },
     {
+      // Fixed Apr 2026: prosvasis.dypa.gov.gr has the canonical page (old dypa.gov.gr slug was 404)
       name: "ΔΥΠΑ - Πρόσληψη Ανέργων 50+ (5.000 θέσεις)",
-      url: "https://www.dypa.gov.gr/neo-programma-apascholisis-5000-anergon-ano-50",
+      url: "https://prosvasis.dypa.gov.gr/active-employment-policies/proghramma-epikhorighisis-epikheiriseon-ghia-tin-proslipsi-5000-anerghon-ilikias-ano-ton-50-etwn-se-epikheiriseis-toy-idiotikou-tomea",
       type: "single_page" as const,
       enabled: true,
     },
     {
+      // Fixed Apr 2026: prosvasis.dypa.gov.gr has the canonical page (old dypa.gov.gr slug was 404)
       name: "ΔΥΠΑ - Πρόσληψη 10.000 Ανέργων Γυναικών",
-      url: "https://www.dypa.gov.gr/proghramma-prosliipsis-10000-anerghon-ghynaikon",
+      url: "https://prosvasis.dypa.gov.gr/active-employment-policies/proghramma-epikhorighisis-epikheiriseon-ghia-tin-proslipsi-10000-anerghon-ghinaikwn-me-emfasi-se-miteres-anilikon-teknon",
       type: "single_page" as const,
       enabled: true,
     },
     {
+      // Added Apr 2026: OPEN program — 1.500 unemployed aged 57+ in public health sector
+      name: "ΔΥΠΑ - Πρόσληψη 1.500 Ανέργων 57+ (Δημόσια Υγεία)",
+      url: "https://prosvasis.dypa.gov.gr/active-employment-policies/eidiko-proghramma-ghia-tin-proslipsi-1500-anerghon-ilikias-57-etwn-kai-ano-ston-dimosio-tomea-tis-ighias",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      // Added Apr 2026: OPEN program — 2.000 unemployed 18+ in Eastern Macedonia & Thrace region
+      name: "ΔΥΠΑ - Πρόσληψη 2.000 Ανέργων 18+ (Ανατολική Μακεδονία & Θράκη)",
+      url: "https://prosvasis.dypa.gov.gr/active-employment-policies/proghramma-epikhorighisis-epikheiriseon-ghia-tin-proslipsi-2000-anerghon-18-etwn-ano-stin-per-anatolikis-makedonias-thrakis",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      // Added Apr 2026: OPEN program — work experience for unemployed aged 30+
+      name: "ΔΥΠΑ - Εργασιακή Εμπειρία Ανέργων 30+",
+      url: "https://prosvasis.dypa.gov.gr/active-employment-policies/anoikto-proghramma-apoktisis-epaghghelmatikiserghasiakis-empeirias-ghia-anerghoys-ilikias-30-etwn-kai-ano-30-me-emfasi-se-omades-me-apokhi-apo-tin-aghora-erghasias-kai-omades-poy-plittontai-idiaitera-apo-tin-anerghia",
+      type: "single_page" as const,
+      enabled: true,
+    },
+    {
+      // TODO: URL 404 — gov.gr αναδιοργάνωσε τις σελίδες.
+      // Βρες από: https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon
       name: "Νταντάδες της Γειτονιάς",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/nantades-tis-geitonias",
       type: "single_page" as const,
-      enabled: true,
+      enabled: false,
     },
     {
+      // Η gov.gr επιστρέφει 403 στο deep fetch (bot protection).
+      // Το record υπάρχει ήδη στη DB από προηγούμενο επιτυχές scrape.
+      // Αν χρειαστεί ανανέωση: βρες alternative URL ή χρησιμοποίησε τον GovGR hub scraper.
       name: "Αλλάζω Συσκευή / Θερμοσίφωνα",
       url: "https://www.gov.gr/ipiresies/periousia-kai-phorologia/epidoteseis-politon/allazw-syskeyi",
       type: "single_page" as const,
-      enabled: true,
+      enabled: false,
     },
     {
       name: "Εξοικονομώ - Ανακαινίζω (Νέο 2026)",
