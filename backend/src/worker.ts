@@ -43,8 +43,10 @@ import {
   recomputeOpportunityMatchesJob,
 } from "./jobs/matching.jobs";
 import { archiveExpiredOpportunitiesJob } from "./jobs/archive.jobs";
+import { dedupOpportunitiesJob } from "./jobs/dedup.jobs";
 import { recomputeStatus } from "./scripts/recompute-status";
 import { verifyAllPublishedJob, verifyOpportunityJob } from "./jobs/verification.jobs";
+import { verificationQueue } from "./jobs/queues";
 import * as Sentry from "@sentry/node";
 
 if (config.sentry.enabled) {
@@ -123,9 +125,38 @@ const aggregationWorker = new Worker(
     await connectMongo();
     if (job.name === "daily-metrics") {
       console.log("Daily metrics aggregation (placeholder)");
-    } else if (job.name === "archive-expired-opportunities") {
+
+    } else if (job.name === "post-ingestion-pipeline") {
+      // Sequential housekeeping after each full ingestion batch.
+      // Steps 1-3 run inline (fast, DB-only). Step 4 (verification) is
+      // dispatched to its own queue so it doesn't block the aggregation worker.
+      console.log("\n  🔄 post-ingestion-pipeline: starting housekeeping sequence\n");
+
+      console.log("  ── Step 1/3: archive expired opportunities ──");
       await archiveExpiredOpportunitiesJob(job);
+
+      console.log("\n  ── Step 2/3: dedup (remove duplicates) ──");
+      await dedupOpportunitiesJob(job);
+
+      console.log("\n  ── Step 3/3: recompute applicationStatus ──");
+      await recomputeStatus(false);
+
+      // Dispatch verification to its own dedicated queue/worker
+      await verificationQueue.add("verify-all-published", {}, {
+        removeOnComplete: { count: 5 },
+        removeOnFail: { count: 10 },
+      });
+
+      console.log("\n  ✅ post-ingestion-pipeline: cleanup done — verification dispatched to verification queue\n");
+
+    } else if (job.name === "archive-expired-opportunities") {
+      // Kept for manual/scheduled triggers (e.g. from admin panel or cron)
+      await archiveExpiredOpportunitiesJob(job);
+    } else if (job.name === "dedup-opportunities") {
+      // Kept for manual/scheduled triggers
+      await dedupOpportunitiesJob(job);
     } else if (job.name === "recompute-status") {
+      // Runs on its own 12h schedule (schedules.ts) + manual trigger
       await recomputeStatus(false);
     } else {
       throw new Error(`Unknown aggregation job name: ${job.name}`);

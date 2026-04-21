@@ -91,20 +91,17 @@ async function onIngestionBatchSourceFinished(
       return;
     }
 
-    const archiveDelayMs = parseInt(
-      process.env.ARCHIVE_AFTER_INGESTION_DELAY_MS || "120000",
-      10,
-    );
-    const verificationDelayMs = parseInt(
-      process.env.VERIFICATION_AFTER_INGESTION_DELAY_MS || String(15 * 60 * 1000),
-      10,
-    );
-
-    await aggregationQueue.add("archive-expired-opportunities", {}, { delay: archiveDelayMs });
-    await verificationQueue.add("verify-all-published", {}, { delay: verificationDelayMs });
+    // Queue a single pipeline job that runs all housekeeping steps sequentially.
+    // No delays needed — the batch counter already guarantees all ingestion
+    // DB writes are committed before we get here.
+    await aggregationQueue.add("post-ingestion-pipeline", { batchId }, {
+      removeOnComplete: { count: 5 },
+      removeOnFail: { count: 10 },
+    });
 
     console.log(
-      `\n  📬 Batch ${batchId} ALL ${total} sources done → queued archive (+${archiveDelayMs / 1000}s) & verification (+${verificationDelayMs / 1000}s)\n`,
+      `\n  📬 Batch ${batchId} — all ${total} sources done → "post-ingestion-pipeline" queued\n` +
+      `       (archive → dedup → recompute-status → verify runs sequentially)\n`,
     );
   } catch (e) {
     console.warn("  ⚠️  Ingestion batch completion hook failed:", e);
