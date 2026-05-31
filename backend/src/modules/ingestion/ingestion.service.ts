@@ -139,9 +139,11 @@ async function fetchWithRedirects(
 
     const finalUrl = response.request?.responseURL || url;
     const statusCode = response.status;
-    const contentType = response.headers['content-type'] || '';
-    const contentLength = response.headers['content-length'] 
-      ? parseInt(response.headers['content-length'], 10) 
+    const contentTypeHeader = response.headers["content-type"];
+    const contentLengthHeader = response.headers["content-length"];
+    const contentType = contentTypeHeader ? String(contentTypeHeader) : "";
+    const contentLength = contentLengthHeader
+      ? parseInt(String(contentLengthHeader), 10)
       : (typeof response.data === 'string' ? response.data.length : 0);
     
     // Check for 404 or error page
@@ -171,9 +173,11 @@ async function fetchWithRedirects(
         finalUrl: url,
         statusCode: error.response.status,
         is404: error.response.status === 404,
-        contentType: error.response.headers['content-type'] || '',
-        contentLength: error.response.headers['content-length'] 
-          ? parseInt(error.response.headers['content-length'], 10) 
+        contentType: error.response.headers["content-type"]
+          ? String(error.response.headers["content-type"])
+          : "",
+        contentLength: error.response.headers["content-length"]
+          ? parseInt(String(error.response.headers["content-length"]), 10)
           : 0,
       };
     }
@@ -1250,7 +1254,8 @@ export class IngestionService {
       }
 
       // 2. Skip based on Content-Type header (Reliable Check)
-      const contentType = response.headers['content-type'] || '';
+      const contentTypeHeader = response.headers["content-type"];
+      const contentType = contentTypeHeader ? String(contentTypeHeader) : "";
       if (
         contentType.includes('application/pdf') ||
         contentType.includes('application/msword') ||
