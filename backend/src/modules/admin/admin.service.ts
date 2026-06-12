@@ -11,6 +11,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { logArchivedOpportunity } from "../../jobs/archive.jobs";
 import { sendEmail, generateContactReplyEmail } from "../../utils/email";
+import { invalidateCache } from "../../utils/cache";
 
 export class AdminService {
   // CMS - Opportunities CRUD
@@ -60,6 +61,9 @@ export class AdminService {
       after: opportunity.toObject(),
     });
 
+    // Public feed is cached for 5 min; don't serve stale data after edits/publish
+    invalidateCache("feed_*").catch(() => {});
+
     return opportunity;
   }
 
@@ -102,6 +106,8 @@ export class AdminService {
 
     // Hard delete from database
     await Opportunity.findByIdAndDelete(id);
+
+    invalidateCache("feed_*").catch(() => {});
   }
 
   async restoreOpportunity(

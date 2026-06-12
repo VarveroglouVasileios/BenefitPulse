@@ -27,12 +27,22 @@ export const config = {
   jwt: {
     secret: (() => {
       const defaultSecret = "your-super-secret-jwt-key-change-in-production";
+      const placeholderSecrets = [
+        defaultSecret,
+        "change-me",
+        "change-me-min-32-chars",
+        "changeme",
+        "secret",
+      ];
       const secret = process.env.JWT_SECRET || defaultSecret;
-      if (process.env.NODE_ENV === "production" && secret === defaultSecret) {
-        console.error(
-          "SECURITY: JWT_SECRET must be set in production. Refusing to start.",
-        );
-        process.exit(1);
+      if (process.env.NODE_ENV === "production") {
+        const normalized = secret.trim().toLowerCase();
+        if (placeholderSecrets.includes(normalized) || secret.length < 32) {
+          console.error(
+            "SECURITY: JWT_SECRET must be a strong value (min 32 chars, not a placeholder) in production. Refusing to start.",
+          );
+          process.exit(1);
+        }
       }
       return secret;
     })(),
@@ -106,8 +116,23 @@ export const config = {
 
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "900000", 10),
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "100", 10),
+    // The SPA fires ~13 API calls per page view, so the global per-IP budget
+    // must be generous; abuse-prone routes have their own stricter limiters.
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || "1000", 10),
   },
+
+  // Number of trusted reverse-proxy hops. Without this, Express sees the
+  // proxy's IP for every client and all visitors share one rate-limit bucket.
+  trustProxy: (() => {
+    const raw = process.env.TRUST_PROXY;
+    if (raw === undefined || raw === "") {
+      return nodeEnv === "production" ? 1 : false;
+    }
+    if (raw === "false") return false;
+    if (raw === "true") return true;
+    const parsed = parseInt(raw, 10);
+    return Number.isNaN(parsed) ? false : parsed;
+  })() as boolean | number,
 
   ingestion: {
     debug: process.env.INGESTION_DEBUG === "true",

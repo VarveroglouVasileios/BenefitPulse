@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/env';
+import { User } from '../models/user.model';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -74,10 +75,24 @@ export function optionalAuthMiddleware(req: AuthRequest, res: Response, next: Ne
   }
 }
 
-export function adminMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
+export async function adminMiddleware(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
   if (req.userRole !== 'admin') {
     res.status(403).json({ error: 'Forbidden' });
     return;
   }
+
+  // Verify against the DB so demoted/deleted admins lose access immediately,
+  // instead of keeping it until their JWT expires (7 days).
+  try {
+    const user = await User.findById(req.userId).select('role');
+    if (!user || user.role !== 'admin') {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Internal Server Error' });
+    return;
+  }
+
   next();
 }

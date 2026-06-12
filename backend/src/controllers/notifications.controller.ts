@@ -64,7 +64,8 @@ export class NotificationsController {
           ? url
           : '/opportunities';
       
-      await notificationService.broadcast({
+      // Test notifications go only to admin subscriptions, never to all users
+      await notificationService.sendToAdmins({
         title: 'BenefitPulse Test',
         body,
         url: targetUrl,

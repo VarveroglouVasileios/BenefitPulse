@@ -66,8 +66,8 @@ export class OpportunitiesService {
       ];
       filter.title = { $regex: new RegExp(resultsKeywords.join("|"), "i") };
     } else if (query.tab === "archived") {
-      // Archived tab: archived/closed/expired
-      filter.status = { $in: ["archived", "draft"] };
+      // Archived tab: archived/closed/expired (drafts must never be public)
+      filter.status = "archived";
       filter.$or = [
         { "criteriaJson.applicationStatus": { $in: ["expired", "closed"] } },
         { deadlineAt: { $lt: now } },
@@ -583,7 +583,15 @@ export class OpportunitiesService {
       status: "published",
       deletedAt: null,
       kind: { $ne: "service_info" },
-      $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+      $and: [
+        { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+        {
+          $or: [
+            { applicationEndAt: null },
+            { applicationEndAt: { $gte: now } },
+          ],
+        },
+      ],
     });
   }
 
@@ -938,20 +946,25 @@ export class OpportunitiesService {
     const matchedIds = matchedLinks.map((uo) => uo.opportunityId);
     const unknownIds = unknownLinks.map((uo) => uo.opportunityId);
 
+    const activeDateGuard = [
+      { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+      { $or: [{ applicationEndAt: null }, { applicationEndAt: { $gte: now } }] },
+    ];
+
     const [matched, unknown] = await Promise.all([
       Opportunity.find({
         _id: { $in: matchedIds },
         status: "published",
         deletedAt: null,
         kind: { $ne: "service_info" },
-        $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+        $and: activeDateGuard,
       }).sort({ publishedAt: -1 }),
       Opportunity.find({
         _id: { $in: unknownIds },
         status: "published",
         deletedAt: null,
         kind: { $ne: "garbage" },
-        $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }],
+        $and: activeDateGuard,
       }).sort({ publishedAt: -1 }),
     ]);
 
@@ -1032,10 +1045,31 @@ export class OpportunitiesService {
       return [];
     }
 
+    const now = new Date();
     const opportunities = await Opportunity.find({
       status: "published",
       deletedAt: null,
       publishedAt: { $gt: profile.lastVisitAt },
+      kind: { $nin: ["service_info", "tender"] },
+      $and: [
+        {
+          $or: [
+            { "criteriaJson.applicationStatus": { $exists: false } },
+            {
+              "criteriaJson.applicationStatus": {
+                $nin: ["expired", "closed", "news", "results"],
+              },
+            },
+          ],
+        },
+        { $or: [{ deadlineAt: null }, { deadlineAt: { $gte: now } }] },
+        {
+          $or: [
+            { applicationEndAt: null },
+            { applicationEndAt: { $gte: now } },
+          ],
+        },
+      ],
     }).sort({ publishedAt: -1 });
 
     const matched: IOpportunity[] = [];
@@ -1081,7 +1115,12 @@ export class OpportunitiesService {
     const opportunities = await Opportunity.find({
       status: "published",
       deletedAt: null,
-      deadlineAt: { $gte: now, $lte: deadline },
+      // Many opportunities only set applicationEndAt (not deadlineAt), so
+      // "expiring soon" must consider both dates.
+      $or: [
+        { deadlineAt: { $gte: now, $lte: deadline } },
+        { applicationEndAt: { $gte: now, $lte: deadline } },
+      ],
       $and: [
         {
           $or: [
@@ -1100,7 +1139,7 @@ export class OpportunitiesService {
           ],
         },
       ],
-    }).sort({ deadlineAt: 1 });
+    }).sort({ deadlineAt: 1, applicationEndAt: 1 });
 
     const matched: IOpportunity[] = [];
     for (const opp of opportunities) {

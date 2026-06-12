@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /profile/
+Disallow: /bookmarks
+Disallow: /for-you
+Disallow: /today
+Disallow: /new
+Disallow: /expiring
+
+Sitemap: https://benefitpulse.me/sitemap.xml

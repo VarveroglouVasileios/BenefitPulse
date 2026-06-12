@@ -59,7 +59,8 @@ export async function recomputeUserMatchesJob(
 
     const matchResult = evaluateMatch(
       profile.toObject(),
-      opp.criteriaRulesJson as CriteriaRules
+      opp.criteriaRulesJson as CriteriaRules,
+      opp
     );
 
     await UserOpportunity.findOneAndUpdate(
@@ -114,7 +115,8 @@ export async function recomputeOpportunityMatchesJob(
 
     const matchResult = evaluateMatch(
       profile.toObject(),
-      opportunity.criteriaRulesJson as CriteriaRules
+      opportunity.criteriaRulesJson as CriteriaRules,
+      opportunity
     );
 
     await UserOpportunity.findOneAndUpdate(

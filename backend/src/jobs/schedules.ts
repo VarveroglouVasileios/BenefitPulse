@@ -10,6 +10,8 @@ export async function scheduleIngestionJobs(): Promise<void> {
     "process-all-sources",
     {},
     {
+      // Stable jobId so API restarts don't stack duplicate repeatable jobs
+      jobId: "ingestion-daily",
       repeat: {
         every: 24 * 60 * 60 * 1000,
       },
@@ -29,6 +31,7 @@ export async function scheduleIngestionJobs(): Promise<void> {
     "recompute-status",
     {},
     {
+      jobId: "recompute-status-12h",
       repeat: {
         every: 12 * 60 * 60 * 1000, // every 12 hours
       },

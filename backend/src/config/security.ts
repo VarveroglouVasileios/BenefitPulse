@@ -36,6 +36,16 @@ export const eventsRateLimiter = rateLimit({
   message: 'Too many event requests, please try again later.',
 });
 
+// Semantic search calls the external embeddings API (costs quota), so it
+// gets a tighter per-IP budget than regular browsing endpoints.
+export const semanticSearchRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  message: 'Too many search requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const chatbotRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20,

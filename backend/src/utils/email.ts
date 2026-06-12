@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config/env';
+import { escapeHtml } from './validation';
 
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
@@ -52,6 +53,10 @@ export function generateContactReplyEmail(
   originalMessage: string,
   replyMessage: string
 ): string {
+  // User-supplied values must be escaped before interpolation into HTML
+  userName = escapeHtml(userName);
+  originalMessage = escapeHtml(originalMessage);
+  replyMessage = escapeHtml(replyMessage);
   return `
 <!DOCTYPE html>
 <html lang="el">

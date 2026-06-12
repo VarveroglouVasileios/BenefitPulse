@@ -47,6 +47,7 @@ import {
   eventsRateLimiter,
   rateLimiter,
   securityMiddleware,
+  semanticSearchRateLimiter,
 } from "./config/security";
 import {
   authMiddleware,
@@ -91,6 +92,10 @@ import * as adminController from "./modules/admin/admin.controller";
 import { scheduleIngestionJobs } from "./jobs/schedules";
 
 const app = express();
+
+// Must be set before rate limiters so req.ip is the real client IP behind
+// the reverse proxy (otherwise all visitors share one rate-limit bucket).
+app.set("trust proxy", config.trustProxy);
 
 // Middleware
 app.use(express.json());
@@ -224,6 +229,7 @@ app.put("/api/profile/theme", authMiddleware, themeController.updateTheme);
 app.get("/api/opportunities", opportunitiesController.getOpportunities);
 app.get(
   "/api/opportunities/semantic-search",
+  semanticSearchRateLimiter,
   opportunitiesController.semanticSearch,
 );
 app.get("/api/feed", optionalAuthMiddleware, opportunitiesController.getFeed); // Feed with optional admin filters
@@ -283,8 +289,13 @@ app.delete(
   bookmarksController.removeBookmark,
 );
 
-// Events route
-app.post("/api/events", eventsRateLimiter, eventsController.trackEvent);
+// Events route (optionalAuth so logged-in pageviews update lastVisitAt)
+app.post(
+  "/api/events",
+  eventsRateLimiter,
+  optionalAuthMiddleware,
+  eventsController.trackEvent,
+);
 
 // Notifications routes
 import { notificationsRoutes } from "./routes/notifications.routes";
