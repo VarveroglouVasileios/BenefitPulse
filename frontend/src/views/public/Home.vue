@@ -120,7 +120,7 @@
         <SkeletonOpportunityCard v-for="n in 6" :key="'new-' + n" />
       </div>
       <div v-else-if="newOpen.length === 0" class="fallback-list">
-        <h4>Top κατηγορίες</h4>
+        <h3>Top κατηγορίες</h3>
         <ul>
           <li v-for="cat in fallbackCategories" :key="cat.label">
             <button class="link-btn" @click="goToTag(cat.query)">{{ cat.label }}</button>
@@ -148,7 +148,7 @@
         <SkeletonOpportunityCard v-for="n in 6" :key="'tr-' + n" />
       </div>
       <div v-else-if="trending.length === 0" class="fallback-list">
-        <h4>Πιο πρόσφατα ενημερωμένα</h4>
+        <h3>Πιο πρόσφατα ενημερωμένα</h3>
         <ul>
           <li><button class="link-btn" @click="goToQuery('')">Δες όλα τα πιο πρόσφατα</button></li>
           <li><button class="link-btn" @click="goToQuery('deadline')">Με ενεργό deadline</button></li>
@@ -1047,7 +1047,7 @@ onBeforeUnmount(() => {
   color: var(--text-secondary);
 }
 
-.fallback-list h4 {
+.fallback-list h3 {
   margin: 0 0 0.75rem 0;
   color: var(--text-primary);
 }

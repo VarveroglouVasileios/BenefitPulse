@@ -7,12 +7,7 @@
 
   <!-- Google Analytics (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-MHM8CCW7QG"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-MHM8CCW7QG', { 'send_page_view': false }); // Handled manually in useTracking
-  </script>
+  <script defer src="/site-init.js"></script>
 
   <!-- Primary Meta Tags -->
   <title>BenefitPulse - Εύρεση Κυβερνητικών Παροχών και Επιδομάτων</title>
@@ -55,22 +50,188 @@
   <!-- Canonical URL -->
   <link rel="canonical" href="https://benefitpulse.me/" />
 
+  <!-- Search engine structured data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://benefitpulse.me/#organization",
+          "name": "BenefitPulse",
+          "url": "https://benefitpulse.me/",
+          "logo": "https://benefitpulse.me/pwa-512x512.png",
+          "description": "Ανεξάρτητη πλατφόρμα συγκέντρωσης πληροφοριών για κυβερνητικές παροχές, επιδόματα και προγράμματα στην Ελλάδα."
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://benefitpulse.me/#website",
+          "url": "https://benefitpulse.me/",
+          "name": "BenefitPulse",
+          "inLanguage": "el-GR",
+          "publisher": {
+            "@id": "https://benefitpulse.me/#organization"
+          },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://benefitpulse.me/opportunities?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://benefitpulse.me/#faq",
+          "inLanguage": "el-GR",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Είναι το BenefitPulse επίσημη κρατική υπηρεσία;",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Όχι. Το BenefitPulse συγκεντρώνει πληροφορίες από επίσημες πηγές και παραπέμπει πάντα στην αρμόδια υπηρεσία για τα τελικά κριτήρια και την αίτηση."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Πώς βρίσκω παροχές που πιθανόν με αφορούν;",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Μπορείτε να περιηγηθείτε στις ανοικτές ευκαιρίες ή να δημιουργήσετε προφίλ με γενικές κατηγορίες, ώστε να εμφανίζονται πιο σχετικές παροχές και προγράμματα."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Είναι δωρεάν η χρήση;",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Ναι, η αναζήτηση και η χρήση του BenefitPulse παρέχονται δωρεάν."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  </script>
+
   <!-- Theme Color -->
   <meta name="theme-color" content="#4F46E5" />
   <meta name="msapplication-TileColor" content="#4F46E5" />
 </head>
 
 <body>
-  <script>
-    // Immediately scroll to top before Vue app loads (prevents browser scroll restoration)
-    if ('scrollRestoration' in history) {
-      history.scrollRestoration = 'manual';
-    }
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
-  </script>
-  <div id="app"></div>
+  <div id="app">
+    <!--
+      Crawlable and no-JavaScript fallback. Vue replaces this content when the
+      application mounts, while search engines and assistive clients still get
+      a complete, correctly structured document without running JavaScript.
+    -->
+    <a href="#main-content">Μετάβαση στο κύριο περιεχόμενο</a>
+    <header>
+      <nav aria-label="Κύρια πλοήγηση">
+        <a href="/">BenefitPulse</a>
+        <a href="/opportunities">Όλες οι παροχές</a>
+        <a href="/trending">Δημοφιλή</a>
+      </nav>
+    </header>
+    <main id="main-content">
+      <section>
+        <h1>Βρες ανοικτά επιδόματα και κυβερνητικά προγράμματα από επίσημες πηγές</h1>
+        <p>
+          Το BenefitPulse συγκεντρώνει σε ένα μέρος πληροφορίες για επιδόματα,
+          vouchers, προγράμματα κατάρτισης, δράσεις απασχόλησης και άλλες
+          κυβερνητικές παροχές στην Ελλάδα. Παρακολουθούμε επίσημες πηγές όπως
+          το gov.gr, τη ΔΥΠΑ, τον ΟΠΕΚΑ και το vouchers.gov.gr, ώστε να μπορείς
+          να εντοπίζεις γρηγορότερα τις ευκαιρίες που είναι ανοικτές τώρα.
+        </p>
+        <p>
+          Η υπηρεσία λειτουργεί ως ανεξάρτητος συγκεντρωτής πληροφοριών και δεν
+          αποτελεί κρατικό φορέα. Για κάθε παροχή εμφανίζουμε την επίσημη πηγή,
+          την ημερομηνία ενημέρωσης και, όταν είναι διαθέσιμη, την προθεσμία.
+          Πριν υποβάλεις αίτηση, έλεγξε πάντοτε τα τελικά κριτήρια και τους όρους
+          στην ιστοσελίδα του αρμόδιου οργανισμού.
+        </p>
+        <a href="/opportunities?status=open">Δες τι είναι ανοικτό τώρα</a>
+      </section>
+
+      <section>
+        <h2>Πώς λειτουργεί το BenefitPulse</h2>
+        <h3>Αναζήτηση σε επίσημες ανακοινώσεις</h3>
+        <p>
+          Συλλέγουμε και οργανώνουμε δημόσιες ανακοινώσεις για οικονομική
+          ενίσχυση, στέγαση, οικογένεια, ανεργία, νέους, άτομα με αναπηρία,
+          εκπαίδευση και επαγγελματική κατάρτιση. Οι καταχωρίσεις ταξινομούνται
+          με τρόπο που διευκολύνει την αναζήτηση και την κατανόηση των βασικών
+          πληροφοριών, χωρίς να αντικαθιστούν το επίσημο κείμενο.
+        </p>
+        <h3>Προαιρετικό προφίλ με περιορισμένα δεδομένα</h3>
+        <p>
+          Αν θέλεις πιο σχετικές προτάσεις, μπορείς να δημιουργήσεις ένα απλό
+          προφίλ. Χρησιμοποιούμε γενικές κατηγορίες, όπως ηλικιακή ομάδα,
+          περιοχή και κατάσταση απασχόλησης, όχι ακριβή διεύθυνση, ΑΦΜ ή
+          τραπεζικά στοιχεία. Η αντιστοίχιση είναι ενδεικτική και δεν αποτελεί
+          επιβεβαίωση επιλεξιμότητας.
+        </p>
+        <h3>Άμεση μετάβαση στην αρμόδια υπηρεσία</h3>
+        <p>
+          Όταν βρεις μια ευκαιρία που σε ενδιαφέρει, ακολούθησε τον σύνδεσμο
+          προς την επίσημη σελίδα. Εκεί θα δεις τα πλήρη δικαιολογητικά, τις
+          εξαιρέσεις, τις ημερομηνίες και τον τρόπο υποβολής της αίτησης.
+        </p>
+      </section>
+
+      <section>
+        <h2>Κατηγορίες παροχών και προγραμμάτων</h2>
+        <p>
+          Μπορείς να εξερευνήσεις επιδόματα στέγασης και οικογένειας,
+          προγράμματα για ανέργους και εργαζομένους, δράσεις για νέους,
+          κοινωνικές ενισχύσεις, εκπαιδευτικά vouchers και προσκλήσεις
+          κατάρτισης. Νέες ανακοινώσεις προστίθενται καθώς δημοσιεύονται από
+          τους επίσημους φορείς, ενώ παλαιότερες καταχωρίσεις ενημερώνονται όταν
+          αλλάζει η κατάστασή τους.
+        </p>
+        <p>
+          Τα φίλτρα αναζήτησης σε βοηθούν να περιορίσεις τα αποτελέσματα ανά
+          κατηγορία, κατάσταση και λέξη-κλειδί. Έτσι μπορείς να ξεκινήσεις από
+          μια ευρεία λίστα και να φτάσεις στις πληροφορίες που είναι πιο
+          χρήσιμες για τη δική σου περίπτωση.
+        </p>
+      </section>
+
+      <section>
+        <h2>Συχνές ερωτήσεις</h2>
+        <h3>Είναι επίσημη κρατική υπηρεσία;</h3>
+        <p>
+          Όχι. Το BenefitPulse οργανώνει δημόσιες πληροφορίες και παραπέμπει
+          στην επίσημη πηγή. Ο αρμόδιος φορέας είναι ο μόνος που μπορεί να
+          επιβεβαιώσει αν πληροίς τα κριτήρια.
+        </p>
+        <h3>Πόσο συχνά ενημερώνονται οι πληροφορίες;</h3>
+        <p>
+          Οι πηγές ελέγχονται τακτικά και οι καταχωρίσεις εμφανίζουν την
+          τελευταία γνωστή ενημέρωση. Επειδή μια ανακοίνωση μπορεί να αλλάξει
+          χωρίς προειδοποίηση, επιβεβαίωσε την τρέχουσα κατάσταση πριν από κάθε
+          αίτηση.
+        </p>
+        <h3>Υπάρχει χρέωση;</h3>
+        <p>
+          Όχι. Η περιήγηση, η αναζήτηση και οι βασικές λειτουργίες του
+          BenefitPulse παρέχονται δωρεάν.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <nav aria-label="Νομικές πληροφορίες">
+        <a href="/terms">Όροι Χρήσης</a>
+        <a href="/privacy">Πολιτική Απορρήτου</a>
+        <a href="/cookies">Πολιτική Cookies</a>
+        <a href="/disclaimer">Αποποίηση Ευθύνης</a>
+      </nav>
+      <p>Το BenefitPulse δεν είναι επίσημος κρατικός φορέας.</p>
+    </footer>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 

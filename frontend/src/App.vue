@@ -1,7 +1,8 @@
 <template>
   <div id="app">
+    <a class="skip-link" href="#main-content">Μετάβαση στο κύριο περιεχόμενο</a>
     <NavBar />
-    <main class="content">
+    <main id="main-content" class="content" tabindex="-1">
       <router-view />
     </main>
     <Footer />
@@ -196,6 +197,25 @@ body {
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
   background-color: var(--bg-primary);
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 10000;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-150%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 .back-to-top {
