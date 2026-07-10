@@ -12,6 +12,7 @@ import * as cheerio from "cheerio";
 import { logArchivedOpportunity } from "../../jobs/archive.jobs";
 import { sendEmail, generateContactReplyEmail } from "../../utils/email";
 import { invalidateCache } from "../../utils/cache";
+import { hasClosedLifecycleSignal } from "../../utils/lifecycle-signals";
 
 export class AdminService {
   // CMS - Opportunities CRUD
@@ -453,23 +454,7 @@ export class AdminService {
     let cleanerExpiredCount = 0;
 
     function hasExpiredKeywords(text: string): boolean {
-      const lowerText = text.toLowerCase();
-      const expiredKeywords = [
-        "ολοκληρώθηκαν",
-        "έληξε",
-        "έκλεισε",
-        "ολοκληρώθηκε",
-        "τελείωσε",
-        "completed",
-        "closed",
-        "ended",
-        "finished",
-        "η πλατφόρμα έκλεισε",
-        "η πλατφορμα εκλεισε",
-        "ολοκλήρωση αιτήσεων",
-        "ολοκληρωση αιτησεων",
-      ];
-      return expiredKeywords.some((kw) => lowerText.includes(kw));
+      return hasClosedLifecycleSignal(text);
     }
 
     // Attempt to extract expiration date from text (e.g. "λήγει στις 16/12/2025")
@@ -593,9 +578,14 @@ export class AdminService {
 
       // Check 2: Summary/title contains expired keywords OR title has past year OR explicit text expiration date
       const hasFutureDeadline = opp.deadlineAt && opp.deadlineAt > now;
-      
+      const combinedText = `${opp.title} ${opp.summary || ''}`;
+      if (!shouldArchive && hasExpiredKeywords(combinedText)) {
+        shouldArchive = true;
+        summaryExpiredCount++;
+        archiveReason = "expired_keywords_in_title_or_summary";
+      }
+
       if (!shouldArchive && !hasFutureDeadline) {
-        const combinedText = `${opp.title} ${opp.summary || ''}`;
         
         // Check for explicit expiration date in text first (Specific > General)
         const textExpiration = findExpirationDateInText(combinedText);
@@ -607,10 +597,6 @@ export class AdminService {
              shouldArchive = true;
              summaryExpiredCount++; 
              archiveReason = "past_year_in_title";
-        } else if (hasExpiredKeywords(combinedText)) {
-             shouldArchive = true;
-             summaryExpiredCount++;
-             archiveReason = "expired_keywords_in_title_or_summary";
         }
       }
 
@@ -631,10 +617,17 @@ export class AdminService {
           if (!rawItem) {
             try {
               const urlObj = new URL(opp.officialUrl);
-              const pathname = urlObj.pathname;
+              const hostname = urlObj.hostname
+                .replace(/^www\./, "")
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const pathname = urlObj.pathname.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&",
+              );
               rawItem = await RawItem.findOne({
                 url: {
-                  $regex: pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+                  $regex: `^https?://(?:www\\.)?${hostname}${pathname}(?:[?#]|$)`,
+                  $options: "i",
                 },
               }).sort({ createdAt: -1 });
             } catch {
@@ -698,7 +691,12 @@ export class AdminService {
       if (shouldArchive) {
         await Opportunity.updateOne(
           { _id: opp._id },
-          { $set: { status: "archived" } }
+          {
+            $set: {
+              status: "archived",
+              applicationStatus: "closed",
+            },
+          },
         );
         archivedCount++;
         logArchivedOpportunity(

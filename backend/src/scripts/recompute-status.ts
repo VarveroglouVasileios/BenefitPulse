@@ -34,6 +34,10 @@ interface RecomputeStats {
  */
 function extractPageSignals(opportunity: any): string[] {
   const signals: string[] = [];
+
+  if (opportunity.applicationStatus) {
+    signals.push(String(opportunity.applicationStatus));
+  }
   
   // Try to extract from criteriaRulesJson or evidence
   if (opportunity.criteriaRulesJson?.evidence?.statusSignals) {
@@ -64,9 +68,11 @@ export async function recomputeStatus(dryRun: boolean = false): Promise<Recomput
     changes: [],
   };
 
-  // Get all opportunities (excluding deleted)
+  // Recompute active records only. Archived/rejected records represent a
+  // terminal moderation or lifecycle decision and must never be resurrected.
   const opportunities = await Opportunity.find({
     deletedAt: null,
+    status: { $in: ["published", "draft"] },
   });
 
   stats.total = opportunities.length;

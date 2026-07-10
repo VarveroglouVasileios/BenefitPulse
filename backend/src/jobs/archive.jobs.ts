@@ -7,6 +7,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { ProgressTracker, logPhaseStart } from "../utils/progress";
 import { invalidateCache } from "../utils/cache";
+import { hasClosedLifecycleSignal } from "../utils/lifecycle-signals";
 
 export function truncateOneLine(s: string, maxLen: number): string {
   const t = (s || "").replace(/\s+/g, " ").trim();
@@ -49,23 +50,7 @@ function canonicalizeUrl(url: string): string {
  * Check if text contains expired keywords
  */
 function hasExpiredKeywords(text: string): boolean {
-  const lowerText = text.toLowerCase();
-  const expiredKeywords = [
-    "ολοκληρώθηκαν",
-    "έληξε",
-    "έκλεισε",
-    "ολοκληρώθηκε",
-    "τελείωσε",
-    "completed",
-    "closed",
-    "ended",
-    "finished",
-    "η πλατφόρμα έκλεισε",
-    "η πλατφορμα εκλεισε",
-    "ολοκλήρωση αιτήσεων",
-    "ολοκληρωση αιτησεων",
-  ];
-  return expiredKeywords.some((kw) => lowerText.includes(kw));
+  return hasClosedLifecycleSignal(text);
 }
 
 /**
@@ -149,11 +134,8 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
       archiveReason = `deadline_passed | ${parts.join(", ")}`;
     }
 
-    // If not archived by deadline but item is locked, skip further probabilistic checks
-    if (!shouldArchive && (opp as any).isLocked) {
-      progress.tick();
-      continue;
-    }
+    // isLocked protects canonical identity/content, not lifecycle state.
+    // Locked records must still close when official content says applications ended.
 
     // --- NEW: Diavgeia Cross-referencing ---
 
@@ -218,13 +200,23 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
           }).sort({ createdAt: -1 });
         }
 
-        // If still not found, try partial match (hostname + pathname)
+        // If still not found, try a same-host pathname match. Pathname alone
+        // (especially "/") can select an unrelated RawItem from another domain.
         if (!rawItem) {
           try {
             const urlObj = new URL(opp.officialUrl);
-            const pathname = urlObj.pathname;
+            const hostname = urlObj.hostname
+              .replace(/^www\./, "")
+              .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const pathname = urlObj.pathname.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&",
+            );
             rawItem = await RawItem.findOne({
-              url: { $regex: pathname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") },
+              url: {
+                $regex: `^https?://(?:www\\.)?${hostname}${pathname}(?:[?#]|$)`,
+                $options: "i",
+              },
             }).sort({ createdAt: -1 });
           } catch {
             // URL parsing failed, skip
@@ -288,7 +280,12 @@ export async function archiveExpiredOpportunitiesJob(job: Job): Promise<void> {
     if (shouldArchive) {
       await Opportunity.updateOne(
         { _id: opp._id },
-        { $set: { status: "archived" } }
+        {
+          $set: {
+            status: "archived",
+            applicationStatus: "closed",
+          },
+        },
       );
       archivedCount++;
       logArchivedOpportunity(

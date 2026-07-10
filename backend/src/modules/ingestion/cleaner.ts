@@ -12,6 +12,16 @@
  * - Returns ONLY JSON (no text outside JSON)
  */
 
+import {
+  hasClosedLifecycleSignal,
+  isResultsAnnouncementTitle,
+  normalizeLifecycleText,
+} from "../../utils/lifecycle-signals";
+import {
+  normalizeDate,
+  parseDate as unifiedParseDate,
+} from "../../utils/date-parser";
+
 // Official domains whitelist (trust rule)
 const OFFICIAL_DOMAINS = new Set([
   "gov.gr",
@@ -112,36 +122,6 @@ const SERVICE_INFO_KEYWORDS = [
   "ελληνικα",
   "3.900.000+",
   "chats beta",
-];
-
-// Closed/completed indicators (enhanced for ΔΥΠΑ)
-const CLOSED_KEYWORDS = [
-  "ολοκληρώθηκαν",
-  "ολοκληρωθηκαν",
-  "ολοκληρώθηκε",
-  "ολοκληρωθηκε",
-  "έληξε",
-  "εληξε",
-  "έκλεισε",
-  "εκλεισε",
-  "τελείωσε",
-  "τελειωσε",
-  "κλειστό",
-  "κλειστο",
-  "μη διαθέσιμο",
-  "μη διαθεσιμο",
-  "δεν δέχεται αιτήσεις",
-  "δεν δεχεται αιτησεις",
-  "η προθεσμία έληξε",
-  "η προθεσμια εληξε",
-  "ολοκλήρωση αιτήσεων",
-  "ολοκληρωση αιτησεων",
-  "ολοκλήρωση υποβολής",
-  "ολοκληρωση υποβολης",
-  "completed",
-  "closed",
-  "ended",
-  "finished",
 ];
 
 // Open/active indicators - ENHANCED with more patterns
@@ -567,7 +547,9 @@ function parseDate(
           // Otherwise, try next year
           const contextIsPast = cleanText.toLowerCase().includes("ολοκληρώθηκαν") ||
                                 cleanText.toLowerCase().includes("έληξε") ||
-                                cleanText.toLowerCase().includes("έκλεισε");
+                                cleanText.toLowerCase().includes("έκλεισε") ||
+                                cleanText.toLowerCase().includes("έκλεισαν") ||
+                                cleanText.toLowerCase().includes("εκλεισαν");
           if (!contextIsPast) {
             year = now.getFullYear() + 1;
             date = new Date(year, month, day);
@@ -586,9 +568,6 @@ function parseDate(
     matchedText: result.matchedText || result.rawDate 
   };
 }
-
-// Import unified date parser utilities
-import { parseDate as unifiedParseDate, normalizeDate } from "../../utils/date-parser";
 
 /**
  * Extract dates from content
@@ -610,7 +589,7 @@ export function extractDates(
   const dateSignals: string[] = [];
 
   // Pattern: "Οι αιτήσεις ολοκληρώθηκαν την [date]" (enhanced for ΔΥΠΑ)
-  const completedPattern = /(?:οι\s+αιτήσεις|η\s+πλατφόρμα|αιτήσεις|η\s+προθεσμία)\s+(?:ολοκληρώθηκαν|έληξε|έκλεισε)[^\.\n]{0,150}(?:την|στις|στην|έως|μέχρι)?\s*([^\.\n]{0,80})/gi;
+  const completedPattern = /(?:οι\s+αιτήσεις|η\s+πλατφόρμα|αιτήσεις|η\s+προθεσμία)\s+(?:ολοκληρώθηκαν|έληξε|έκλεισε|έκλεισαν|εκλεισαν)[^\.\n]{0,150}(?:την|στις|στην|έως|μέχρι)?\s*([^\.\n]{0,80})/gi;
   const completedMatches = [...content.matchAll(completedPattern)];
   for (const match of completedMatches) {
     const dateStr = match[1] || match[0];
@@ -657,6 +636,33 @@ export function extractDates(
   for (const pattern of deadlinePatterns) {
     const matches = [...content.matchAll(pattern)];
     for (const match of matches) {
+      const matchIndex = match.index ?? 0;
+      const candidateContext = normalizeLifecycleText(
+        content.slice(
+          Math.max(0, matchIndex - 120),
+          Math.min(content.length, matchIndex + match[0].length + 120),
+        ),
+      );
+      const isVoucherUsePeriod =
+        [
+          "χρηση voucher",
+          "χρηση του voucher",
+          "χρηση κουπονι",
+          "χρηση του κουπονι",
+          "εξαργυρωση",
+          "περιοδος ισχυος",
+          "ισχυς του voucher",
+          "τα voucher χρησιμοποιουνται",
+          "τα κουπονια χρησιμοποιουνται",
+        ].some((signal) => candidateContext.includes(signal)) &&
+        !/(?:αιτησ|υποβολ|ενστασ)/.test(candidateContext);
+      if (isVoucherUsePeriod) {
+        dateSignals.push(
+          `Ignored non-application voucher-use period: "${match[0].substring(0, 120)}"`,
+        );
+        continue;
+      }
+
       // Check if pattern has time component (23:59 format)
       const hasTime = match[2] && match[3] && /^\d{1,2}:\d{2}$/.test(`${match[2]}:${match[3]}`);
       
@@ -746,6 +752,19 @@ export function determineApplicationStatus(
   const lowerTitle = (title || "").toLowerCase();
   const lowerUrl = (sourceUrl || "").toLowerCase();
   const statusSignals: string[] = [];
+
+  // Results/final-table announcements describe an application lifecycle that
+  // has already completed. Redemption or voucher-use dates must not turn them
+  // into upcoming application opportunities.
+  if (isResultsAnnouncementTitle(title || "")) {
+    statusSignals.push("Results/final-table announcement in title");
+    return {
+      status: "results",
+      statusSignals,
+      applicationStartAt: null,
+      applicationEndAt: null,
+    };
+  }
   
   // Special rule for Pass items with year in title (e.g., "Thessaly-Evros Pass 2025")
   // STRICT: If year in title is before current year OR deadline is in past → expired/closed
@@ -887,16 +906,14 @@ export function determineApplicationStatus(
   }
 
   // Rule 1: Explicitly closed
-  for (const keyword of CLOSED_KEYWORDS) {
-    if (lowerContent.includes(keyword)) {
-      const contextMatch = lowerContent.match(
-        new RegExp(`[^.]{0,50}${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^.]{0,50}`, "i")
-      );
-      if (contextMatch) {
-        statusSignals.push(`"${contextMatch[0].substring(0, 120)}"`);
-        return { status: "closed", statusSignals, applicationStartAt: startAt, applicationEndAt: deadlineAt };
-      }
-    }
+  if (hasClosedLifecycleSignal(content)) {
+    statusSignals.push("Explicit closed lifecycle signal");
+    return {
+      status: "closed",
+      statusSignals,
+      applicationStartAt: startAt,
+      applicationEndAt: deadlineAt,
+    };
   }
 
   // Rule 2: Deadline exists and is in past
@@ -1045,7 +1062,7 @@ export function determineApplicationStatus(
     lowerContent.includes("κάντε αίτηση") ||
     lowerContent.includes("καντε αιτηση");
 
-  const hasClosedIndicators = CLOSED_KEYWORDS.some(kw => lowerContent.includes(kw));
+  const hasClosedIndicators = hasClosedLifecycleSignal(content);
 
   if (hasApplicationKeywords && !hasClosedIndicators && (!deadlineAt || deadlineAt >= now)) {
     statusSignals.push("Contains application invitation without closed indicators → assume open");
@@ -2350,8 +2367,13 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       evidence.notes.push("Override: Κοινωνικός Τουρισμός treated as news (informational page)");
     }
     
-    const applicationStartAt = computedApplicationStartAt || startAt;
-    const applicationEndAt = computedApplicationEndAt || deadlineAt;
+    const isResultsLifecycle = applicationStatus === "results";
+    const applicationStartAt = isResultsLifecycle
+      ? null
+      : computedApplicationStartAt || startAt;
+    const applicationEndAt = isResultsLifecycle
+      ? null
+      : computedApplicationEndAt || deadlineAt;
     evidence.statusSignals = statusSignals;
     
     // Override must STILL respect closed/expired → archived
@@ -2372,8 +2394,10 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       kind: overrideResult.kind,
       type: overrideResult.type,
       applicationStatus,
-      startAt: startAt ? startAt.toISOString() : null,
-      deadlineAt: deadlineAt ? deadlineAt.toISOString() : null,
+      startAt:
+        !isResultsLifecycle && startAt ? startAt.toISOString() : null,
+      deadlineAt:
+        !isResultsLifecycle && deadlineAt ? deadlineAt.toISOString() : null,
       announcedAt: now.toISOString(),
       applicationStartAt: applicationStartAt ? applicationStartAt.toISOString() : null,
       applicationEndAt: applicationEndAt ? applicationEndAt.toISOString() : null,
@@ -2440,8 +2464,13 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
   );
   
   // Use computed dates or parsed dates
-  const applicationStartAt = computedApplicationStartAt || startAt;
-  const applicationEndAt = computedApplicationEndAt || deadlineAt;
+  const isResultsLifecycle = applicationStatus === "results";
+  const applicationStartAt = isResultsLifecycle
+    ? null
+    : computedApplicationStartAt || startAt;
+  const applicationEndAt = isResultsLifecycle
+    ? null
+    : computedApplicationEndAt || deadlineAt;
   
   // announcedAt is the publishedAt date (when we first saw it)
   const announcedAt = now;
@@ -2532,9 +2561,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     if (kind === "benefit") {
       // Benefit with unknown status → published (stable/recurring benefit)
       // Only if official domain and no closed indicators
-      const noClosedIndicators = !CLOSED_KEYWORDS.some((kw) =>
-        rawContent.toLowerCase().includes(kw)
-      );
+      const noClosedIndicators = !hasClosedLifecycleSignal(rawContent);
       const isSpitiMou2 = rawTitle.toLowerCase().includes("σπίτι μου ιι") || rawTitle.toLowerCase().includes("σπίτι μου 2");
       
       if (isOfficial && noClosedIndicators && (rawContent.length > 50 || isSpitiMou2)) {
@@ -2552,9 +2579,7 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
       // Program/voucher_pass with unknown status → draft (don't show as "open")
       // EXCEPTION: ASEP competitions can be published if no closed indicators
       if (type === "asep_competition") {
-        const noClosedIndicators = !CLOSED_KEYWORDS.some((kw) =>
-          rawContent.toLowerCase().includes(kw)
-        );
+        const noClosedIndicators = !hasClosedLifecycleSignal(rawContent);
         // Check for ASEP stage indicators
         const asepStageMatch = rawContent.match(/(?:τρέχον\s+στάδιο|current\s+stage)[\s:]+([^\.\n]{0,200})/i);
         const stageIndicatesClosed = asepStageMatch && (
@@ -2681,8 +2706,10 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     kind,
     type: type, // Keep type as is (no mapping needed)
     applicationStatus,
-    startAt: startAt ? startAt.toISOString() : null,
-    deadlineAt: deadlineAt ? deadlineAt.toISOString() : null,
+    startAt:
+      !isResultsLifecycle && startAt ? startAt.toISOString() : null,
+    deadlineAt:
+      !isResultsLifecycle && deadlineAt ? deadlineAt.toISOString() : null,
     announcedAt: announcedAt ? announcedAt.toISOString() : null,
     applicationStartAt: applicationStartAt ? applicationStartAt.toISOString() : null,
     applicationEndAt: applicationEndAt ? applicationEndAt.toISOString() : null,

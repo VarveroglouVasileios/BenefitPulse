@@ -14,6 +14,11 @@ import { IngestionReporter } from "./ingestion-reporter";
 import { parseDate, normalizeDate } from "../../utils/date-parser";
 import { ProgressTracker } from "../../utils/progress";
 import { extractDiavgeiaText, crossReferenceAsepWithDiavgeia, searchDiavgeia } from "./diavgeia";
+import { isResultsAnnouncementTitle } from "../../utils/lifecycle-signals";
+import {
+  extractTitleTokens,
+  titleTokenOverlap,
+} from "../../utils/title-dedup";
 
 // Simple in-memory caches for AI results (per worker process)
 // Key: hash of title+url (or content), Value: AIStatusResult / ExtractedOpportunity
@@ -2140,6 +2145,19 @@ export class IngestionService {
         }
         // --- END Diavgeia Cross-referencing ---
 
+        const isResultsAnnouncement = isResultsAnnouncementTitle(
+          item.title || cleaned.title,
+        );
+        if (isResultsAnnouncement) {
+          cleaned.applicationStatus = "results";
+          cleaned.status = "archived";
+          cleaned.deadlineAt = null;
+          cleaned.applicationEndAt = null;
+          console.log(
+            "   📋 RESULTS: table/results announcement forced to archived; non-application dates ignored",
+          );
+        }
+
         // Determine current source priority (1=API, 2=RSS, 3=HTML)
         const currentSourcePriority = source.type === "api" ? 1 : source.type === "rss" ? 2 : 3;
 
@@ -2152,8 +2170,8 @@ export class IngestionService {
         if (alreadyExists) {
            const existingPriority = alreadyExists.sourcePriority || 3;
            
-           if (currentSourcePriority >= existingPriority) {
-             console.log(`   ⏭️  SKIP: Opportunity already exists (skipping AI) - Priority: ${existingPriority} vs Current: ${currentSourcePriority} - ${cleaned.officialUrl}`);
+           if (currentSourcePriority > existingPriority) {
+             console.log(`   ⏭️  SKIP: Lower-priority opportunity already exists - Priority: ${existingPriority} vs Current: ${currentSourcePriority} - ${cleaned.officialUrl}`);
              // Mark raw item as processed since we found the opportunity
              rawItem.processed = true;
              rawItem.updatedAt = new Date();
@@ -2168,7 +2186,7 @@ export class IngestionService {
         // AI-ASSISTED STATUS DETERMINATION: If cleaner returned 'unknown' status OR we have Diavgeia authority, try AI
         // OPTIMIZATION: Skip AI if status is rejected (e.g. service_info) to save tokens/time
         // Check for Groq API key
-        const hasAiKey = !!config.groq.apiKey;
+        const hasAiKey = !!config.groq.apiKey || !!config.googleAi.apiKey;
         const hasDiavgeiaAuthority = item.content.includes("[OFFICIAL DOCUMENT FROM DIAVGEIA]");
         
         if ((cleaned.applicationStatus === "unknown" || hasDiavgeiaAuthority) && cleaned.status !== "rejected" && hasAiKey) {
@@ -2218,6 +2236,15 @@ export class IngestionService {
                 cleaned.status = "published";
                 console.log("   🔓 AI upgraded status: draft → published (AI confirmed open/upcoming)");
               }
+              if (
+                aiStatus.status === "closed" ||
+                aiStatus.status === "expired"
+              ) {
+                cleaned.status = "archived";
+                console.log(
+                  "   📦 AI lifecycle closure: forcing opportunity to archived",
+                );
+              }
             } else {
               console.log(`   ℹ️ AI returned: ${aiStatus.status} (${Math.round(aiStatus.confidence * 100)}%) - keeping unknown`);
             }
@@ -2231,7 +2258,10 @@ export class IngestionService {
         // Throttle AI extraction requests to reduce 429s on shared/free limits.
         // OPTIMIZATION: Skip eligibility extraction if item is rejected
         let extracted: any = { confidence: 0, criteriaRulesJson: {}, criteriaJson: {}, summary: "" }; // Initialize extracted with safe defaults
-        if (config.groq.apiKey && cleaned.status !== "rejected") {
+        if (
+          (config.groq.apiKey || config.googleAi.apiKey) &&
+          cleaned.status !== "rejected"
+        ) {
           console.log(`   ⏳ Throttling AI extraction request (${AI_THROTTLE_DELAY_MS}ms)...`);
           await sleep(AI_THROTTLE_DELAY_MS);
           
@@ -2290,14 +2320,6 @@ export class IngestionService {
           if (cleaned.status === "draft") {
             console.log(`   🔓 AUTO-PUBLISH: Trusted source "${sourceName}" with confidence ${Math.max(extracted.confidence, cleaned.confidence)} - overriding draft status`);
             cleaned.status = "published";
-            
-            // If dates are unknown, set default expiration to 2 months in the future
-            if (!cleaned.deadlineAt && !cleaned.applicationEndAt) {
-              const twoMonthsFromNow = new Date();
-              twoMonthsFromNow.setMonth(twoMonthsFromNow.getMonth() + 2);
-              cleaned.applicationEndAt = twoMonthsFromNow.toISOString();
-              console.log(`   📅 AUTO-DATE: Set default expiration to 2 months from now (${twoMonthsFromNow.toISOString().split('T')[0]})`);
-            }
           }
         }
 
@@ -2369,20 +2391,33 @@ export class IngestionService {
             criteriaUnknown = true;
           }
         }
+        if (cleaned.evidence) {
+          criteriaRulesJson.evidence = cleaned.evidence;
+        }
 
         // Parse dates from cleaned output using unified parser (never Invalid Date)
         // FALLBACK: Use AI extracted dates if regex cleaner failed
         const parsedCleanedDeadline = cleaned.deadlineAt ? parseDate(cleaned.deadlineAt).date : null;
-        const fallbackDeadline = extracted.deadlineAt ? new Date(extracted.deadlineAt) : undefined;
-        const deadlineAt = parsedCleanedDeadline
-          ? normalizeDate(parsedCleanedDeadline) || fallbackDeadline
-          : fallbackDeadline;
+        const fallbackDeadline =
+          !isResultsAnnouncement && extracted.deadlineAt
+            ? new Date(extracted.deadlineAt)
+            : undefined;
+        const deadlineAt = isResultsAnnouncement
+          ? null
+          : parsedCleanedDeadline
+            ? normalizeDate(parsedCleanedDeadline) || fallbackDeadline
+            : fallbackDeadline;
 
         const parsedCleanedStart = cleaned.startAt ? parseDate(cleaned.startAt).date : null;
-        const fallbackStart = extracted.startAt ? new Date(extracted.startAt) : undefined;
-        const startAt = parsedCleanedStart
-          ? normalizeDate(parsedCleanedStart) || fallbackStart
-          : fallbackStart;
+        const fallbackStart =
+          !isResultsAnnouncement && extracted.startAt
+            ? new Date(extracted.startAt)
+            : undefined;
+        const startAt = isResultsAnnouncement
+          ? null
+          : parsedCleanedStart
+            ? normalizeDate(parsedCleanedStart) || fallbackStart
+            : fallbackStart;
 
         const announcedAt = cleaned.announcedAt
           ? normalizeDate(parseDate(cleaned.announcedAt).date) || new Date()
@@ -2446,26 +2481,46 @@ export class IngestionService {
 
         if (existingOpp) {
           // Update existing opportunity (don't create duplicate)
-          // Always upgrade priority if the current source is better or equal
-          if (currentSourcePriority <= (existingOpp.sourcePriority || 3)) {
+          const existingIsLocked = Boolean(existingOpp.isLocked);
+          if (
+            !existingIsLocked &&
+            currentSourcePriority <= (existingOpp.sourcePriority || 3)
+          ) {
              existingOpp.sourceType = source.type;
              existingOpp.sourcePriority = currentSourcePriority;
              existingOpp.source = cleaned.source;
           }
 
-          existingOpp.title = cleaned.title;
-          existingOpp.summary = finalSummary;
-          existingOpp.kind = finalKind;
-          existingOpp.type = cleaned.type;
-          existingOpp.deadlineAt = deadlineAt;
-          existingOpp.startAt = startAt;
-          existingOpp.announcedAt = announcedAt;
-          existingOpp.applicationStartAt = applicationStartAt;
-          existingOpp.applicationEndAt = applicationEndAt;
-          existingOpp.tags = tags;
+          // A lock protects curated identity/content, but lifecycle fields must
+          // continue to follow the official page.
+          if (!existingIsLocked) {
+            existingOpp.title = cleaned.title;
+            existingOpp.summary = finalSummary;
+            existingOpp.kind = finalKind;
+            existingOpp.type = cleaned.type;
+            existingOpp.tags = tags;
+            existingOpp.confidence = cleaned.confidence;
+            existingOpp.criteriaUnknown = criteriaUnknown;
+            existingOpp.criteriaRulesJson = criteriaRulesJson;
+          }
+          if (!existingIsLocked || deadlineAt || isResultsAnnouncement) {
+            existingOpp.deadlineAt = deadlineAt;
+          }
+          if (!existingIsLocked || startAt || isResultsAnnouncement) {
+            existingOpp.startAt = startAt;
+          }
+          existingOpp.announcedAt = existingOpp.announcedAt || announcedAt;
+          if (
+            !existingIsLocked ||
+            applicationStartAt ||
+            isResultsAnnouncement
+          ) {
+            existingOpp.applicationStartAt = applicationStartAt;
+          }
+          if (!existingIsLocked || applicationEndAt || isResultsAnnouncement) {
+            existingOpp.applicationEndAt = applicationEndAt;
+          }
           existingOpp.status = cleaned.status;
-          existingOpp.confidence = cleaned.confidence;
-          existingOpp.criteriaUnknown = cleaned.criteriaUnknown;
           // Update applicationStatus field
           (existingOpp as any).applicationStatus = cleaned.applicationStatus;
           existingOpp.updatedAt = new Date();
@@ -2483,41 +2538,28 @@ export class IngestionService {
             titleDuplicate = await Opportunity.findOne({
               officialUrl: { $ne: cleaned.officialUrl },
               title: { $regex: `^${escapedPrefix}`, $options: 'i' },
+              status: { $in: ["published", "draft"] },
               deletedAt: null,
             }) as typeof existingOpp;
           }
 
           // Pass 2: token-overlap dedup (catches cross-language / reordered titles)
           if (!titleDuplicate) {
-            const extractTokens = (t: string): Set<string> => {
-              const stopWords = new Set([
-                'το', 'τα', 'τον', 'την', 'τους', 'τις', 'ο', 'η', 'οι',
-                'για', 'και', 'της', 'του', 'στο', 'στη', 'στον', 'στην',
-                'με', 'απο', 'προγραμμα', 'program', 'the', 'for', 'a', 'an', 'of',
-                'νεο', 'new', 'νεα', 'δραση', 'δρασης',
-              ]);
-              return new Set(
-                t.toLowerCase()
-                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
-                  .replace(/[«»"'()\[\]{}\-–—]/g, ' ')
-                  .split(/\s+/)
-                  .filter(tok => tok.length >= 4 && !stopWords.has(tok))
-              );
-            };
-            const newTokens = extractTokens(cleaned.title);
+            const newTokens = extractTitleTokens(cleaned.title);
             if (newTokens.size >= 2) {
               // Fetch recent published/draft opps with a different URL (limit search scope)
               const candidates = await Opportunity.find({
                 officialUrl: { $ne: cleaned.officialUrl },
                 status: { $in: ['published', 'draft'] },
                 deletedAt: null,
-              }).select('title officialUrl sourcePriority sourceType source').limit(500).lean();
+              })
+                .select('title officialUrl sourcePriority sourceType source isLocked')
+                .limit(500);
 
               for (const candidate of candidates) {
-                const candTokens = extractTokens(candidate.title);
+                const candTokens = extractTitleTokens(candidate.title);
                 if (candTokens.size < 2) continue;
-                const shared = [...newTokens].filter(t => candTokens.has(t)).length;
-                const overlap = shared / Math.min(newTokens.size, candTokens.size);
+                const overlap = titleTokenOverlap(newTokens, candTokens);
                 if (overlap >= 0.65) {
                   titleDuplicate = candidate as any;
                   console.log(`   🔍 TOKEN DEDUP: "${cleaned.title.substring(0, 50)}" ≈ "${candidate.title.substring(0, 50)}" (overlap=${(overlap * 100).toFixed(0)}%)`);
@@ -2529,14 +2571,50 @@ export class IngestionService {
 
           if (titleDuplicate) {
             const existingPriority = titleDuplicate.sourcePriority || 3;
-            if (currentSourcePriority < existingPriority) {
-              // Higher-priority source (e.g. API < RSS < HTML) — upgrade the existing record's URL
-              console.log(`   ⭐ TITLE DEDUP UPGRADE: "${cleaned.title.substring(0, 50)}" — switching to higher-priority URL ${cleaned.officialUrl}`);
-              titleDuplicate.officialUrl = cleaned.officialUrl;
-              titleDuplicate.sourceType = source.type;
-              titleDuplicate.sourcePriority = currentSourcePriority;
-              titleDuplicate.source = cleaned.source;
+            const duplicateIsLocked = Boolean(titleDuplicate.isLocked);
+            if (currentSourcePriority <= existingPriority) {
+              if (!duplicateIsLocked) {
+                titleDuplicate.title = cleaned.title;
+                titleDuplicate.summary = finalSummary;
+                titleDuplicate.kind = finalKind;
+                titleDuplicate.type = cleaned.type;
+                titleDuplicate.tags = tags;
+                titleDuplicate.confidence = cleaned.confidence;
+                titleDuplicate.criteriaUnknown = criteriaUnknown;
+                titleDuplicate.criteriaRulesJson = criteriaRulesJson;
+                if (currentSourcePriority < existingPriority) {
+                  titleDuplicate.officialUrl = cleaned.officialUrl;
+                  titleDuplicate.sourceType = source.type;
+                  titleDuplicate.sourcePriority = currentSourcePriority;
+                  titleDuplicate.source = cleaned.source;
+                }
+              }
+              if (!duplicateIsLocked || deadlineAt || isResultsAnnouncement) {
+                titleDuplicate.deadlineAt = deadlineAt;
+              }
+              if (!duplicateIsLocked || startAt || isResultsAnnouncement) {
+                titleDuplicate.startAt = startAt;
+              }
+              if (
+                !duplicateIsLocked ||
+                applicationStartAt ||
+                isResultsAnnouncement
+              ) {
+                titleDuplicate.applicationStartAt = applicationStartAt;
+              }
+              if (
+                !duplicateIsLocked ||
+                applicationEndAt ||
+                isResultsAnnouncement
+              ) {
+                titleDuplicate.applicationEndAt = applicationEndAt;
+              }
+              titleDuplicate.status = cleaned.status;
+              titleDuplicate.applicationStatus = cleaned.applicationStatus;
               await titleDuplicate.save();
+              console.log(
+                `   🔄 TITLE DEDUP REFRESH: lifecycle updated for existing id=${titleDuplicate._id}`,
+              );
             } else {
               console.log(`   ⏭️  TITLE DEDUP SKIP: "${cleaned.title.substring(0, 50)}" already exists (id=${titleDuplicate._id})`);
             }

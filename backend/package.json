@@ -16,7 +16,8 @@
     "vapid-keys": "npm exec -- web-push generate-vapid-keys",
     "cleanup": "ts-node src/scripts/cleanup-opportunities.ts",
     "dedup:opportunities": "ts-node src/scripts/dedup-opportunities.ts",
-    "backfill:embeddings": "ts-node src/scripts/backfill-opportunity-embeddings.ts"
+    "backfill:embeddings": "ts-node src/scripts/backfill-opportunity-embeddings.ts",
+    "test:lifecycle": "npm run build && node dist/utils/lifecycle-regression-smoke-test.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.17",

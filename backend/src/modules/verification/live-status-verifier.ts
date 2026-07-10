@@ -8,6 +8,7 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 import { parseDate, normalizeDate } from "../../utils/date-parser";
+import { hasClosedLifecycleSignal } from "../../utils/lifecycle-signals";
 
 export interface VerificationResult {
   verificationResult: "open" | "upcoming" | "closed" | "unknown" | "dead_link";
@@ -190,6 +191,8 @@ function extractStatusSignals(html: string, url: string): {
     /οι\s+αιτήσεις\s+ολοκληρώθηκαν/i,
     /ολοκληρώθηκαν\s+οι\s+αιτήσεις/i,
     /έκλεισε\s+η\s+προθεσμία/i,
+    /έκλεισαν\s+οι\s+αιτήσεις/i,
+    /οι\s+αιτήσεις\s+έκλεισαν/i,
     /κλείσιμο\s+αιτήσεων/i,
   ];
   
@@ -206,6 +209,13 @@ function extractStatusSignals(html: string, url: string): {
         evidenceSnippet: snippet.substring(0, 200),
       };
     }
+  }
+
+  if (hasClosedLifecycleSignal(text)) {
+    return {
+      status: "closed",
+      evidenceSnippet: "Explicit closed lifecycle signal detected",
+    };
   }
   
   // Open signals with dates

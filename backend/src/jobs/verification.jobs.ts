@@ -100,11 +100,7 @@ export async function verifyAllPublishedJob(job: Job): Promise<void> {
         
         // Also update status if needed
         if (result.newApplicationStatus === "closed") {
-          // Closed: archive if old, keep published if recent
-          const isOld = opp.publishedAt && (now.getTime() - opp.publishedAt.getTime()) > 30 * 24 * 60 * 60 * 1000; // 30 days
-          if (isOld) {
-            updates.status = "archived";
-          }
+          updates.status = "archived";
         } else if (result.newApplicationStatus === "open" && opp.status !== "published") {
           // Open: ensure published
           updates.status = "published";
@@ -177,6 +173,9 @@ export async function verifyOpportunityJob(job: Job): Promise<void> {
   
   if (result.shouldUpdateStatus && result.newApplicationStatus) {
     opportunity.applicationStatus = result.newApplicationStatus;
+    if (result.newApplicationStatus === "closed") {
+      opportunity.status = "archived";
+    }
   }
   
   if (result.verificationResult === "dead_link" || result.brokenLink) {

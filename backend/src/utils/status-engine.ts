@@ -5,6 +5,7 @@
  */
 
 import { compareDatesInAthens, isPast, isFuture } from "./date-parser";
+import { hasClosedLifecycleSignal } from "./lifecycle-signals";
 
 export interface StatusInputs {
   applicationStartAt?: Date | null;
@@ -37,18 +38,7 @@ function extractYearFromTitle(title: string): number | null {
  * Check if page signals indicate closed status
  */
 function hasClosedSignals(pageSignals: string[] = []): boolean {
-  const closedKeywords = [
-    "η προθεσμία έληξε",
-    "προθεσμία έληξε",
-    "οι αιτήσεις ολοκληρώθηκαν",
-    "ολοκληρώθηκαν",
-    "έληξε",
-    "έκλεισε",
-    "κλείσιμο",
-  ];
-  
-  const signalsText = pageSignals.join(" ").toLowerCase();
-  return closedKeywords.some(keyword => signalsText.includes(keyword.toLowerCase()));
+  return hasClosedLifecycleSignal(pageSignals.join(" "));
 }
 
 /**
@@ -228,6 +218,16 @@ export function computeStatus(
   const effectiveStartAt = applicationStartAt || startAt;
   const effectiveEndAt = applicationEndAt || endAt;
 
+  // Explicit closure evidence is authoritative even when no deadline was
+  // extracted. This must run before the no-date branches, which all return.
+  if (hasClosedSignals(pageSignals)) {
+    return {
+      applicationStatus: "closed",
+      status: "archived",
+      reason: "page signals indicate closed",
+    };
+  }
+
   // Rule 1: If applicationEndAt < now => closed + archived
   if (effectiveEndAt && isPast(effectiveEndAt, now)) {
     return {
@@ -239,7 +239,12 @@ export function computeStatus(
 
   // Rule 2: Title Date Guard (Past events detection)
   const titleDate = extractDateFromTitle(title, now);
-  if (titleDate && isPast(titleDate, now)) {
+  const hasActiveApplicationWindow =
+    !!effectiveStartAt &&
+    !!effectiveEndAt &&
+    compareDatesInAthens(effectiveStartAt, now) <= 0 &&
+    compareDatesInAthens(effectiveEndAt, now) >= 0;
+  if (!hasActiveApplicationWindow && titleDate && isPast(titleDate, now)) {
     // Small buffer for today's events: if it's today, keep it open until end of day
     const isActuallyPast = compareDatesInAthens(titleDate, now) < 0;
     if (isActuallyPast) {
@@ -376,15 +381,6 @@ export function computeStatus(
         reason: `endAt (${effectiveEndAt.toISOString()}) exists but no start date and no open signals`,
       };
     }
-  }
-
-  // Check page signals for closed status
-  if (hasClosedSignals(pageSignals)) {
-    return {
-      applicationStatus: "closed",
-      status: "archived",
-      reason: "page signals indicate closed",
-    };
   }
 
   // Default: unknown + draft
