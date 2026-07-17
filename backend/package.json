@@ -17,6 +17,7 @@
     "cleanup": "ts-node src/scripts/cleanup-opportunities.ts",
     "dedup:opportunities": "ts-node src/scripts/dedup-opportunities.ts",
     "backfill:embeddings": "ts-node src/scripts/backfill-opportunity-embeddings.ts",
+    "sync:canonical": "ts-node src/scripts/sync-canonical-opportunities.ts",
     "test:lifecycle": "npm run build && node dist/utils/lifecycle-regression-smoke-test.js"
   },
   "dependencies": {

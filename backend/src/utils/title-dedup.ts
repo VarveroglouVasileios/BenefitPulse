@@ -83,5 +83,12 @@ export function extractTitleTokens(title: string): Set<string> {
 export function titleTokenOverlap(a: Set<string>, b: Set<string>): number {
   if (a.size === 0 || b.size === 0) return 0;
   const shared = [...a].filter((token) => b.has(token)).length;
-  return shared / Math.min(a.size, b.size);
+  const union = new Set([...a, ...b]).size;
+  return shared / union;
+}
+
+export function haveConflictingTitleYears(a: string, b: string): boolean {
+  const aYear = a.match(/\b20\d{2}\b/)?.[0];
+  const bYear = b.match(/\b20\d{2}\b/)?.[0];
+  return Boolean(aYear && bYear && aYear !== bYear);
 }

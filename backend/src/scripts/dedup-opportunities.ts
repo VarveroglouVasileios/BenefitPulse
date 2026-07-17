@@ -17,6 +17,7 @@ import { Opportunity } from "../models/opportunity.model";
 import mongoose from "mongoose";
 import {
   extractTitleTokens,
+  haveConflictingTitleYears,
   titleTokenOverlap,
 } from "../utils/title-dedup";
 
@@ -54,6 +55,7 @@ async function main() {
       const b = opps[j];
       const bId = String(b._id);
       if (archiveIds.has(bId)) continue;
+      if (haveConflictingTitleYears(a.title, b.title)) continue;
       const bTokens = tokenMap.get(bId)!;
 
       const overlap = titleTokenOverlap(aTokens, bTokens);

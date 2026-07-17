@@ -47,6 +47,7 @@ import { dedupOpportunitiesJob } from "./jobs/dedup.jobs";
 import { recomputeStatus } from "./scripts/recompute-status";
 import { verifyAllPublishedJob, verifyOpportunityJob } from "./jobs/verification.jobs";
 import { verificationQueue } from "./jobs/queues";
+import { syncCanonicalOpportunities } from "./modules/opportunities/canonical-opportunities";
 import * as Sentry from "@sentry/node";
 
 if (config.sentry.enabled) {
@@ -128,18 +129,21 @@ const aggregationWorker = new Worker(
 
     } else if (job.name === "post-ingestion-pipeline") {
       // Sequential housekeeping after each full ingestion batch.
-      // Steps 1-3 run inline (fast, DB-only). Step 4 (verification) is
+      // Steps 1-4 run inline (fast, DB-only). Verification is
       // dispatched to its own queue so it doesn't block the aggregation worker.
       console.log("\n  🔄 post-ingestion-pipeline: starting housekeeping sequence\n");
 
-      console.log("  ── Step 1/3: archive expired opportunities ──");
+      console.log("  ── Step 1/4: archive expired opportunities ──");
       await archiveExpiredOpportunitiesJob(job);
 
-      console.log("\n  ── Step 2/3: dedup (remove duplicates) ──");
+      console.log("\n  ── Step 2/4: dedup (remove duplicates) ──");
       await dedupOpportunitiesJob(job);
 
-      console.log("\n  ── Step 3/3: recompute applicationStatus ──");
+      console.log("\n  ── Step 3/4: recompute applicationStatus ──");
       await recomputeStatus(false);
+
+      console.log("\n  ── Step 4/4: sync canonical official opportunities ──");
+      await syncCanonicalOpportunities();
 
       // Dispatch verification to its own dedicated queue/worker
       await verificationQueue.add("verify-all-published", {}, {
@@ -158,6 +162,7 @@ const aggregationWorker = new Worker(
     } else if (job.name === "recompute-status") {
       // Runs on its own 12h schedule (schedules.ts) + manual trigger
       await recomputeStatus(false);
+      await syncCanonicalOpportunities();
     } else {
       throw new Error(`Unknown aggregation job name: ${job.name}`);
     }

@@ -97,6 +97,10 @@ export async function verifyAllPublishedJob(job: Job): Promise<void> {
       // Update applicationStatus if verification found clear signal
       if (result.shouldUpdateStatus && result.newApplicationStatus) {
         updates.applicationStatus = result.newApplicationStatus;
+        updates.criteriaJson = {
+          ...(opp.criteriaJson || {}),
+          applicationStatus: result.newApplicationStatus,
+        };
         
         // Also update status if needed
         if (result.newApplicationStatus === "closed") {
@@ -173,6 +177,10 @@ export async function verifyOpportunityJob(job: Job): Promise<void> {
   
   if (result.shouldUpdateStatus && result.newApplicationStatus) {
     opportunity.applicationStatus = result.newApplicationStatus;
+    opportunity.criteriaJson = {
+      ...(opportunity.criteriaJson || {}),
+      applicationStatus: result.newApplicationStatus,
+    };
     if (result.newApplicationStatus === "closed") {
       opportunity.status = "archived";
     }

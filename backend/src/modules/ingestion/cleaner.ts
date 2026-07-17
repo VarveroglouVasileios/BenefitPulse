@@ -32,6 +32,7 @@ const OFFICIAL_DOMAINS = new Set([
   "www.opeka.gr",
   "dypa.gov.gr",
   "www.dypa.gov.gr",
+  "prosvasis.dypa.gov.gr",
   "e-efka.gov.gr",
   "www.e-efka.gov.gr",
   "efka.gov.gr",
@@ -45,6 +46,14 @@ const OFFICIAL_DOMAINS = new Set([
   "asep.gr",
   "www.asep.gr",
   "info.asep.gr",
+  "mintour.gov.gr",
+  "www.mintour.gov.gr",
+  "minfin.gov.gr",
+  "www.minfin.gov.gr",
+  "ypen.gov.gr",
+  "www.ypen.gov.gr",
+  "mindev.gov.gr",
+  "www.mindev.gov.gr",
 ]);
 
 // Service info / menu / landing page keywords (reject these)
@@ -183,8 +192,6 @@ const UPCOMING_KEYWORDS = [
   "ανοιγμα πλατφορμας",
   "ξεκινάει στις",
   "ξεκιναει στις",
-  "από",
-  "απο",
   "starts on",
   "will open",
   "opening on",
@@ -1146,26 +1153,9 @@ export function classifyKindAndType(
     }
     // --- END LOCAL / MUNICIPAL DECISION FILTER ---
 
-    // Default to decision, but allow override during ingestion if keywords are present
-    const hasRelevantKeywords = [
-      "voucher", "pass", "επίδομα", "επιδομα", "επιδότηση", "επιχορηγηση",
-      "πρόγραμμα", "προγραμμα", "παροχή", "παροχη", "βοήθημα", "βοηθημα",
-      "κατάρτιση", "καταρτιση", "απασχόληση", "απασχοληση", "ανεργία", "ανεργια",
-    ].some(kw => lowerTitle.includes(kw) || lowerContent.includes(kw));
-
-    // If has relevant keywords, allow it to be classified as program/benefit
-    // Live verification will do final check
-    if (hasRelevantKeywords && lowerContent.length > 200) {
-      // Check if it's a program or benefit
-      if (lowerContent.includes("πρόγραμμα") || lowerContent.includes("προγραμμα")) {
-        return { kind: "program", type: "program" };
-      }
-      if (lowerContent.includes("επίδομα") || lowerContent.includes("επιδομα")) {
-        return { kind: "benefit", type: "subsidy" };
-      }
-    }
-
-    // Default: decision (will be verified during live verification)
+    // A Διαύγεια document is evidence about an administrative act, not a
+    // citizen-facing application page. Keyword mentions alone (for example a
+    // seminar "about EEE") must never promote it to an opportunity.
     return { kind: "decision", type: "decision" };
   }
   
@@ -2114,6 +2104,10 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
     "επιστημονική συνεργασία", "επιστημονικη συνεργασια",
     "μητρώο επιλέξιμων παρόχων", "μητρωο επιλεξιμων παροχων", // provider registries — not citizen-facing
     "χρονοδιάγραμμα προσκλήσεων", "χρονοδιαγραμμα προσκλησεων", // abstract schedule announcements
+    "συμμετοχή σε σεμινάριο", "συμμετοχη σε σεμιναριο", // administrative training approvals
+    "έγκριση συμμετοχής σε σεμινάριο", "εγκριση συμμετοχης σε σεμιναριο",
+    "προθεσμίες υλοποίησης", "προθεσμιες υλοποιησης", // implementation notices, not application calls
+    "προθεσμία υλοποίησης", "προθεσμια υλοποιησης",
   ];
   
   const lowerTitle = rawTitle.toLowerCase();
@@ -2485,6 +2479,9 @@ export function cleanAndValidate(input: CleanerInput): CleanerOutput {
   if (kind === "service_info") {
     status = "rejected";
     evidence.notes.push("Classified as service_info → rejected");
+  } else if (kind === "decision") {
+    status = "rejected";
+    evidence.notes.push("Diavgeia administrative decision → rejected as standalone opportunity");
   } else if (kind === "tender") {
     // Tenders: published but excluded from Opportunities tabs (handled in getFeed)
     status = "published";

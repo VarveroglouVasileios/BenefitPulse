@@ -17,6 +17,7 @@ import { extractDiavgeiaText, crossReferenceAsepWithDiavgeia, searchDiavgeia } f
 import { isResultsAnnouncementTitle } from "../../utils/lifecycle-signals";
 import {
   extractTitleTokens,
+  haveConflictingTitleYears,
   titleTokenOverlap,
 } from "../../utils/title-dedup";
 
@@ -1899,10 +1900,7 @@ export class IngestionService {
       
       // --- CROSS-REFERENCE WITH DIAVGEIA ---
       const sourceLower = source.name?.toLowerCase() || "";
-      const titleLower = item.title?.toLowerCase() || "";
       const isAsepSource = sourceLower.includes("asep") || sourceLower.includes("ασεπ");
-      const isDypaSource = sourceLower.includes("δυνα") || sourceLower.includes("dypa") || sourceLower.includes("oaed") || sourceLower.includes("οαεδ");
-      
       const asepCodeMatch = item.title?.match(/(\d+[ΚΓΒΠΔ]\/\d{4})/i);
       
       if (isAsepSource && asepCodeMatch) {
@@ -1913,32 +1911,6 @@ export class IngestionService {
             const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
             item.content = combinedContent;
             content = combinedContent;
-         }
-      } else if (isDypaSource && (titleLower.includes("πρόγραμμα") || titleLower.includes("προγραμμα"))) {
-         // Generic DYPA cross-reference for programs
-         // Try searching for the first 50 chars of the title as a "Public Invitation" (Δημόσια Πρόσκληση)
-         const searchTitle = item.title.replace(/[«»"]/g, '').substring(0, 100).trim();
-         console.log(`   🔎 Cross-referencing DYPA program with Diavgeia: "${searchTitle}"...`);
-         
-         const diavgeiaData = await searchDiavgeia(`subject:"Πρόσκληση" AND subject:"ΔΥΠΑ" AND subject:"${searchTitle.substring(0, 40)}"`);
-         if (diavgeiaData) {
-            console.log(`   ✅ Diavgeia cross-reference success for DYPA program`);
-            const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
-            item.content = combinedContent;
-            content = combinedContent;
-         }
-      } else if (item.title && item.title.length > 20) {
-         // FINAL FALLBACK: For any source, try to find a decision in Diavgeia if title is specific enough
-         const searchTitle = item.title.replace(/[«»"]/g, '').substring(0, 60).trim();
-         if (searchTitle.length > 30) {
-            console.log(`   🔎 Generic cross-referencing with Diavgeia: "${searchTitle}"...`);
-            const diavgeiaData = await searchDiavgeia(`subject:"${searchTitle}"`);
-            if (diavgeiaData) {
-               console.log(`   ✅ Generic Diavgeia cross-reference success for: ${searchTitle}`);
-               const combinedContent = `${content}\n\n[ΔΙΑΣΤΑΥΡΩΣΗ ΑΠΟ ΔΙΑΥΓΕΙΑ]:\n${diavgeiaData.url}\n${diavgeiaData.text}`;
-               item.content = combinedContent;
-               content = combinedContent;
-            }
          }
       }
       // --- END CROSS-REFERENCE ---
@@ -2018,23 +1990,6 @@ export class IngestionService {
         continue;
       }
 
-      // Prevent duplicates from RSS/Discovery: Check for duplicate title before creating RawItem
-      // Exclude current item (by hash) if it exists
-      const duplicateQuery = { 
-        title: item.title, 
-        ...(existingRawItem ? { _id: { $ne: existingRawItem._id } } : {}) 
-      };
-      const existingByTitle = await RawItem.findOne(duplicateQuery);
-      
-      if (existingByTitle) {
-        skipReasons.duplicateTitle = (skipReasons.duplicateTitle || 0) + 1;
-        console.log(`   ⏭️  SKIP: Skipping duplicate title - "${item.title.substring(0, 50)}"`);
-        if (reporter) {
-          reporter.trackSkipped(sourceId, 'duplicateTitle', item.title, item.url, item.content?.length || 0, source.type);
-        }
-        continue;
-      }
-
       // Save raw item (upsert if exists)
       let rawItem = existingRawItem;
       const isDuplicate = !!rawItem;
@@ -2106,12 +2061,6 @@ export class IngestionService {
               diavgeiaMatch = await crossReferenceAsepWithDiavgeia(item.title);
             }
             
-            // Attempt 2: General match if title is specific enough
-            if (!diavgeiaMatch && item.title && item.title.length > 20) {
-              const searchTitle = item.title.substring(0, 50).replace(/"/g, '');
-              diavgeiaMatch = await searchDiavgeia(`subject:"${searchTitle}"`);
-            }
-
             if (diavgeiaMatch && diavgeiaMatch.text) {
               console.log(`   🏛️ Diavgeia Match found during ingestion: ${diavgeiaMatch.url}`);
               // Append Diavgeia content to raw content for better AI extraction later
@@ -2303,26 +2252,6 @@ export class IngestionService {
           console.log(`   ⛔ AI Filter: Χαρακτηρίστηκε ως άσχετο νέο (παράβλεψη)`);
         }
 
-        // AUTO-PUBLISH TRUSTED SOURCES: Check if source is trusted and confidence is sufficient
-        const sourceName = source.name || "";
-        const isTrustedSource = 
-          sourceName.includes("ΔΥΠΑ") || 
-          sourceName.includes("DYPA") || 
-          sourceName.includes("ASEP") || 
-          sourceName.includes("ΑΣΕΠ") || 
-          sourceName.includes("Gov") || 
-          sourceName.includes("Vouchers") ||
-          sourceName.toLowerCase().includes("asep") ||
-          sourceName.toLowerCase().includes("dypa");
-        
-        // Auto-publish trusted sources with sufficient confidence
-        if (isTrustedSource && (extracted.confidence > 0.6 || cleaned.confidence > 0.6)) {
-          if (cleaned.status === "draft") {
-            console.log(`   🔓 AUTO-PUBLISH: Trusted source "${sourceName}" with confidence ${Math.max(extracted.confidence, cleaned.confidence)} - overriding draft status`);
-            cleaned.status = "published";
-          }
-        }
-
         // Log cleaning result
         console.log(`   🧹 CLEANED: kind=${cleaned.kind}, type=${cleaned.type}, status=${cleaned.status}, applicationStatus=${cleaned.applicationStatus}`);
         if (cleaned.status === "rejected") {
@@ -2458,6 +2387,7 @@ export class IngestionService {
         
         // ASEP kind detection: If ASEP source and title contains news keywords, override kind
         const lowerTitle = cleaned.title.toLowerCase();
+        const sourceName = source.name || "";
         const isAsepSource = sourceName.toLowerCase().includes("asep") || sourceName.toLowerCase().includes("ασεπ");
         if (isAsepSource) {
           // News-like keywords: results, tables, lottery, objections
@@ -2521,8 +2451,11 @@ export class IngestionService {
             existingOpp.applicationEndAt = applicationEndAt;
           }
           existingOpp.status = cleaned.status;
-          // Update applicationStatus field
           (existingOpp as any).applicationStatus = cleaned.applicationStatus;
+          existingOpp.criteriaJson = {
+            ...(existingOpp.criteriaJson || {}),
+            applicationStatus: cleaned.applicationStatus,
+          };
           existingOpp.updatedAt = new Date();
           await existingOpp.save();
           console.log(`   ✅ UPDATED existing opportunity (status=${cleaned.status})`);
@@ -2541,6 +2474,12 @@ export class IngestionService {
               status: { $in: ["published", "draft"] },
               deletedAt: null,
             }) as typeof existingOpp;
+            if (
+              titleDuplicate &&
+              haveConflictingTitleYears(cleaned.title, titleDuplicate.title)
+            ) {
+              titleDuplicate = null;
+            }
           }
 
           // Pass 2: token-overlap dedup (catches cross-language / reordered titles)
@@ -2557,6 +2496,9 @@ export class IngestionService {
                 .limit(500);
 
               for (const candidate of candidates) {
+                if (haveConflictingTitleYears(cleaned.title, candidate.title)) {
+                  continue;
+                }
                 const candTokens = extractTitleTokens(candidate.title);
                 if (candTokens.size < 2) continue;
                 const overlap = titleTokenOverlap(newTokens, candTokens);
@@ -2611,6 +2553,10 @@ export class IngestionService {
               }
               titleDuplicate.status = cleaned.status;
               titleDuplicate.applicationStatus = cleaned.applicationStatus;
+              titleDuplicate.criteriaJson = {
+                ...(titleDuplicate.criteriaJson || {}),
+                applicationStatus: cleaned.applicationStatus,
+              };
               await titleDuplicate.save();
               console.log(
                 `   🔄 TITLE DEDUP REFRESH: lifecycle updated for existing id=${titleDuplicate._id}`,
@@ -2644,7 +2590,10 @@ export class IngestionService {
             applicationEndAt,
             tags,
             region: extracted.region,
-            criteriaJson: extracted.criteriaJson || {},
+            criteriaJson: {
+              ...(extracted.criteriaJson || {}),
+              applicationStatus: cleaned.applicationStatus,
+            },
             criteriaRulesJson,
             criteriaUnknown: cleaned.criteriaUnknown,
             confidence: cleaned.confidence,

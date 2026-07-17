@@ -17,6 +17,7 @@ import { logPhaseStart } from "../utils/progress";
 import { invalidateCache } from "../utils/cache";
 import {
   extractTitleTokens,
+  haveConflictingTitleYears,
   titleTokenOverlap,
 } from "../utils/title-dedup";
 
@@ -62,6 +63,7 @@ export async function dedupOpportunitiesJob(job: Job): Promise<{ archivedCount: 
       const bId = String(b._id);
 
       if (archiveIds.has(bId)) continue;
+      if (haveConflictingTitleYears(a.title, b.title)) continue;
 
       const bTokens  = tokenMap.get(bId)!;
       const overlap  = titleTokenOverlap(aTokens, bTokens);

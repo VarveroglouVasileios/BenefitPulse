@@ -85,6 +85,19 @@ export async function recomputeStatus(dryRun: boolean = false): Promise<Recomput
     try {
       stats.processed++;
 
+      // Curated recurring/upcoming records intentionally have no synthetic
+      // dates. Preserve their reviewed lifecycle until an official source
+      // provides an application window.
+      if (
+        opp.isLocked &&
+        !opp.applicationStartAt &&
+        !opp.applicationEndAt &&
+        !opp.startAt &&
+        !opp.deadlineAt
+      ) {
+        continue;
+      }
+
       // Parse dates (handle string dates from DB)
       const applicationStartAt = opp.applicationStartAt
         ? normalizeDate(opp.applicationStartAt instanceof Date ? opp.applicationStartAt : parseDate(String(opp.applicationStartAt)).date)
@@ -166,6 +179,10 @@ export async function recomputeStatus(dryRun: boolean = false): Promise<Recomput
         if (!dryRun) {
           // Update opportunity
           (opp as any).applicationStatus = newStatus.applicationStatus;
+          opp.criteriaJson = {
+            ...(opp.criteriaJson || {}),
+            applicationStatus: newStatus.applicationStatus,
+          };
           opp.status = newStatus.status;
           opp.updatedAt = new Date();
           await opp.save();

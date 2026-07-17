@@ -45,26 +45,15 @@ export class OpportunitiesService {
       // Results tab: only results
       filter["criteriaJson.applicationStatus"] = "results";
     } else if (query.tab === "news") {
-      // News tab: ONLY ASEP results (αποτελέσματα, πίνακες, ενστάσεις) and only if not expired (< 3 weeks)
-      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-      filter.$and = [
-        { source: { $regex: /asep|ασεπ/i } },
-        { publishedAt: { $gte: threeWeeksAgo } },
-      ];
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      filter.$and = [{ publishedAt: { $gte: ninetyDaysAgo } }];
       filter["$or"] = [
         { kind: "news" },
         { applicationStatus: "results" },
+        { applicationStatus: "news" },
         { "criteriaJson.applicationStatus": "results" },
+        { "criteriaJson.applicationStatus": "news" },
       ];
-      // Title must contain results/objections keywords (ASEP results only)
-      const resultsKeywords = [
-        "αποτελέσματα", "αποτελεσματα", "οριστικοί πίνακες", "οριστικοι πινακες",
-        "προσωρινός πίνακας", "προσωρινος πινακας", "πίνακας τοποθετήσεων", "πινακας τοποθετησεων",
-        "πίνακας επιλαχόντων", "πινακας επιλαχοντων", "πίνακας διοριστέων", "πινακας διοριστεων",
-        "ένσταση", "ενσταση", "ενστάσεις", "ενστασεις", "προθεσμία ενστάσεων", "προθεσμια ενστασεων",
-        "1γ", "2γ", "3γ", "αριθμός προκήρυξης", "αριθμος προκηρυξης",
-      ];
-      filter.title = { $regex: new RegExp(resultsKeywords.join("|"), "i") };
     } else if (query.tab === "archived") {
       // Archived tab: archived/closed/expired (drafts must never be public)
       filter.status = "archived";
@@ -231,33 +220,17 @@ export class OpportunitiesService {
 
     // Tab-based filtering (non-overlapping criteria)
     if (tab === "news") {
-      // News tab: ONLY ASEP results (αποτελέσματα, πίνακες, ενστάσεις) and only if not expired (< 3 weeks)
-      const resultsAndObjectionsKeywords = [
-        "αποτελέσματα", "αποτελεσματα",
-        "οριστικοί πίνακες", "οριστικοι πινακες",
-        "προσωρινός πίνακας", "προσωρινος πινακας",
-        "προσωρινοί πίνακες", "προσωρινοι πινακες",
-        "οριστικός πίνακας", "οριστικος πινακας",
-        "πίνακας τοποθετήσεων", "πινακας τοποθετησεων",
-        "πίνακας επιλαχόντων", "πινακας επιλαχοντων",
-        "πίνακας διοριστέων", "πινακας διοριστεων",
-        "πίνακες κατάταξης", "πινακες καταταξης",
-        "ένσταση", "ενσταση", "ενστάσεις", "ενστασεις",
-        "προθεσμία ενστάσεων", "προθεσμια ενστασεων",
-        "δικαίωμα ένστασης", "δικαιωμα ενστασης",
-        "υποβολή ενστάσεων", "υποβολη ενστασεων",
-        "1γ", "2γ", "3γ", "αριθμός προκήρυξης", "αριθμος προκηρυξης",
-      ];
-      const threeWeeksAgo = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000);
-      const resultsRegex = new RegExp(resultsAndObjectionsKeywords.join("|"), "i");
-
+      // News from every official source, kept separate from actionable calls.
+      const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       filter.$and = filter.$and || [];
-      // ONLY ASEP source
-      filter.$and.push({ $or: [{ source: { $regex: /asep/i } }, { source: { $regex: /ασεπ/i } }] });
-      // Only results/objections keywords in title
-      filter.$and.push({ title: { $regex: resultsRegex } });
-      // Not expired: published in last 3 weeks (aligned with archive job)
-      filter.$and.push({ publishedAt: { $gte: threeWeeksAgo } });
+      filter.$and.push({
+        $or: [
+          { kind: "news" },
+          { applicationStatus: { $in: ["news", "results"] } },
+          { "criteriaJson.applicationStatus": { $in: ["news", "results"] } },
+        ],
+      });
+      filter.$and.push({ publishedAt: { $gte: ninetyDaysAgo } });
       filter.$and.push({ kind: { $ne: "service_info" } });
 
       sort = { updatedAt: -1 };
@@ -319,12 +292,15 @@ export class OpportunitiesService {
       exclusionReasons.brokenLink = excludedBroken;
       exclusionReasons.deadLink = excludedDeadLink;
     } else if (tab === "current") {
-      // Τρέχοντα: All real kinds AND (applicationStatus="open" OR "unknown")
+      // Τρέχοντα: only opportunities with verified open applications.
       const realKinds = ["benefit", "voucher_pass", "program"];
       filter.kind = { $in: realKinds };
       filter.$or = [
-        { applicationStatus: { $in: ["open", "unknown"] } },
-        { "criteriaJson.applicationStatus": { $in: ["open", "unknown"] } },
+        { applicationStatus: "open" },
+        {
+          applicationStatus: { $exists: false },
+          "criteriaJson.applicationStatus": "open",
+        },
       ];
       // EXCLUDE broken links from Current tab (only if verified as broken)
       filter.$and = filter.$and || [];
