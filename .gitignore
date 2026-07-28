@@ -51,3 +51,9 @@ skip-reasons.json
 **/skip-reasons.json
 reports/
 **/reports/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
